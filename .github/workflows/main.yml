@@ -1,0 +1,30 @@
+name: Build Docker Image
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 登录到阿里云镜像服务
+        uses: docker/login-action@v3
+        with:
+          registry: registry.cn-shanghai.aliyuncs.com
+          username: ${{ secrets.ALI_DOCKER_USERNAME }}
+          password: ${{ secrets.ALI_DOCKER_PASSWORD }}
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: 构建并推送
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          tags: registry.cn-shanghai.aliyuncs.com/leftsky/romosoft-projects:left-tools
+    #   - name: 发起一条http请求，附带当前仓库地址和分支
+    #     run: |
+    #       curl -X POST "http://47.98.171.207:1991/api/webhooks/57c0a5be-a599-4779-8648-70d506c2e7ec"
