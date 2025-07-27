@@ -508,6 +508,166 @@
                     }
                 ]
             }
+        },
+        "/api/tools/extract-douyin": {
+            "post": {
+                "tags": [
+                    "工具接口"
+                ],
+                "summary": "提取抖音文案",
+                "description": "通过分享链接提取抖音视频文案",
+                "operationId": "af58a8b67c5b98f746ce4448053557bd",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "share_url"
+                                ],
+                                "properties": {
+                                    "share_url": {
+                                        "description": "抖音分享链接",
+                                        "type": "string",
+                                        "example": "https://v.douyin.com/xxxxx/"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "提取成功",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 1
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "success"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "提取成功"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "content": {
+                                                    "type": "string",
+                                                    "example": "提取的文案内容"
+                                                },
+                                                "original_url": {
+                                                    "type": "string",
+                                                    "example": "https://v.douyin.com/xxxxx/"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "请求错误",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 0
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "链接格式错误"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "验证失败",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 0
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "参数错误"
+                                        },
+                                        "errors": {
+                                            "properties": {
+                                                "share_url": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "example": [
+                                                        "share_url字段是必需的"
+                                                    ]
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "服务器错误",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 0
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "提取失败"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
         }
     },
     "components": {
@@ -523,6 +683,10 @@
         {
             "name": "认证管理",
             "description": "用户认证相关接口"
+        },
+        {
+            "name": "工具接口",
+            "description": "各种工具功能接口"
         }
     ]
 }

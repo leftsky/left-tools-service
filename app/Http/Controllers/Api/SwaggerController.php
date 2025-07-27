@@ -36,6 +36,10 @@ use OpenApi\Attributes as OA;
     name: '认证管理',
     description: '用户认证相关接口'
 )]
+#[OA\Tag(
+    name: '工具接口',
+    description: '各种工具功能接口'
+)]
 class SwaggerController extends Controller
 {
     // 这个控制器只用于提供OpenAPI注解，不需要任何方法
