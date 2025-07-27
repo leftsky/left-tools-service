@@ -285,6 +285,104 @@ class AuthController extends Controller
     }
 
     /**
+     * H5登录
+     */
+    #[OA\Post(
+        path: '/api/auth/h5-login',
+        summary: 'H5登录',
+        description: '登录默认的H5用户，不存在则创建',
+        tags: ['认证管理'],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: '登录成功',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 1),
+                        new OA\Property(property: 'status', type: 'string', example: 'success'),
+                        new OA\Property(property: 'message', type: 'string', example: '登录成功'),
+                        new OA\Property(
+                            property: 'data',
+                            type: 'object',
+                            properties: [
+                                new OA\Property(property: 'token', type: 'string', example: '1|abc123...'),
+                                new OA\Property(
+                                    property: 'user',
+                                    type: 'object',
+                                    properties: [
+                                        new OA\Property(property: 'id', type: 'integer', example: 1),
+                                        new OA\Property(property: 'name', type: 'string', example: 'H5用户'),
+                                        new OA\Property(property: 'email', type: 'string', example: 'h5@leftsky.top'),
+                                        new OA\Property(property: 'phone', type: 'string', nullable: true, example: null),
+                                        new OA\Property(property: 'weixin_mini_openid', type: 'string', nullable: true, example: null),
+                                        new OA\Property(property: 'weixin_unionid', type: 'string', nullable: true, example: null),
+                                        new OA\Property(property: 'email_verified_at', type: 'string', nullable: true, example: null),
+                                        new OA\Property(property: 'created_at', type: 'string', format: 'date-time'),
+                                        new OA\Property(property: 'updated_at', type: 'string', format: 'date-time')
+                                    ]
+                                )
+                            ]
+                        )
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 500,
+                description: '服务器错误',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '服务器内部错误'),
+                    ]
+                )
+            )
+        ]
+    )]
+    public function h5Login(Request $request): JsonResponse
+    {
+        try {
+            // 查找或创建H5用户
+            $user = User::where('email', 'h5@leftsky.top')->first();
+
+            if (!$user) {
+                // 创建H5用户
+                $user = User::create([
+                    'name' => 'H5用户',
+                    'email' => 'h5@leftsky.top',
+                    'password' => bcrypt(Str::random(16)), // 生成随机密码
+                ]);
+
+                Log::info('创建H5用户', [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                ]);
+            }
+
+            // 生成API Token
+            $token = $user->createToken('h5-token')->plainTextToken;
+
+            Log::info('H5登录成功', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+            ]);
+
+            return $this->success([
+                'token' => $token,
+                'user' => new UserResource($user),
+            ], '登录成功');
+
+        } catch (\Exception $e) {
+            Log::error('H5登录异常', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return $this->serverError('服务器内部错误');
+        }
+    }
+
+    /**
      * 退出登录
      */
     #[OA\Post(
