@@ -119,7 +119,7 @@ class ToolController extends Controller
         try {
             // 验证请求参数
             $request->validate([
-                'share_url' => 'required|string|url',
+                'share_url' => 'required|string',
             ]);
 
             $shareUrl = $request->input('share_url');
@@ -155,8 +155,7 @@ class ToolController extends Controller
 
             $data = $response->json();
 
-            // 检查API返回的数据
-            if (!isset($data['data']) || !isset($data['data']['output'])) {
+            if (!isset($data['data'])) {
                 Log::error('Coze API返回数据格式异常', [
                     'response' => $data,
                     'share_url' => $shareUrl,
@@ -165,7 +164,20 @@ class ToolController extends Controller
                 return $this->error('提取结果格式异常', 500);
             }
 
-            $content = $data['data']['output'];
+            $data = $data['data'];
+            $data = json_decode($data, true);
+
+            // 检查API返回的数据
+            if (!isset($data['output'])) {
+                Log::error('Coze API返回数据格式异常', [
+                    'response' => $data,
+                    'share_url' => $shareUrl,
+                ]);
+
+                return $this->error('提取结果格式异常', 500);
+            }
+
+            $content = $data['output'];
 
             // 记录使用日志
             Log::info('抖音文案提取成功', [
