@@ -25,6 +25,6 @@ jobs:
         with:
           push: true
           tags: registry.cn-shanghai.aliyuncs.com/leftsky/romosoft-projects:left-tools-service
-    #   - name: 发起一条http请求，附带当前仓库地址和分支
-    #     run: |
-    #       curl -X POST "http://47.98.171.207:1991/api/webhooks/57c0a5be-a599-4779-8648-70d506c2e7ec"
+      - name: 发起一条http请求，附带当前仓库地址和分支
+        run: |
+          curl -X POST "http://ds.leftsky.top:9000/api/webhooks/2767b69c-d356-4c61-ba66-376ad288ad0f"
