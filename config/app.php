@@ -123,4 +123,11 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    'wechat' => [
+        'mini_program' => [
+            'app_id' => env('WECHAT_MINI_PROGRAM_APP_ID'),
+            'secret' => env('WECHAT_MINI_PROGRAM_SECRET'),
+        ],
+    ],
+
 ];
