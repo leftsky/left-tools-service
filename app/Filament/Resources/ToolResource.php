@@ -76,17 +76,14 @@ class ToolResource extends Resource
                 Tables\Columns\TextColumn::make('hotness')
                     ->label('热度')
                     ->sortable(),
-                Tables\Columns\TextColumn::make('today_usage_count')
-                    ->label('今日使用次数')
+                Tables\Columns\TextColumn::make('usage_logs_count')
+                    ->label('使用记录数')
                     ->sortable(),
-                Tables\Columns\TextColumn::make('today_user_count')
-                    ->label('今日使用人数')
+                Tables\Columns\TextColumn::make('favorites_count')
+                    ->label('收藏数')
                     ->sortable(),
-                Tables\Columns\TextColumn::make('total_usage_count')
-                    ->label('总使用次数')
-                    ->sortable(),
-                Tables\Columns\TextColumn::make('total_user_count')
-                    ->label('总使用人数')
+                Tables\Columns\TextColumn::make('user_history_count')
+                    ->label('历史用户数')
                     ->sortable(),
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('创建时间')
