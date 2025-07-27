@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
+use Filament\Models\Contracts\FilamentUser;
 
 class User extends Authenticatable implements FilamentUser
 {
@@ -58,7 +59,7 @@ class User extends Authenticatable implements FilamentUser
             ->implode('');
     }
 
-    public function canAccessFilament(): bool
+    public function canAccessPanel(): bool
     {
         return $this->email === 'leftsky@vip.qq.com';
     }
