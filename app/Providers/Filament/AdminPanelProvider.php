@@ -53,6 +53,8 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
-            ]);
+            ])
+            ->brandName('工具服务-后台管理')
+            ->maxContentWidth('full');
     }
 }

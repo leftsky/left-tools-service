@@ -12,12 +12,15 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('users', function (Blueprint $table) {
-            $table->id();
-            $table->string('name');
-            $table->string('email')->unique();
-            $table->timestamp('email_verified_at')->nullable();
-            $table->string('password');
-            $table->rememberToken();
+            $table->id()->comment('用户ID');
+            $table->string('name')->comment('用户姓名');
+            $table->string('email')->unique()->nullable()->comment('邮箱地址');
+            $table->timestamp('email_verified_at')->nullable()->comment('邮箱验证时间');
+            $table->string('password')->nullable()->comment('密码');
+            $table->string('phone', 20)->nullable()->comment('手机号码');
+            $table->string('weixin_mini_openid')->nullable()->comment('微信小程序openid');
+            $table->string('weixin_unionid')->nullable()->comment('微信unionid');
+            $table->rememberToken()->comment('记住我令牌');
             $table->timestamps();
         });
 
