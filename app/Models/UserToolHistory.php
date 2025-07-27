@@ -10,6 +10,8 @@ class UserToolHistory extends Model
 {
     use HasFactory;
 
+    protected $table = 'user_tool_history';
+
     protected $fillable = [
         'user_id',
         'tool_id',
