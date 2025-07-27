@@ -32,16 +32,18 @@ class ToolUsageLogResource extends Resource
                             ->label('工具')
                             ->relationship('tool', 'name')
                             ->required()
-                            ->searchable(),
+                            ->searchable()
+                            ->disabled(),
                         Forms\Components\Select::make('user_id')
                             ->label('用户')
                             ->relationship('user', 'name')
                             ->searchable()
-                            ->nullable(),
+                            ->nullable()
+                            ->disabled(),
                         Forms\Components\DateTimePicker::make('used_at')
                             ->label('使用时间')
                             ->required()
-                            ->default(now()),
+                            ->disabled(),
                     ])
                     ->columns(2),
             ]);
@@ -101,13 +103,8 @@ class ToolUsageLogResource extends Resource
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
-                Tables\Actions\EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
-            ])
+            ->bulkActions([])
             ->defaultSort('used_at', 'desc');
     }
 
@@ -122,8 +119,6 @@ class ToolUsageLogResource extends Resource
     {
         return [
             'index' => Pages\ListToolUsageLogs::route('/'),
-            'create' => Pages\CreateToolUsageLog::route('/create'),
-            'edit' => Pages\EditToolUsageLog::route('/{record}/edit'),
             'view' => Pages\ViewToolUsageLog::route('/{record}'),
         ];
     }

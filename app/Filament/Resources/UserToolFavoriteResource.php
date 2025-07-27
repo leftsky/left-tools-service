@@ -32,17 +32,20 @@ class UserToolFavoriteResource extends Resource
                             ->label('用户')
                             ->relationship('user', 'name')
                             ->required()
-                            ->searchable(),
+                            ->searchable()
+                            ->disabled(),
                         Forms\Components\Select::make('tool_id')
                             ->label('工具')
                             ->relationship('tool', 'name')
                             ->required()
-                            ->searchable(),
+                            ->searchable()
+                            ->disabled(),
                         Forms\Components\TextInput::make('weight')
                             ->label('权重')
                             ->numeric()
                             ->default(0)
-                            ->helperText('权重越大排序越靠前'),
+                            ->helperText('权重越大排序越靠前')
+                            ->disabled(),
                     ])
                     ->columns(2),
             ]);
@@ -86,13 +89,8 @@ class UserToolFavoriteResource extends Resource
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
-                Tables\Actions\EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
-            ])
+            ->bulkActions([])
             ->defaultSort('weight', 'desc');
     }
 
@@ -107,8 +105,6 @@ class UserToolFavoriteResource extends Resource
     {
         return [
             'index' => Pages\ListUserToolFavorites::route('/'),
-            'create' => Pages\CreateUserToolFavorite::route('/create'),
-            'edit' => Pages\EditUserToolFavorite::route('/{record}/edit'),
             'view' => Pages\ViewUserToolFavorite::route('/{record}'),
         ];
     }

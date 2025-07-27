@@ -12,9 +12,6 @@ class ListToolUsageLogs extends ListRecords
 
     protected function getHeaderActions(): array
     {
-        return [
-            Actions\CreateAction::make()
-                ->label('创建使用记录'),
-        ];
+        return [];
     }
 } 

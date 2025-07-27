@@ -12,9 +12,6 @@ class ListToolUsageStats extends ListRecords
 
     protected function getHeaderActions(): array
     {
-        return [
-            Actions\CreateAction::make()
-                ->label('创建统计记录'),
-        ];
+        return [];
     }
 } 

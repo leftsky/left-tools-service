@@ -32,21 +32,24 @@ class UserToolHistoryResource extends Resource
                             ->label('用户')
                             ->relationship('user', 'name')
                             ->required()
-                            ->searchable(),
+                            ->searchable()
+                            ->disabled(),
                         Forms\Components\Select::make('tool_id')
                             ->label('工具')
                             ->relationship('tool', 'name')
                             ->required()
-                            ->searchable(),
+                            ->searchable()
+                            ->disabled(),
                         Forms\Components\DateTimePicker::make('last_used_at')
                             ->label('最后使用时间')
                             ->required()
-                            ->default(now()),
+                            ->disabled(),
                         Forms\Components\TextInput::make('usage_count')
                             ->label('使用次数')
                             ->numeric()
                             ->default(1)
-                            ->required(),
+                            ->required()
+                            ->disabled(),
                     ])
                     ->columns(2),
             ]);
@@ -113,13 +116,8 @@ class UserToolHistoryResource extends Resource
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
-                Tables\Actions\EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
-            ])
+            ->bulkActions([])
             ->defaultSort('last_used_at', 'desc');
     }
 
@@ -134,8 +132,6 @@ class UserToolHistoryResource extends Resource
     {
         return [
             'index' => Pages\ListUserToolHistories::route('/'),
-            'create' => Pages\CreateUserToolHistory::route('/create'),
-            'edit' => Pages\EditUserToolHistory::route('/{record}/edit'),
             'view' => Pages\ViewUserToolHistory::route('/{record}'),
         ];
     }

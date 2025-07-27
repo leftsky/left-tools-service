@@ -12,9 +12,6 @@ class ListUserToolHistories extends ListRecords
 
     protected function getHeaderActions(): array
     {
-        return [
-            Actions\CreateAction::make()
-                ->label('创建历史记录'),
-        ];
+        return [];
     }
 } 

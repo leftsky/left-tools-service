@@ -32,21 +32,24 @@ class ToolUsageStatResource extends Resource
                             ->label('工具')
                             ->relationship('tool', 'name')
                             ->required()
-                            ->searchable(),
+                            ->searchable()
+                            ->disabled(),
                         Forms\Components\DatePicker::make('date')
                             ->label('统计日期')
                             ->required()
-                            ->default(now()),
+                            ->disabled(),
                         Forms\Components\TextInput::make('usage_count')
                             ->label('使用次数')
                             ->numeric()
                             ->default(0)
-                            ->required(),
+                            ->required()
+                            ->disabled(),
                         Forms\Components\TextInput::make('user_count')
                             ->label('使用人数')
                             ->numeric()
                             ->default(0)
-                            ->required(),
+                            ->required()
+                            ->disabled(),
                     ])
                     ->columns(2),
             ]);
@@ -109,13 +112,8 @@ class ToolUsageStatResource extends Resource
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
-                Tables\Actions\EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
-            ])
+            ->bulkActions([])
             ->defaultSort('date', 'desc');
     }
 
@@ -130,8 +128,6 @@ class ToolUsageStatResource extends Resource
     {
         return [
             'index' => Pages\ListToolUsageStats::route('/'),
-            'create' => Pages\CreateToolUsageStat::route('/create'),
-            'edit' => Pages\EditToolUsageStat::route('/{record}/edit'),
             'view' => Pages\ViewToolUsageStat::route('/{record}'),
         ];
     }
