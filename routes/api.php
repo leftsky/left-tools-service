@@ -27,4 +27,5 @@ Route::middleware('auth:sanctum')->group(function () {
 // 工具相关接口
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/tools/extract-douyin', [ToolController::class, 'extractDouyin']);
+    Route::post('/tools/record-usage', [ToolController::class, 'recordUsage']);
 });
