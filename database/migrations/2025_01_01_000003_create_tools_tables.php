@@ -14,7 +14,7 @@ return new class extends Migration
         // 1. 工具表
         Schema::create('tools', function (Blueprint $table) {
             $table->comment('工具信息表');
-            $table->id()->comment('工具ID');
+            $table->id();
             $table->string('name')->comment('工具名称');
             $table->boolean('is_enabled')->default(true)->comment('是否启用');
             $table->integer('sort_weight')->default(0)->comment('排序权重');
@@ -25,7 +25,7 @@ return new class extends Migration
         // 2. 工具使用记录表
         Schema::create('tool_usage_logs', function (Blueprint $table) {
             $table->comment('工具使用记录表');
-            $table->id()->comment('使用记录ID');
+            $table->id();
             $table->unsignedBigInteger('tool_id')->comment('工具ID');
             $table->unsignedBigInteger('user_id')->nullable()->comment('用户ID');
             $table->timestamp('used_at')->comment('使用时间');
@@ -35,7 +35,7 @@ return new class extends Migration
         // 3. 工具使用次数统计表
         Schema::create('tool_usage_stats', function (Blueprint $table) {
             $table->comment('工具使用次数统计表');
-            $table->id()->comment('统计记录ID');
+            $table->id();
             $table->unsignedBigInteger('tool_id')->comment('工具ID');
             $table->date('date')->comment('统计日期');
             $table->integer('usage_count')->default(0)->comment('使用次数');
@@ -46,7 +46,7 @@ return new class extends Migration
         // 4. 用户收藏工具表
         Schema::create('user_tool_favorites', function (Blueprint $table) {
             $table->comment('用户收藏工具表');
-            $table->id()->comment('收藏记录ID');
+            $table->id();
             $table->unsignedBigInteger('user_id')->comment('用户ID');
             $table->unsignedBigInteger('tool_id')->comment('工具ID');
             $table->integer('weight')->default(0)->comment('权重');
@@ -56,7 +56,7 @@ return new class extends Migration
         // 5. 用户历史使用工具表
         Schema::create('user_tool_history', function (Blueprint $table) {
             $table->comment('用户历史使用工具表');
-            $table->id()->comment('历史记录ID');
+            $table->id();
             $table->unsignedBigInteger('user_id')->comment('用户ID');
             $table->unsignedBigInteger('tool_id')->comment('工具ID');
             $table->timestamp('last_used_at')->comment('最后使用时间');
