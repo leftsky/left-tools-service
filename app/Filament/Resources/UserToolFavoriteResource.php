@@ -19,6 +19,10 @@ class UserToolFavoriteResource extends Resource
     protected static ?string $navigationGroup = '工具管理';
 
     protected static ?string $navigationLabel = '用户收藏';
+    
+    protected static ?string $modelLabel = '用户收藏';
+    
+    protected static ?string $pluralModelLabel = '用户收藏';
 
     protected static ?int $navigationSort = 4;
 

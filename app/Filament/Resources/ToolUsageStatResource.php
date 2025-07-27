@@ -19,6 +19,10 @@ class ToolUsageStatResource extends Resource
     protected static ?string $navigationGroup = '工具管理';
 
     protected static ?string $navigationLabel = '使用统计';
+    
+    protected static ?string $modelLabel = '使用统计';
+    
+    protected static ?string $pluralModelLabel = '使用统计';
 
     protected static ?int $navigationSort = 3;
 

@@ -20,6 +20,10 @@ class ToolResource extends Resource
     protected static ?string $navigationGroup = '工具管理';
 
     protected static ?string $navigationLabel = '工具';
+    
+    protected static ?string $modelLabel = '工具';
+    
+    protected static ?string $pluralModelLabel = '工具';
 
     protected static ?int $navigationSort = 1;
 
