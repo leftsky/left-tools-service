@@ -12,13 +12,119 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use OpenApi\Attributes as OA;
 
+#[OA\Tag(
+    name: '认证管理',
+    description: '用户认证相关接口'
+)]
 class AuthController extends Controller
 {
     use ApiResponseTrait;
+    
     /**
      * 小程序登录
      */
+    #[OA\Post(
+        path: '/api/auth/mini-login',
+        summary: '微信小程序登录',
+        description: '使用微信小程序code换取用户token',
+        tags: ['认证管理'],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['code'],
+                properties: [
+                    new OA\Property(
+                        property: 'code',
+                        type: 'string',
+                        description: '微信小程序登录code',
+                        example: 'wx_code_123456'
+                    )
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: '登录成功',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 1),
+                        new OA\Property(property: 'status', type: 'string', example: 'success'),
+                        new OA\Property(property: 'message', type: 'string', example: '登录成功'),
+                        new OA\Property(
+                            property: 'data',
+                            type: 'object',
+                            properties: [
+                                new OA\Property(property: 'token', type: 'string', example: '1|abc123...'),
+                                new OA\Property(
+                                    property: 'user',
+                                    type: 'object',
+                                    properties: [
+                                        new OA\Property(property: 'id', type: 'integer', example: 1),
+                                        new OA\Property(property: 'name', type: 'string', example: '微信用户_12345678'),
+                                        new OA\Property(property: 'email', type: 'string', example: 'openid123@wechat.local'),
+                                        new OA\Property(property: 'phone', type: 'string', nullable: true, example: null),
+                                        new OA\Property(property: 'weixin_mini_openid', type: 'string', example: 'openid123'),
+                                        new OA\Property(property: 'weixin_unionid', type: 'string', example: 'unionid123'),
+                                        new OA\Property(property: 'email_verified_at', type: 'string', nullable: true, example: null),
+                                        new OA\Property(property: 'created_at', type: 'string', format: 'date-time'),
+                                        new OA\Property(property: 'updated_at', type: 'string', format: 'date-time')
+                                    ]
+                                )
+                            ]
+                        )
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 400,
+                description: '请求错误',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '微信登录失败: code无效'),
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 422,
+                description: '验证失败',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '参数错误'),
+                        new OA\Property(
+                            property: 'errors',
+                            type: 'object',
+                            properties: [
+                                new OA\Property(
+                                    property: 'code',
+                                    type: 'array',
+                                    items: new OA\Items(type: 'string'),
+                                    example: ['code字段是必需的']
+                                )
+                            ]
+                        )
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 500,
+                description: '服务器错误',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '服务器内部错误'),
+                    ]
+                )
+            )
+        ]
+    )]
     public function miniLogin(Request $request): JsonResponse
     {
         try {
@@ -125,6 +231,52 @@ class AuthController extends Controller
     /**
      * 获取当前用户信息
      */
+    #[OA\Get(
+        path: '/api/auth/me',
+        summary: '获取当前用户信息',
+        description: '获取当前登录用户的详细信息',
+        tags: ['认证管理'],
+        security: [['sanctum' => []]],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: '获取成功',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 1),
+                        new OA\Property(property: 'status', type: 'string', example: 'success'),
+                        new OA\Property(property: 'message', type: 'string', example: '获取用户信息成功'),
+                        new OA\Property(
+                            property: 'data',
+                            type: 'object',
+                            properties: [
+                                new OA\Property(property: 'id', type: 'integer', example: 1),
+                                new OA\Property(property: 'name', type: 'string', example: '微信用户_12345678'),
+                                new OA\Property(property: 'email', type: 'string', example: 'openid123@wechat.local'),
+                                new OA\Property(property: 'phone', type: 'string', nullable: true, example: null),
+                                new OA\Property(property: 'weixin_mini_openid', type: 'string', example: 'openid123'),
+                                new OA\Property(property: 'weixin_unionid', type: 'string', example: 'unionid123'),
+                                new OA\Property(property: 'email_verified_at', type: 'string', nullable: true, example: null),
+                                new OA\Property(property: 'created_at', type: 'string', format: 'date-time'),
+                                new OA\Property(property: 'updated_at', type: 'string', format: 'date-time')
+                            ]
+                        )
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 401,
+                description: '未授权',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '未授权访问'),
+                    ]
+                )
+            )
+        ]
+    )]
     public function me(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -135,13 +287,42 @@ class AuthController extends Controller
     /**
      * 退出登录
      */
+    #[OA\Post(
+        path: '/api/auth/logout',
+        summary: '退出登录',
+        description: '删除当前用户的访问令牌',
+        tags: ['认证管理'],
+        security: [['sanctum' => []]],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: '退出成功',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 1),
+                        new OA\Property(property: 'status', type: 'string', example: 'success'),
+                        new OA\Property(property: 'message', type: 'string', example: '退出成功'),
+                        new OA\Property(property: 'data', type: 'object', example: [])
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 401,
+                description: '未授权',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '未授权访问'),
+                    ]
+                )
+            )
+        ]
+    )]
     public function logout(Request $request): JsonResponse
     {
         $request->user()->currentAccessToken()->delete();
 
-        return response()->json([
-            'success' => true,
-            'message' => '退出成功',
-        ]);
+        return $this->success([], '退出成功');
     }
 }

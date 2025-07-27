@@ -11,6 +11,9 @@ RUN chmod -R 777 /var/www/storage
 RUN composer install --no-dev
 RUN php artisan telescope:install
 
+# 生成API文档
+RUN php artisan l5-swagger:generate
+
 RUN echo "* * * * * php /var/www/artisan schedule:run >> /dev/null 2>&1" >> /etc/crontabs/root
 #RUN php artisan key:generate
 RUN php artisan storage:link

@@ -106,10 +106,6 @@ class ToolResource extends Resource
             ->actions([
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
-                Tables\Actions\Action::make('stats')
-                    ->label('统计')
-                    ->icon('heroicon-o-chart-bar')
-                    ->url(fn (Tool $record): string => route('filament.admin.resources.tools.stats', $record)),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
