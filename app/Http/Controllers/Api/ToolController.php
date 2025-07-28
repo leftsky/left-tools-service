@@ -334,4 +334,128 @@ class ToolController extends Controller
             return $this->serverError('记录失败');
         }
     }
+
+    /**
+     * 记录工具使用（无需认证）
+     */
+    #[OA\Post(
+        path: '/api/tools/record-usage-public',
+        summary: '记录工具使用（无需认证）',
+        description: '记录指定工具的一次使用，支持未登录用户',
+        tags: ['工具接口'],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['tool_name'],
+                properties: [
+                    new OA\Property(
+                        property: 'tool_name',
+                        type: 'string',
+                        description: '工具名称',
+                        example: '视频转码'
+                    )
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: '记录成功',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 1),
+                        new OA\Property(property: 'status', type: 'string', example: 'success'),
+                        new OA\Property(property: 'message', type: 'string', example: '使用记录已保存'),
+                        new OA\Property(
+                            property: 'data',
+                            type: 'object',
+                            properties: [
+                                new OA\Property(property: 'tool_name', type: 'string', example: '视频转码'),
+                                new OA\Property(property: 'user_id', type: 'integer', nullable: true, example: null),
+                                new OA\Property(property: 'used_at', type: 'string', format: 'date-time')
+                            ]
+                        )
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 400,
+                description: '工具不存在',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '工具不存在'),
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 422,
+                description: '验证失败',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '参数错误'),
+                        new OA\Property(
+                            property: 'errors',
+                            type: 'object',
+                            properties: [
+                                new OA\Property(
+                                    property: 'tool_name',
+                                    type: 'array',
+                                    items: new OA\Items(type: 'string'),
+                                    example: ['tool_name字段是必需的']
+                                )
+                            ]
+                        )
+                    ]
+                )
+            )
+        ]
+    )]
+    public function recordUsagePublic(Request $request): JsonResponse
+    {
+        try {
+            // 验证请求参数
+            $request->validate([
+                'tool_name' => 'required|string|max:255',
+            ]);
+
+            $toolName = $request->input('tool_name');
+            $userId = $request->user()?->id; // 可能为null
+
+            // 记录工具使用
+            $usageLog = ToolUsageLog::recordUsage($toolName, $userId);
+
+            if (!$usageLog) {
+                return $this->error('工具不存在', 400);
+            }
+
+            // 记录日志
+            Log::info('工具使用记录已保存（无需认证）', [
+                'user_id' => $userId,
+                'tool_name' => $toolName,
+                'usage_log_id' => $usageLog->id,
+            ]);
+
+            return $this->success([
+                'tool_name' => $toolName,
+                'user_id' => $userId,
+                'used_at' => $usageLog->used_at,
+            ], '使用记录已保存');
+
+        } catch (ValidationException $e) {
+            return $this->validationError($e->errors(), '参数错误');
+        } catch (\Exception $e) {
+            Log::error('记录工具使用异常（无需认证）', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'tool_name' => $request->input('tool_name'),
+                'user_id' => $request->user()?->id,
+            ]);
+
+            return $this->serverError('记录失败');
+        }
+    }
 }

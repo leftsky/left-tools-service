@@ -24,8 +24,6 @@ const videoInfo = ref<{
   format: string;
 } | null>(null);
 
-
-
 // 临时存储解析的视频信息
 const tempVideoInfo = ref<{
   duration: number;
@@ -48,7 +46,6 @@ const videoQuality = ref("high");
 const resolution = ref("original");
 const framerate = ref("original");
 
-
 // FFmpeg CDN配置
 const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.10/dist/esm";
 
@@ -63,29 +60,26 @@ onMounted(async () => {
 
   // 设置日志监听
   ffmpeg.on("log", ({ message: msg }: any) => {
-    // 只在转换过程中输出关键日志，避免过多信息
+    // 只在转换过程中输出关键信息
     if (isConverting.value) {
-      // 只输出关键信息，过滤掉详细的进度日志
-      if (msg.includes("frame=") && msg.includes("fps=")) {
-        // 跳过详细的帧进度日志
-        return;
-      }
-      if (msg.includes("size=") && msg.includes("bitrate=")) {
-        // 跳过详细的比特率日志
-        return;
-      }
+      // 过滤掉详细的进度日志
+      if (msg.includes("frame=") && msg.includes("fps=")) return;
+      if (msg.includes("size=") && msg.includes("bitrate=")) return;
+
       // 只输出重要的转换信息
-      if (msg.includes("Stream mapping:") || 
-          msg.includes("Output #") || 
-          msg.includes("video:") || 
-          msg.includes("audio:") ||
-          msg.includes("muxing overhead:")) {
-        console.log(`[FFmpeg转换] ${msg}`);
+      if (
+        msg.includes("Stream mapping:") ||
+        msg.includes("Output #") ||
+        msg.includes("video:") ||
+        msg.includes("audio:") ||
+        msg.includes("muxing overhead:")
+      ) {
+        console.log(`[FFmpeg] ${msg}`);
       }
     } else {
-      // 在非转换状态下，只输出关键信息
+      // 只输出关键视频信息
       if (msg.includes("Duration:") || msg.includes("Video:") || msg.includes("Audio:")) {
-        console.log(`[FFmpeg信息] ${msg}`);
+        console.log(`[FFmpeg] ${msg}`);
       }
     }
 
@@ -114,11 +108,6 @@ onMounted(async () => {
     }
 
     if (msg.includes("Video:")) {
-      // 解析视频流信息
-      console.log("解析视频信息行:", msg);
-
-      // 更精确的分辨率匹配：在Video行中查找分辨率
-      // 分辨率通常出现在类似这样的格式中：Video: hevc (Main) (hev1 / 0x31766568), yuv420p(tv, bt709), 720x1280 [SAR 9:16 DAR 9:16], 30 fps, 30 tbr, 30 tbn, 30 tbc
       const resolutionMatch = msg.match(/(\d{3,4})x(\d{3,4})/);
       const fpsMatch = msg.match(/(\d+) fps/);
       const codecMatch = msg.match(/Video: (\w+)/);
@@ -138,28 +127,21 @@ onMounted(async () => {
       if (resolutionMatch) {
         const width = parseInt(resolutionMatch[1]);
         const height = parseInt(resolutionMatch[2]);
-        // 验证分辨率是否合理（至少100x100）
         if (width >= 100 && height >= 100) {
           tempVideoInfo.value.resolution = `${width}x${height}`;
-          console.log("解析到分辨率:", tempVideoInfo.value.resolution);
-        } else {
-          console.log("分辨率值不合理，跳过:", width, "x", height);
         }
       }
 
       if (fpsMatch) {
         tempVideoInfo.value.fps = parseInt(fpsMatch[1]);
-        console.log("解析到帧率:", tempVideoInfo.value.fps);
       }
 
       if (codecMatch) {
         tempVideoInfo.value.videoCodec = codecMatch[1];
-        console.log("解析到视频编解码器:", tempVideoInfo.value.videoCodec);
       }
 
       if (bitrateMatch) {
         tempVideoInfo.value.bitrate = `${bitrateMatch[1]} kb/s`;
-        console.log("解析到比特率:", tempVideoInfo.value.bitrate);
       }
     }
 
@@ -183,36 +165,22 @@ onMounted(async () => {
       }
     }
 
-    // 根据日志更新进度（简化版本）
+    // 更新进度
     if (msg.includes("frame=")) {
-      // 解析帧信息来更新进度
       const frameMatch = msg.match(/frame=\s*(\d+)/);
       if (frameMatch && isConverting.value) {
         const frame = parseInt(frameMatch[1]);
-        // 使用动态计算的帧数，如果没有视频信息则使用默认值
         const totalFrames = videoInfo.value?.totalFrames || 111;
-        const frameProgress = Math.min((frame / totalFrames) * 0.4, 0.4); // 视频转码占40%
-        progress.value = frameProgress * 100; // 转换为百分比
-        // 移除详细的进度日志，只保留关键节点
-      }
-    }
-
-    // 监控关键转换阶段
-    if (isConverting.value) {
-      if (msg.includes("Stream mapping:")) {
-        console.log("[转换阶段] 开始流映射...");
-      } else if (msg.includes("Output #0")) {
-        console.log("[转换阶段] 开始输出...");
+        const frameProgress = Math.min((frame / totalFrames) * 0.4, 0.4);
+        progress.value = frameProgress * 100;
       }
     }
   });
 
   // 设置进度监听
-  ffmpeg.on("progress", ({ progress: p, time }: any) => {
-    console.log(`[VideoConverter] 转换进度: ${p * 100}%, 时间: ${time}`);
+  ffmpeg.on("progress", ({ progress: p }: any) => {
     if (p > 0) {
-      // 根据当前转换阶段调整进度
-      // 这里暂时保持简单，主要依赖手动设置的阶段进度
+      // 主要依赖手动设置的阶段进度
     }
   });
 
@@ -240,33 +208,6 @@ onMounted(async () => {
     setMessage("资源加载完成！");
     isLoaded.value = true;
     isLoading.value = false;
-
-    // 检查ffprobe是否可用
-    console.log("检查ffprobe可用性:", typeof ffmpeg.ffprobe);
-    console.log("FFmpeg对象:", ffmpeg);
-
-    // 执行FFmpeg命令获取版本和帮助信息
-    //   try {
-    //     console.log("=== FFmpeg版本信息 ===");
-    //     await ffmpeg.exec(['-version']);
-
-    //     console.log("=== FFmpeg帮助信息 ===");
-    //     await ffmpeg.exec(['-h']);
-
-    //     console.log("=== FFmpeg支持的格式 ===");
-    //     await ffmpeg.exec(['-formats']);
-
-    //     console.log("=== FFmpeg支持的编码器 ===");
-    //     await ffmpeg.exec(['-codecs']);
-
-    //     console.log("=== FFmpeg支持的过滤器 ===");
-    //     await ffmpeg.exec(['-filters']);
-
-    //     setMessage("FFmpeg初始化完成，已获取详细信息");
-    //   } catch (infoError) {
-    //     console.warn("获取FFmpeg信息时出错:", infoError);
-    //     setMessage("FFmpeg初始化完成");
-    //   }
 
     // 等待一秒让用户看到加载完成
     await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -323,10 +264,10 @@ const readVideoInfo = async () => {
     return;
   }
 
-      if (!isLoaded.value) {
-      setMessage("资源尚未加载完成，无法读取视频信息");
-      return;
-    }
+  if (!isLoaded.value) {
+    setMessage("资源尚未加载完成，无法读取视频信息");
+    return;
+  }
 
   try {
     setMessage("正在读取视频信息...");
@@ -397,19 +338,7 @@ const convertVideo = async () => {
   const inputExt = getFileExtension(selectedFile.value.name);
   const outputExt = outputFormat.value;
 
-  console.log("=== 开始分离式转换 ===");
-  console.log("FFmpeg实例:", ffmpeg);
-  console.log(
-    "选择文件:",
-    selectedFile.value.name,
-    "大小:",
-    (selectedFile.value.size / 1024 / 1024).toFixed(2),
-    "MB"
-  );
-  console.log("输出格式:", outputFormat.value);
-  console.log("视频质量:", videoQuality.value);
-  console.log("分辨率设置:", resolution.value);
-  console.log("帧率设置:", framerate.value);
+  console.log("开始转换:", selectedFile.value.name, "→", outputFormat.value);
 
   isConverting.value = true;
   progress.value = 0;
@@ -426,12 +355,7 @@ const convertVideo = async () => {
     progress.value = 0;
 
     setMessage("正在写入输入文件...");
-    console.log("开始写入输入文件...");
-    const startTime = Date.now();
-    // 写入输入文件
     await ffmpeg.writeFile(`input.${inputExt}`, await fetchFile(selectedFile.value));
-    const writeTime = Date.now() - startTime;
-    console.log(`文件写入完成，耗时: ${writeTime}ms`);
     progress.value = 0; // 文件写入完成，准备开始转码
 
     // 始终使用分离式转码，参考成功代码的逻辑
@@ -457,43 +381,39 @@ const convertVideo = async () => {
 
       progress.value = 100;
       setMessage("转换完成！");
-      console.log("=== 转换成功完成 ===");
-      console.log("输出文件大小:", (data as Uint8Array).length, "字节");
+      console.log("转换成功，文件大小:", (data as Uint8Array).length, "字节");
 
       // 清理临时文件
       await cleanupTempFiles(inputExt, outputExt);
     } catch (readError) {
       console.error("读取输出文件失败:", readError);
-      
+
       // 检查是否有视频文件存在
       try {
         const videoData = await ffmpeg.readFile(`video_only.${outputExt}`);
         if (videoData && (videoData as Uint8Array).length > 0) {
-          console.log("发现有效的视频文件，尝试直接使用");
           convertedBlob.value = new Blob([(videoData as Uint8Array).buffer], {
             type: `video/${outputExt}`,
           });
           downloadUrl.value = URL.createObjectURL(convertedBlob.value);
           progress.value = 100;
           setMessage("转换完成！（仅视频）");
-          console.log("=== 转换成功完成（仅视频）===");
-          console.log("输出文件大小:", (videoData as Uint8Array).length, "字节");
+          console.log(
+            "转换成功（仅视频），文件大小:",
+            (videoData as Uint8Array).length,
+            "字节"
+          );
           await cleanupTempFiles(inputExt, outputExt);
           return;
         }
       } catch (videoError) {
         console.error("视频文件也不存在:", videoError);
       }
-      
+
       throw new Error(`读取输出文件失败: ${readError.message || readError.toString()}`);
     }
   } catch (error) {
-    console.error("=== 转换失败 ===");
-    console.error("错误对象:", error);
-    console.error("错误类型:", error.constructor.name);
-    console.error("错误消息:", error.message);
-    console.error("错误字符串:", error.toString());
-    console.error("错误堆栈:", error.stack);
+    console.error("转换失败:", error.message || error.toString());
 
     // 根据错误类型提供不同的建议
     let errorMessage = "转换失败，请检查文件格式或重试";
@@ -522,15 +442,11 @@ const convertVideo = async () => {
   } finally {
     isConverting.value = false;
     isLoading.value = false;
-    console.log("=== 转换流程结束 ===");
   }
 };
 
 // 分离式转码：分别处理视频和音频
 const performSeparateTranscode = async (inputExt: string, outputExt: string) => {
-  console.log("=== 开始分离式转码 ===");
-
-  // 在函数开始处定义所有变量，确保在所有执行路径中都能访问
   let videoTime = 0;
   let audioTime = 0;
   let mergeTime = 0;
@@ -545,55 +461,40 @@ const performSeparateTranscode = async (inputExt: string, outputExt: string) => 
   try {
     // 第一步：转码视频（无音频）
     setMessage("正在转码视频...");
-    progress.value = 0; // 视频转码开始：0%
-    console.log("步骤1: 转码视频（无音频）");
+    progress.value = 0;
 
     const videoCommand = buildVideoCommand(inputExt, outputExt);
-    console.log("视频转码命令:", videoCommand.join(" "));
-
     const videoStartTime = Date.now();
     await Promise.race([ffmpeg.exec(videoCommand), timeoutPromise]);
     videoTime = Date.now() - videoStartTime;
-    console.log(`视频转码完成，耗时: ${videoTime}ms`);
-    progress.value = 40; // 视频转码完成：40%
+    progress.value = 40;
 
     // 第二步：提取并转码音频
     setMessage("正在处理音频...");
-    progress.value = 40; // 音频处理开始：40%
-    console.log("步骤2: 提取并转码音频");
+    progress.value = 40;
 
     const audioCommand = buildAudioCommand(inputExt, outputExt);
-    console.log("音频转码命令:", audioCommand.join(" "));
-
     const audioStartTime = Date.now();
     await Promise.race([ffmpeg.exec(audioCommand), timeoutPromise]);
     audioTime = Date.now() - audioStartTime;
-    console.log(`音频转码完成，耗时: ${audioTime}ms`);
-    progress.value = 80; // 音频处理完成：80%
+    progress.value = 80;
 
     // 第三步：重新组合视频和音频
     setMessage("正在合并视频和音频...");
-    progress.value = 80; // 合并开始：80%
-    console.log("步骤3: 重新组合视频和音频");
+    progress.value = 80;
 
     const mergeCommand = buildMergeCommand(outputExt);
-    console.log("合并命令:", mergeCommand.join(" "));
-
     const mergeStartTime = Date.now();
     await Promise.race([ffmpeg.exec(mergeCommand), timeoutPromise]);
     mergeTime = Date.now() - mergeStartTime;
-    console.log(`合并完成，耗时: ${mergeTime}ms`);
-    progress.value = 100; // 合并完成：100%
+    progress.value = 100;
 
-    console.log("=== 分离式转码完成 ===");
-    console.log(`总耗时: ${videoTime + audioTime + mergeTime}ms`);
+    console.log("转码完成，总耗时:", videoTime + audioTime + mergeTime, "ms");
   } catch (error) {
-    console.error("分离式转码失败:", error);
+    console.error("转码失败:", error);
     throw error;
   }
 };
-
-
 
 // 构建视频转码命令
 const buildVideoCommand = (inputExt: string, outputExt: string) => {
@@ -656,7 +557,7 @@ const buildAudioCommand = (inputExt: string, outputExt: string) => {
 // 构建合并命令
 const buildMergeCommand = (outputExt: string) => {
   const audioFile = outputExt === "avi" ? "audio.mp3" : "audio.aac";
-  
+
   const command = [
     "-i",
     `video_only.${outputExt}`,
@@ -688,12 +589,10 @@ const cleanupTempFiles = async (inputExt: string, outputExt: string) => {
     for (const file of filesToDelete) {
       try {
         await ffmpeg.deleteFile(file);
-        console.log(`已删除临时文件: ${file}`);
       } catch (error) {
-        console.warn(`删除临时文件 ${file} 失败:`, error);
+        console.warn(`删除临时文件失败:`, error);
       }
     }
-    console.log("转换完成，已清理临时文件");
   } catch (cleanupError) {
     console.warn("清理临时文件失败:", cleanupError);
   }
@@ -704,30 +603,66 @@ const getFileExtension = (filename: string) => {
   return filename.split(".").pop()?.toLowerCase() || "mp4";
 };
 
+// 记录工具使用
+const recordToolUsage = async () => {
+  try {
+    const response = await fetch('/api/tools/record-usage-public', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: JSON.stringify({
+        tool_name: '视频转码'
+      })
+    });
+
+    if (response.ok) {
+      console.log('工具使用记录已保存');
+    } else {
+      console.warn('工具使用记录失败:', response.status);
+    }
+  } catch (error) {
+    console.warn('记录工具使用时出错:', error);
+  }
+};
+
 // 下载转换后的文件
-const downloadFile = () => {
-  if (convertedBlob.value && downloadUrl.value) {
+const downloadFile = async () => {
+  if (convertedBlob.value && downloadUrl.value && selectedFile.value) {
     const a = document.createElement("a");
     a.href = downloadUrl.value;
-    a.download = `converted.${outputFormat.value}`;
+    
+    // 获取原始文件名（不含扩展名）
+    const originalName = selectedFile.value.name;
+    const nameWithoutExt = originalName.substring(0, originalName.lastIndexOf("."));
+    
+    // 使用原始文件名 + 新的输出格式
+    a.download = `${nameWithoutExt}.${outputFormat.value}`;
+    
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+
+    // 记录工具使用
+    await recordToolUsage();
   }
 };
 </script>
 
 <template>
   <Layout title="视频格式转换 - 小左子的工具箱">
-
-
     <!-- 主要内容区域 -->
     <div class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
       <div class="grid grid-cols-1 lg:grid-cols-10 gap-8">
         <!-- 左侧功能说明 -->
         <div class="lg:col-span-4 order-2 lg:order-1">
-          <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 lg:sticky lg:top-8">
-            <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">功能说明</h2>
+          <div
+            class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 lg:sticky lg:top-8"
+          >
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+              功能说明
+            </h2>
             <div class="grid grid-cols-2 gap-4">
               <div>
                 <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
@@ -756,7 +691,7 @@ const downloadFile = () => {
                 </ul>
               </div>
             </div>
-            
+
             <div class="mt-6">
               <div
                 class="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md"
@@ -797,307 +732,315 @@ const downloadFile = () => {
         <!-- 右侧转换工具 -->
         <div class="lg:col-span-6 order-1 lg:order-2">
           <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
-        <!-- 状态消息 -->
-        <div
-          class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md"
-        >
-          <div class="flex items-center">
-            <svg
-              class="h-5 w-5 text-blue-400 mr-2"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+            <!-- 状态消息 -->
+            <div
+              class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md"
             >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              ></path>
-            </svg>
-            <span class="text-blue-800 dark:text-blue-200">{{ message }}</span>
-          </div>
-        </div>
-
-        <!-- 文件上传区域 -->
-        <div class="mb-8">
-          <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-            选择视频文件
-          </h2>
-          <div
-            @drop="handleDrop"
-            @dragover="handleDragOver"
-            class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center hover:border-blue-400 dark:hover:border-blue-400 transition-colors"
-            :class="{ 'border-blue-400 bg-blue-50 dark:bg-blue-900/20': selectedFile }"
-          >
-            <svg
-              class="mx-auto h-12 w-12 text-gray-400"
-              stroke="currentColor"
-              fill="none"
-              viewBox="0 0 48 48"
-            >
-              <path
-                d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-            <div class="mt-4">
-              <label
-                for="file-upload"
-                class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
-              >
-                选择文件
-              </label>
-              <input
-                id="file-upload"
-                name="file-upload"
-                type="file"
-                class="sr-only"
-                accept="video/*"
-                @change="handleFileSelect"
-              />
-              <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                支持 MP4, AVI, MOV, MKV, WMV 等格式
-              </p>
-              <p
-                v-if="selectedFile"
-                class="mt-2 text-sm text-blue-600 dark:text-blue-400"
-              >
-                已选择: {{ selectedFile.name }}
-              </p>
-              <div
-                v-if="videoInfo"
-                class="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-md"
-              >
-                <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                  视频信息
-                </h4>
-                <div
-                  class="grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-400"
+              <div class="flex items-center">
+                <svg
+                  class="h-5 w-5 text-blue-400 mr-2"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
                 >
-                  <div>时长: {{ videoInfo.duration.toFixed(2) }}秒</div>
-                  <div>帧率: {{ videoInfo.fps.toFixed(2) }}fps</div>
-                  <div>总帧数: {{ videoInfo.totalFrames }}</div>
-                  <div>分辨率: {{ videoInfo.resolution }}</div>
-                  <div>比特率: {{ videoInfo.bitrate }}</div>
-                  <div>格式: {{ videoInfo.format }}</div>
-                </div>
-
-
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  ></path>
+                </svg>
+                <span class="text-blue-800 dark:text-blue-200">{{ message }}</span>
               </div>
             </div>
-          </div>
-        </div>
 
-        <!-- 转换选项 -->
-        <div class="mb-8">
-          <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-            转换选项
-          </h2>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- 输出格式 -->
-            <div>
-              <label
-                for="output-format"
-                class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+            <!-- 文件上传区域 -->
+            <div class="mb-8">
+              <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                选择视频文件
+              </h2>
+              <div
+                @drop="handleDrop"
+                @dragover="handleDragOver"
+                class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center hover:border-blue-400 dark:hover:border-blue-400 transition-colors"
+                :class="{
+                  'border-blue-400 bg-blue-50 dark:bg-blue-900/20': selectedFile,
+                }"
               >
-                输出格式
-              </label>
-              <select
-                id="output-format"
-                v-model="outputFormat"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              >
-                <option value="mp4">MP4</option>
-                <option value="avi">AVI</option>
-                <option value="mov">MOV</option>
-                <option value="mkv">MKV</option>
-                <option value="wmv">WMV</option>
-                <option value="flv">FLV</option>
-              </select>
+                <svg
+                  class="mx-auto h-12 w-12 text-gray-400"
+                  stroke="currentColor"
+                  fill="none"
+                  viewBox="0 0 48 48"
+                >
+                  <path
+                    d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+                <div class="mt-4">
+                  <label
+                    for="file-upload"
+                    class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
+                  >
+                    选择文件
+                  </label>
+                  <input
+                    id="file-upload"
+                    name="file-upload"
+                    type="file"
+                    class="sr-only"
+                    accept="video/*"
+                    @change="handleFileSelect"
+                  />
+                  <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                    支持 MP4, AVI, MOV, MKV, WMV 等格式
+                  </p>
+                  <p
+                    v-if="selectedFile"
+                    class="mt-2 text-sm text-blue-600 dark:text-blue-400"
+                  >
+                    已选择: {{ selectedFile.name }}
+                  </p>
+                  <div
+                    v-if="videoInfo"
+                    class="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-md"
+                  >
+                    <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                      视频信息
+                    </h4>
+                    <div
+                      class="grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-400"
+                    >
+                      <div>时长: {{ videoInfo.duration.toFixed(2) }}秒</div>
+                      <div>帧率: {{ videoInfo.fps.toFixed(2) }}fps</div>
+                      <div>总帧数: {{ videoInfo.totalFrames }}</div>
+                      <div>分辨率: {{ videoInfo.resolution }}</div>
+                      <div>比特率: {{ videoInfo.bitrate }}</div>
+                      <div>格式: {{ videoInfo.format }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <!-- 视频质量 -->
-            <div>
-              <label
-                for="video-quality"
-                class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                视频质量
-              </label>
-              <select
-                id="video-quality"
-                v-model="videoQuality"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              >
-                <option value="high">高质量</option>
-                <option value="medium">中等质量</option>
-                <option value="low">低质量</option>
-              </select>
+            <!-- 转换选项 -->
+            <div class="mb-8">
+              <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                转换选项
+              </h2>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- 输出格式 -->
+                <div>
+                  <label
+                    for="output-format"
+                    class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                  >
+                    输出格式
+                  </label>
+                  <select
+                    id="output-format"
+                    v-model="outputFormat"
+                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="mp4">MP4</option>
+                    <option value="avi">AVI</option>
+                    <option value="mov">MOV</option>
+                    <option value="mkv">MKV</option>
+                    <option value="wmv">WMV</option>
+                    <option value="flv">FLV</option>
+                  </select>
+                </div>
+
+                <!-- 视频质量 -->
+                <div>
+                  <label
+                    for="video-quality"
+                    class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                  >
+                    视频质量
+                  </label>
+                  <select
+                    id="video-quality"
+                    v-model="videoQuality"
+                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="high">高质量</option>
+                    <option value="medium">中等质量</option>
+                    <option value="low">低质量</option>
+                  </select>
+                </div>
+
+                <!-- 分辨率 -->
+                <div>
+                  <label
+                    for="resolution"
+                    class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                  >
+                    分辨率
+                  </label>
+                  <select
+                    id="resolution"
+                    v-model="resolution"
+                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="original">保持原分辨率</option>
+                    <option value="4k">4K (3840x2160)</option>
+                    <option value="1080p">1080p (1920x1080)</option>
+                    <option value="720p">720p (1280x720)</option>
+                    <option value="480p">480p (854x480)</option>
+                  </select>
+                </div>
+
+                <!-- 帧率 -->
+                <div>
+                  <label
+                    for="framerate"
+                    class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                  >
+                    帧率
+                  </label>
+                  <select
+                    id="framerate"
+                    v-model="framerate"
+                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="original">保持原帧率</option>
+                    <option value="60">60 FPS</option>
+                    <option value="30">30 FPS</option>
+                    <option value="25">25 FPS</option>
+                    <option value="24">24 FPS</option>
+                  </select>
+                </div>
+              </div>
             </div>
 
-            <!-- 分辨率 -->
-            <div>
-              <label
-                for="resolution"
-                class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+            <!-- 转换按钮 -->
+            <div class="text-center">
+              <button
+                @click="convertVideo"
+                :disabled="!selectedFile || !videoInfo || isConverting || !isLoaded"
+                class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-3 px-8 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
-                分辨率
-              </label>
-              <select
-                id="resolution"
-                v-model="resolution"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              >
-                <option value="original">保持原分辨率</option>
-                <option value="4k">4K (3840x2160)</option>
-                <option value="1080p">1080p (1920x1080)</option>
-                <option value="720p">720p (1280x720)</option>
-                <option value="480p">480p (854x480)</option>
-              </select>
+                <svg
+                  v-if="!isConverting"
+                  class="inline-block h-5 w-5 mr-2"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                  ></path>
+                </svg>
+                <svg
+                  v-else
+                  class="inline-block h-5 w-5 mr-2 animate-spin"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  ></path>
+                </svg>
+                {{ isConverting ? "转换中..." : "开始转换" }}
+              </button>
             </div>
 
-            <!-- 帧率 -->
-            <div>
-              <label
-                for="framerate"
-                class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                帧率
-              </label>
-              <select
-                id="framerate"
-                v-model="framerate"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              >
-                <option value="original">保持原帧率</option>
-                <option value="60">60 FPS</option>
-                <option value="30">30 FPS</option>
-                <option value="25">25 FPS</option>
-                <option value="24">24 FPS</option>
-              </select>
+            <!-- 加载进度 -->
+            <div v-if="isLoading" class="mt-8">
+              <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                资源加载进度
+              </h3>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-sm text-gray-600 dark:text-gray-400"
+                  >正在加载核心文件，请稍候...</span
+                >
+                <span class="text-sm font-medium text-blue-600 dark:text-blue-400"
+                  >{{ Math.round(progress) }}%</span
+                >
+              </div>
+              <div class="bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                <div
+                  class="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  :style="{ width: progress + '%' }"
+                ></div>
+              </div>
             </div>
 
+            <!-- 转换进度 -->
+            <div v-if="isConverting && !isLoading" class="mt-8">
+              <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                转换进度
+              </h3>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-sm text-gray-600 dark:text-gray-400"
+                  >正在转换中，请稍候...</span
+                >
+                <span class="text-sm font-medium text-blue-600 dark:text-blue-400"
+                  >{{ Math.round(progress) }}%</span
+                >
+              </div>
+              <div class="bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                <div
+                  class="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  :style="{ width: progress + '%' }"
+                ></div>
+              </div>
+            </div>
 
-          </div>
-        </div>
-
-        <!-- 转换按钮 -->
-        <div class="text-center">
-          <button
-            @click="convertVideo"
-            :disabled="!selectedFile || !videoInfo || isConverting || !isLoaded"
-            class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-3 px-8 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            <svg
-              v-if="!isConverting"
-              class="inline-block h-5 w-5 mr-2"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-              ></path>
-            </svg>
-            <svg
-              v-else
-              class="inline-block h-5 w-5 mr-2 animate-spin"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-              ></path>
-            </svg>
-            {{ isConverting ? "转换中..." : "开始转换" }}
-          </button>
-        </div>
-
-        <!-- 加载进度 -->
-        <div v-if="isLoading" class="mt-8">
-          <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
-            资源加载进度
-          </h3>
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-sm text-gray-600 dark:text-gray-400">正在加载核心文件，请稍候...</span>
-            <span class="text-sm font-medium text-blue-600 dark:text-blue-400">{{ Math.round(progress) }}%</span>
-          </div>
-          <div class="bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+            <!-- 下载区域 -->
             <div
-              class="bg-blue-600 h-2 rounded-full transition-all duration-300"
-              :style="{ width: progress + '%' }"
-            ></div>
-          </div>
-        </div>
-
-        <!-- 转换进度 -->
-        <div v-if="isConverting && !isLoading" class="mt-8">
-          <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">转换进度</h3>
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-sm text-gray-600 dark:text-gray-400">正在转换中，请稍候...</span>
-            <span class="text-sm font-medium text-blue-600 dark:text-blue-400">{{ Math.round(progress) }}%</span>
-          </div>
-          <div class="bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-            <div
-              class="bg-blue-600 h-2 rounded-full transition-all duration-300"
-              :style="{ width: progress + '%' }"
-            ></div>
-          </div>
-        </div>
-
-        <!-- 下载区域 -->
-        <div
-          v-if="convertedBlob && downloadUrl"
-          class="mt-8 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md"
-        >
-          <div class="flex items-center justify-between">
-            <div class="flex items-center">
-              <svg
-                class="h-5 w-5 text-green-400 mr-2"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                ></path>
-              </svg>
-              <span class="text-green-800 dark:text-green-200">转换完成！</span>
-            </div>
-            <button
-              @click="downloadFile"
-              class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
+              v-if="convertedBlob && downloadUrl"
+              class="mt-8 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md"
             >
-              <svg
-                class="inline-block h-4 w-4 mr-1"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                ></path>
-              </svg>
-              下载文件
-            </button>
-          </div>
-        </div>
+              <div class="flex items-center justify-between">
+                <div class="flex items-center">
+                  <svg
+                    class="h-5 w-5 text-green-400 mr-2"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                    ></path>
+                  </svg>
+                  <span class="text-green-800 dark:text-green-200">转换完成！</span>
+                </div>
+                <button
+                  @click="downloadFile"
+                  class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
+                >
+                  <svg
+                    class="inline-block h-4 w-4 mr-1"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    ></path>
+                  </svg>
+                  下载文件
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -29,3 +29,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/tools/extract-douyin', [ToolController::class, 'extractDouyin']);
     Route::post('/tools/record-usage', [ToolController::class, 'recordUsage']);
 });
+
+// 无需认证的工具接口
+Route::post('/tools/record-usage-public', [ToolController::class, 'recordUsagePublic']);
