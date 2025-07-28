@@ -53,7 +53,7 @@ onMounted(async () => {
       const frameMatch = msg.match(/frame=\s*(\d+)/);
       if (frameMatch) {
         const frame = parseInt(frameMatch[1]);
-        // 使用动态计算的帧数
+        // 使用动态计算的帧数，如果没有视频信息则使用默认值
         const totalFrames = videoInfo.value?.totalFrames || 111;
         const frameProgress = Math.min((frame / totalFrames) * 70, 70);
         progress.value = 20 + frameProgress; // 从20%开始，最多到90%
@@ -69,35 +69,62 @@ onMounted(async () => {
     }
   });
 
-  // 自动加载FFmpeg
-  try {
-    isLoading.value = true;
-    setMessage("正在加载FFmpeg...");
-    
-    // 模拟加载进度
-    const progressInterval = setInterval(() => {
-      if (progress.value < 80) {
-        progress.value += 5;
-        setMessage(`正在加载FFmpeg... ${progress.value}%`);
-      }
-    }, 200);
+      // 自动加载FFmpeg
+    try {
+      isLoading.value = true;
+      setMessage("正在加载FFmpeg...");
+      
+      // 模拟加载进度
+      const progressInterval = setInterval(() => {
+        if (progress.value < 80) {
+          progress.value += 5;
+          setMessage(`正在加载FFmpeg... ${progress.value}%`);
+        }
+      }, 200);
 
-    await ffmpeg.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-      workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, "text/javascript"),
-    });
-    
-    clearInterval(progressInterval);
-    progress.value = 100;
-    setMessage("FFmpeg加载完成！");
-    isLoaded.value = true;
-    isLoading.value = false;
-    
-    // 等待一秒让用户看到加载完成
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setMessage("请选择视频文件开始转换");
-    progress.value = 0;
+      await ffmpeg.load({
+        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+        workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, "text/javascript"),
+      });
+      
+      clearInterval(progressInterval);
+      progress.value = 100;
+      setMessage("FFmpeg加载完成！");
+      isLoaded.value = true;
+      isLoading.value = false;
+      
+      // 检查ffprobe是否可用
+      console.log("检查ffprobe可用性:", typeof ffmpeg.ffprobe);
+      console.log("FFmpeg对象:", ffmpeg);
+      
+      // 执行FFmpeg命令获取版本和帮助信息
+      try {
+        console.log("=== FFmpeg版本信息 ===");
+        await ffmpeg.exec(['-version']);
+        
+        console.log("=== FFmpeg帮助信息 ===");
+        await ffmpeg.exec(['-h']);
+        
+        console.log("=== FFmpeg支持的格式 ===");
+        await ffmpeg.exec(['-formats']);
+        
+        console.log("=== FFmpeg支持的编码器 ===");
+        await ffmpeg.exec(['-codecs']);
+        
+        console.log("=== FFmpeg支持的过滤器 ===");
+        await ffmpeg.exec(['-filters']);
+        
+        setMessage("FFmpeg初始化完成，已获取详细信息");
+      } catch (infoError) {
+        console.warn("获取FFmpeg信息时出错:", infoError);
+        setMessage("FFmpeg初始化完成");
+      }
+      
+      // 等待一秒让用户看到加载完成
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      setMessage("请选择视频文件开始转换");
+      progress.value = 0;
   } catch (error) {
     console.error("FFmpeg加载失败:", error);
     setMessage("FFmpeg加载失败，请刷新页面重试");
@@ -143,21 +170,7 @@ const handleDragOver = (event: DragEvent) => {
   event.preventDefault();
 };
 
-// 解析帧率字符串 (如 "30/1" -> 30)
-const parseFrameRate = (frameRate: string): number => {
-  try {
-    const parts = frameRate.split('/');
-    if (parts.length === 2) {
-      const numerator = parseFloat(parts[0]);
-      const denominator = parseFloat(parts[1]);
-      return denominator > 0 ? numerator / denominator : 30;
-    }
-    return parseFloat(frameRate) || 30;
-  } catch {
-    console.warn("解析帧率失败，使用默认值30:", frameRate);
-    return 30;
-  }
-};
+
 
 // 读取视频信息
 const readVideoInfo = async () => {
@@ -179,33 +192,25 @@ const readVideoInfo = async () => {
     // 写入临时文件
     await ffmpeg.writeFile(`temp_input.${inputExt}`, await fetchFile(selectedFile.value));
     
-    // 使用ffprobe获取视频信息
-    const info = await ffmpeg.ffprobe(['-i', `temp_input.${inputExt}`]);
-    console.log("ffprobe返回的完整信息:", JSON.stringify(info, null, 2));
-    
-    if (info.streams && info.streams.length > 0) {
-      const videoStream = info.streams.find(stream => stream.codec_type === 'video');
+    // 使用exec命令获取视频信息
+    console.log("尝试使用exec获取视频信息...");
+    try {
+      await ffmpeg.exec(['-i', `temp_input.${inputExt}`]);
       
-      if (videoStream) {
-        const duration = parseFloat(info.format?.duration || '0');
-        const fps = parseFrameRate(videoStream.r_frame_rate || '30/1');
-        const totalFrames = Math.round(duration * fps);
-        const width = videoStream.width || 0;
-        const height = videoStream.height || 0;
-        const bitrate = info.format?.bit_rate || '0';
-        const codecName = videoStream.codec_name || '';
-        
-        videoInfo.value = {
-          duration,
-          fps,
-          totalFrames,
-          resolution: `${width}x${height}`,
-          bitrate: `${Math.round(parseInt(bitrate) / 1000)} kbps`,
-          format: info.format?.format_name || 'unknown'
-        };
-        
-        setMessage(`视频信息: ${duration.toFixed(2)}秒, ${fps.toFixed(2)}fps, ${totalFrames}帧, ${width}x${height}, 编码: ${codecName}`);
-      }
+      // 如果exec成功，说明文件是有效的视频文件
+      // 但我们无法从exec获取结构化信息，所以设置基本信息
+      setMessage("视频文件有效，但无法获取详细信息");
+      videoInfo.value = {
+        duration: 0,
+        fps: 30,
+        totalFrames: 0,
+        resolution: "未知",
+        bitrate: "未知",
+        format: inputExt
+      };
+    } catch (execError) {
+      console.error("exec命令失败:", execError);
+      throw new Error("无法读取视频信息");
     }
     
     // 清理临时文件
