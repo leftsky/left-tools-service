@@ -229,6 +229,23 @@ onMounted(async () => {
         if (fpsMatch) {
           console.log(`[转换性能] 当前FPS: ${fpsMatch[1]}`);
         }
+      } else if (msg.includes("audio:")) {
+        // 监控音频转换进度
+        console.log(`[音频转换] ${msg}`);
+      } else if (msg.includes("time=")) {
+        // 监控时间进度
+        const timeMatch = msg.match(/time=(\d{2}):(\d{2}):(\d{2}\.\d{2})/);
+        if (timeMatch) {
+          const hours = parseInt(timeMatch[1]);
+          const minutes = parseInt(timeMatch[2]);
+          const seconds = parseFloat(timeMatch[3]);
+          const currentTime = hours * 3600 + minutes * 60 + seconds;
+          const totalTime = videoInfo.value?.duration || 0;
+          if (totalTime > 0) {
+            const audioProgress = (currentTime / totalTime) * 100;
+            console.log(`[音频进度] ${audioProgress.toFixed(1)}% (${timeMatch[0]})`);
+          }
+        }
       }
     }
   });
@@ -470,6 +487,13 @@ const convertVideo = async () => {
       }, 1000 * 60); // 1分钟超时
     });
     
+    // 添加音频转换专用超时（更短）
+    const audioTimeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error("音频转换超时，尝试仅视频转换"));
+      }, 1000 * 30); // 30秒音频转换超时
+    });
+    
     // 执行转换
     try {
       const convertStartTime = Date.now();
@@ -500,7 +524,11 @@ const convertVideo = async () => {
           // 策略2: 仅视频转换
           ["-i", `input.${inputExt}`, "-an", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-y", `output.${outputExt}`],
           // 策略3: 使用最基本的映射
-          ["-i", `input.${inputExt}`, "-map", "0:v", "-map", "0:a", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-c:a", "aac", "-b:a", "128k", "-y", `output.${outputExt}`]
+          ["-i", `input.${inputExt}`, "-map", "0:v", "-map", "0:a", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-c:a", "aac", "-b:a", "128k", "-y", `output.${outputExt}`],
+          // 策略4: Opus音频特殊处理
+          ["-i", `input.${inputExt}`, "-map", "0:v", "-map", "0:a", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-af", "aresample=async=1", "-ar", "48000", "-c:a", "aac", "-b:a", "128k", "-y", `output.${outputExt}`],
+          // 策略5: 使用libfdk_aac（如果可用）
+          ["-i", `input.${inputExt}`, "-map", "0:v", "-map", "0:a", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-c:a", "libfdk_aac", "-b:a", "128k", "-y", `output.${outputExt}`]
         ];
         
         for (let i = 0; i < fallbackStrategies.length; i++) {
@@ -509,7 +537,9 @@ const convertVideo = async () => {
           setMessage(`尝试策略 ${i + 1}...`);
           
           try {
-            await Promise.race([ffmpeg.exec(strategy), timeoutPromise]);
+            // 根据策略类型选择不同的超时
+            const currentTimeout = strategy.includes("-an") ? timeoutPromise : audioTimeoutPromise;
+            await Promise.race([ffmpeg.exec(strategy), currentTimeout]);
             console.log(`策略 ${i + 1} 成功`);
             setMessage(`策略 ${i + 1} 转换成功`);
             progress.value = 90;
@@ -659,17 +689,43 @@ const buildFFmpegCommand = (inputExt: string, outputExt: string) => {
 
   // 音频编码器设置（仅在需要音频时）
   if (audioMode.value !== "none") {
-    switch (outputExt) {
-      case "mp4":
-      case "mov":
-      case "mkv":
-      case "wmv":
-      case "flv":
-        command.push("-c:a", "aac", "-b:a", "128k");
-        break;
-      case "avi":
-        command.push("-c:a", "mp3", "-b:a", "128k");
-        break;
+    // 检测输入音频编码器类型
+    const inputAudioCodec = tempVideoInfo.value?.audioCodec || "unknown";
+    console.log("输入音频编码器:", inputAudioCodec);
+    
+    // 根据输入音频编码器选择转换策略
+    if (inputAudioCodec === "opus") {
+      // Opus音频特殊处理
+      console.log("检测到Opus音频，使用特殊转换参数");
+      command.push("-af", "aresample=async=1");
+      command.push("-ar", "48000");
+      
+      switch (outputExt) {
+        case "mp4":
+        case "mov":
+        case "mkv":
+        case "wmv":
+        case "flv":
+          command.push("-c:a", "aac", "-b:a", "128k");
+          break;
+        case "avi":
+          command.push("-c:a", "mp3", "-b:a", "128k");
+          break;
+      }
+    } else {
+      // 其他音频编码器的标准处理
+      switch (outputExt) {
+        case "mp4":
+        case "mov":
+        case "mkv":
+        case "wmv":
+        case "flv":
+          command.push("-c:a", "aac", "-b:a", "128k");
+          break;
+        case "avi":
+          command.push("-c:a", "mp3", "-b:a", "128k");
+          break;
+      }
     }
   }
 
@@ -1056,6 +1112,12 @@ const downloadFile = () => {
               <div v-if="audioMode !== 'none' && audioStreams.length > 0">
                 选中音频流: {{ audioStreams[selectedAudioStream]?.codec || '未知' }}
               </div>
+              <div v-if="tempVideoInfo?.audioCodec" class="mt-1 text-yellow-600 dark:text-yellow-400">
+                输入音频编码器: {{ tempVideoInfo.audioCodec }}
+                <span v-if="tempVideoInfo.audioCodec === 'opus'" class="text-xs">
+                  (使用特殊转换参数)
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -1189,6 +1251,11 @@ const downloadFile = () => {
                 <p class="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
                   如果转换过程中音频处理失败，系统会自动尝试仅视频转换。建议选择"仅视频"选项以获得最佳兼容性。
                 </p>
+                <div class="mt-2 text-xs text-yellow-600 dark:text-yellow-400">
+                  <div>• Opus音频会自动使用特殊转换参数</div>
+                  <div>• 音频转换超时时间为30秒</div>
+                  <div>• 系统提供5种不同的转换策略</div>
+                </div>
               </div>
             </div>
           </div>
