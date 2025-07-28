@@ -47,20 +47,28 @@ const resolution = ref("original");
 const framerate = ref("original");
 
 // FFmpeg CDN配置
-const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.9/dist/esm";
+const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.10/dist/esm";
 
 // FFmpeg实例
 const ffmpeg = new FFmpeg();
 
 // 初始化FFmpeg
 onMounted(async () => {
-  // 设置日志监听
+  // 清理之前的事件监听器（如果有的话）
+  ffmpeg.off("log");
+  ffmpeg.off("progress");
+  
+    // 设置日志监听
   ffmpeg.on("log", ({ message: msg }: any) => {
-    console.log(`[FFmpeg] ${msg}`);
-
-    // 只在转换过程中更新消息，避免干扰视频信息读取
+    // 只在转换过程中输出详细日志，避免干扰视频信息读取
     if (isConverting.value) {
+      console.log(`[FFmpeg转换] ${msg}`);
       setMessage(msg);
+    } else {
+      // 在非转换状态下，只输出关键信息
+      if (msg.includes("Duration:") || msg.includes("Video:") || msg.includes("Audio:")) {
+        console.log(`[FFmpeg信息] ${msg}`);
+      }
     }
 
     // 解析视频信息
@@ -168,8 +176,23 @@ onMounted(async () => {
         const frameProgress = Math.min((frame / totalFrames) * 70, 70);
         progress.value = 20 + frameProgress; // 从20%开始，最多到90%
         console.log(
-          `转换进度: ${frame}/${totalFrames} 帧 (${progress.value.toFixed(1)}%)`
+          `[转换进度] ${frame}/${totalFrames} 帧 (${progress.value.toFixed(1)}%) - ${new Date().toLocaleTimeString()}`
         );
+      }
+    }
+    
+    // 监控关键转换阶段
+    if (isConverting.value) {
+      if (msg.includes("Stream mapping:")) {
+        console.log("[转换阶段] 开始流映射...");
+      } else if (msg.includes("Output #0")) {
+        console.log("[转换阶段] 开始输出...");
+      } else if (msg.includes("frame=") && msg.includes("fps=")) {
+        // 解析FPS信息
+        const fpsMatch = msg.match(/fps=\s*(\d+)/);
+        if (fpsMatch) {
+          console.log(`[转换性能] 当前FPS: ${fpsMatch[1]}`);
+        }
       }
     }
   });
@@ -359,7 +382,13 @@ const convertVideo = async () => {
     return;
   }
 
-  console.log(ffmpeg, selectedFile.value);
+  console.log("=== 开始转换 ===");
+  console.log("FFmpeg实例:", ffmpeg);
+  console.log("选择文件:", selectedFile.value.name, "大小:", (selectedFile.value.size / 1024 / 1024).toFixed(2), "MB");
+  console.log("输出格式:", outputFormat.value);
+  console.log("视频质量:", videoQuality.value);
+  console.log("分辨率设置:", resolution.value);
+  console.log("帧率设置:", framerate.value);
 
   isConverting.value = true;
   progress.value = 0;
@@ -380,30 +409,40 @@ const convertVideo = async () => {
     const outputExt = outputFormat.value;
 
     setMessage("正在写入输入文件...");
+    console.log("开始写入输入文件...");
+    const startTime = Date.now();
     // 写入输入文件
     await ffmpeg.writeFile(`input.${inputExt}`, await fetchFile(selectedFile.value));
+    const writeTime = Date.now() - startTime;
+    console.log(`文件写入完成，耗时: ${writeTime}ms`);
     progress.value = 20;
 
     // 构建FFmpeg命令
     const command = buildFFmpegCommand(inputExt, outputExt);
 
-    setMessage("开始转换...");
+        setMessage("开始转换...");
     console.log("执行FFmpeg命令:", command.join(" "));
-
+    console.log("转换开始时间:", new Date().toLocaleTimeString());
+    
     // 添加超时机制
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => {
         reject(new Error("转换超时，请尝试更小的文件或更低的设置"));
       }, 1000 * 60); // 1分钟超时
     });
-
+    
     // 执行转换
     try {
+      const convertStartTime = Date.now();
       await Promise.race([ffmpeg.exec(command), timeoutPromise]);
+      const convertTime = Date.now() - convertStartTime;
       console.log("FFmpeg转换命令执行完成");
+      console.log(`转换耗时: ${convertTime}ms`);
+      console.log("转换结束时间:", new Date().toLocaleTimeString());
       progress.value = 90;
     } catch (execError) {
       console.error("FFmpeg执行错误:", execError);
+      console.error("错误详情:", execError.stack);
       throw new Error(`转换执行失败: ${execError.message}`);
     }
 
@@ -429,11 +468,25 @@ const convertVideo = async () => {
     } catch (cleanupError) {
       console.warn("清理临时文件失败:", cleanupError);
     }
-  } catch (error) {
-    console.error("转换失败:", error);
-    setMessage("转换失败，请检查文件格式或重试");
-    alert("视频转换失败，请检查文件格式或重试");
-
+    } catch (error) {
+    console.error("=== 转换失败 ===");
+    console.error("错误类型:", error.constructor.name);
+    console.error("错误消息:", error.message);
+    console.error("错误堆栈:", error.stack);
+    
+    // 根据错误类型提供不同的建议
+    let errorMessage = "转换失败，请检查文件格式或重试";
+    if (error.message.includes("超时")) {
+      errorMessage = "转换超时，建议：1. 尝试更小的文件 2. 降低视频质量设置 3. 检查网络连接";
+    } else if (error.message.includes("编码器")) {
+      errorMessage = "编码器错误，建议：1. 尝试不同的输出格式 2. 检查输入文件是否损坏";
+    } else if (error.message.includes("内存")) {
+      errorMessage = "内存不足，建议：1. 关闭其他程序 2. 尝试更小的文件";
+    }
+    
+    setMessage(errorMessage);
+    alert(errorMessage);
+    
     // 清理临时文件
     try {
       const inputExt = getFileExtension(selectedFile.value?.name || "");
@@ -447,6 +500,7 @@ const convertVideo = async () => {
   } finally {
     isConverting.value = false;
     isLoading.value = false;
+    console.log("=== 转换流程结束 ===");
   }
 };
 
