@@ -26,6 +26,16 @@ const videoInfo = ref<{
   format: string;
 } | null>(null);
 
+// 音频流信息
+const audioStreams = ref<Array<{
+  index: number;
+  codec: string;
+  channels: number;
+  sampleRate: number;
+  language?: string;
+}>>([]);
+const selectedAudioStream = ref<number>(0);
+
 // 临时存储解析的视频信息
 const tempVideoInfo = ref<{
   duration: number;
@@ -151,6 +161,10 @@ onMounted(async () => {
     if (msg.includes("Audio:")) {
       // 解析音频流信息
       const audioCodecMatch = msg.match(/Audio: (\w+)/);
+      const audioStreamMatch = msg.match(/Stream #0:(\d+)/);
+      const channelsMatch = msg.match(/(\d+) channels/);
+      const sampleRateMatch = msg.match(/(\d+) Hz/);
+      const languageMatch = msg.match(/\((\w+)\)/);
 
       if (!tempVideoInfo.value) {
         tempVideoInfo.value = {
@@ -165,6 +179,25 @@ onMounted(async () => {
 
       if (audioCodecMatch) {
         tempVideoInfo.value.audioCodec = audioCodecMatch[1];
+      }
+
+      // 解析音频流详细信息
+      if (audioStreamMatch) {
+        const streamIndex = parseInt(audioStreamMatch[1]);
+        const audioStream = {
+          index: streamIndex,
+          codec: audioCodecMatch ? audioCodecMatch[1] : "未知",
+          channels: channelsMatch ? parseInt(channelsMatch[1]) : 2,
+          sampleRate: sampleRateMatch ? parseInt(sampleRateMatch[1]) : 48000,
+          language: languageMatch ? languageMatch[1] : undefined,
+        };
+        
+        // 检查是否已存在该音频流
+        const existingIndex = audioStreams.value.findIndex(stream => stream.index === streamIndex);
+        if (existingIndex === -1) {
+          audioStreams.value.push(audioStream);
+          console.log("检测到音频流:", audioStream);
+        }
       }
     }
 
@@ -323,8 +356,10 @@ const readVideoInfo = async () => {
   try {
     setMessage("正在读取视频信息...");
 
-    // 重置临时视频信息
+    // 重置临时视频信息和音频流信息
     tempVideoInfo.value = null;
+    audioStreams.value = [];
+    selectedAudioStream.value = 0;
 
     // 获取文件扩展名
     const inputExt = getFileExtension(selectedFile.value.name);
@@ -359,6 +394,7 @@ const readVideoInfo = async () => {
           }, ${tempVideoInfo.value.duration.toFixed(2)}秒, ${tempVideoInfo.value.fps}fps`
         );
         console.log("解析到的视频信息:", tempVideoInfo.value);
+        console.log("检测到的音频流:", audioStreams.value);
       } else {
         // 如果没有解析到有效信息，说明文件可能有问题
         throw new Error("无法解析视频信息");
@@ -540,6 +576,25 @@ const buildFFmpegCommand = (inputExt: string, outputExt: string) => {
   if (audioMode.value === "none") {
     // 跳过音频流
     command.push("-an");
+  } else {
+    // 使用流映射明确指定音频流
+    if (audioStreams.value.length > 0) {
+      // 映射视频流
+      command.push("-map", "0:v");
+      // 映射选定的音频流
+      const targetAudioStream = audioStreams.value[selectedAudioStream.value];
+      if (targetAudioStream) {
+        command.push("-map", `0:a:${targetAudioStream.index - 1}`); // 音频流索引从0开始
+        console.log(`映射音频流 ${targetAudioStream.index}: ${targetAudioStream.codec}`);
+      } else {
+        // 如果没有找到选定的音频流，使用第一个
+        command.push("-map", "0:a:0");
+        console.log("使用默认音频流 0:a:0");
+      }
+    } else {
+      // 如果没有检测到音频流，使用默认映射
+      console.log("未检测到音频流，使用默认映射");
+    }
   }
 
   // 分辨率设置
@@ -731,6 +786,24 @@ const downloadFile = () => {
                   <div>比特率: {{ videoInfo.bitrate }}</div>
                   <div>格式: {{ videoInfo.format }}</div>
                 </div>
+                
+                <!-- 音频流信息 -->
+                <div v-if="audioStreams.length > 0" class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                  <h5 class="text-xs font-medium text-gray-900 dark:text-white mb-2">
+                    音频流 ({{ audioStreams.length }}个)
+                  </h5>
+                  <div class="space-y-1 text-xs text-gray-600 dark:text-gray-400">
+                    <div
+                      v-for="stream in audioStreams"
+                      :key="stream.index"
+                      :class="{ 'text-blue-600 dark:text-blue-400 font-medium': stream.index === selectedAudioStream }"
+                    >
+                      流 {{ stream.index }}: {{ stream.codec }} ({{ stream.channels }}声道, {{ stream.sampleRate }}Hz)
+                      {{ stream.language ? `[${stream.language}]` : '' }}
+                      {{ stream.index === selectedAudioStream ? '✓' : '' }}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -841,6 +914,30 @@ const downloadFile = () => {
                 <option value="auto">自动（推荐）</option>
                 <option value="keep">保留音频</option>
                 <option value="none">仅视频</option>
+              </select>
+            </div>
+
+            <!-- 音频流选择 -->
+            <div v-if="audioMode !== 'none' && audioStreams.length > 1">
+              <label
+                for="audio-stream"
+                class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                音频流选择
+              </label>
+              <select
+                id="audio-stream"
+                v-model="selectedAudioStream"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              >
+                <option
+                  v-for="stream in audioStreams"
+                  :key="stream.index"
+                  :value="stream.index"
+                >
+                  流 {{ stream.index }}: {{ stream.codec }} ({{ stream.channels }}声道, {{ stream.sampleRate }}Hz)
+                  {{ stream.language ? `[${stream.language}]` : '' }}
+                </option>
               </select>
             </div>
           </div>
