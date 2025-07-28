@@ -3,10 +3,8 @@ import { ref, onMounted } from "vue";
 import Layout from "@/components/Layout.vue";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
-import type { LogEvent } from "@ffmpeg/ffmpeg/dist/esm/types";
 
 // 响应式数据
-const ffmpeg = ref<FFmpeg | null>(null);
 const isLoaded = ref(false);
 const isConverting = ref(false);
 const progress = ref(0);
@@ -24,10 +22,19 @@ const framerate = ref("original");
 // FFmpeg CDN配置
 const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.9/dist/esm";
 
+// FFmpeg实例
+const ffmpeg = new FFmpeg();
+
 // 初始化FFmpeg
 onMounted(async () => {
-  // 只创建FFmpeg实例，不进行其他操作
-  ffmpeg.value = new FFmpeg();
+  // 设置日志监听
+  ffmpeg.on("log", ({ message: msg }: any) => {
+    message.value = msg;
+    // 根据日志更新进度
+    if (msg.includes("frame=")) {
+      progress.value = Math.min(progress.value + 10, 90);
+    }
+  });
 });
 
 // 文件选择处理
@@ -61,12 +68,12 @@ const handleDragOver = (event: DragEvent) => {
 
 // 转换视频
 const convertVideo = async () => {
-  if (!selectedFile.value || !ffmpeg.value) {
+  if (!selectedFile.value || !ffmpeg) {
     alert("请先选择视频文件");
     return;
   }
 
-  console.log(ffmpeg.value, selectedFile.value);
+  console.log(ffmpeg, selectedFile.value);
 
   isConverting.value = true;
   progress.value = 0;
@@ -74,18 +81,11 @@ const convertVideo = async () => {
 
   try {
     // 设置日志监听
-    // ffmpeg.value.on("log", ({ message: msg }: LogEvent) => {
-    //   message.value = msg;
-    //   // 根据日志更新进度
-    //   //   if (msg.includes("frame=")) {
-    //   //     progress.value = Math.min(progress.value + 10, 90);
-    //   //   }
-    // });
 
     // 加载FFmpeg
     if (!isLoaded.value) {
       console.log("加载FFmpeg");
-      await ffmpeg.value.load({
+      await ffmpeg.load({
         coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
         wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
         workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, "text/javascript"),
@@ -101,21 +101,18 @@ const convertVideo = async () => {
     const outputExt = outputFormat.value;
 
     // 写入输入文件
-    await ffmpeg.value.writeFile(
-      `input.${inputExt}`,
-      await fetchFile(selectedFile.value)
-    );
+    await ffmpeg.writeFile(`input.${inputExt}`, await fetchFile(selectedFile.value));
     progress.value = 20;
 
     // 构建FFmpeg命令
     const command = buildFFmpegCommand(inputExt, outputExt);
 
     // 执行转换
-    await ffmpeg.value.exec(command);
+    await ffmpeg.exec(command);
     progress.value = 90;
 
     // 读取输出文件
-    const data = await ffmpeg.value.readFile(`output.${outputExt}`);
+    const data = await ffmpeg.readFile(`output.${outputExt}`);
     convertedBlob.value = new Blob([(data as Uint8Array).buffer], {
       type: `video/${outputExt}`,
     });
