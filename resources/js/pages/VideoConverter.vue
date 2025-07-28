@@ -47,6 +47,7 @@ const outputFormat = ref("mp4");
 const videoQuality = ref("high");
 const resolution = ref("original");
 const framerate = ref("original");
+const audioMode = ref("auto"); // 音频处理模式：auto, keep, none
 
 // FFmpeg CDN配置
 const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.10/dist/esm";
@@ -445,7 +446,28 @@ const convertVideo = async () => {
     } catch (execError) {
       console.error("FFmpeg执行错误:", execError);
       console.error("错误详情:", execError.stack);
-      throw new Error(`转换执行失败: ${execError.message}`);
+      
+      // 如果是音频处理失败，尝试仅视频转换
+      if (audioMode.value !== "none" && execError.message.includes("audio")) {
+        console.log("音频处理失败，尝试仅视频转换...");
+        setMessage("音频处理失败，尝试仅视频转换...");
+        
+        // 构建仅视频转换命令
+        const videoOnlyCommand = ["-i", `input.${inputExt}`, "-an", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-y", `output.${outputExt}`];
+        console.log("仅视频转换命令:", videoOnlyCommand.join(" "));
+        
+        try {
+          await Promise.race([ffmpeg.exec(videoOnlyCommand), timeoutPromise]);
+          console.log("仅视频转换成功");
+          setMessage("仅视频转换成功（无音频）");
+          progress.value = 90;
+        } catch (videoOnlyError) {
+          console.error("仅视频转换也失败:", videoOnlyError);
+          throw new Error(`转换失败: ${execError.message}，仅视频转换也失败: ${videoOnlyError.message}`);
+        }
+      } else {
+        throw new Error(`转换执行失败: ${execError.message}`);
+      }
     }
 
     // 读取输出文件
@@ -514,7 +536,11 @@ const buildFFmpegCommand = (inputExt: string, outputExt: string) => {
   command.push("-y"); // 覆盖输出文件
   command.push("-loglevel", "info"); // 设置日志级别
 
-  // 视频质量设置 - 移除重复的CRF设置，在后面的编码器设置中统一处理
+  // 音频处理模式
+  if (audioMode.value === "none") {
+    // 跳过音频流
+    command.push("-an");
+  }
 
   // 分辨率设置
   if (resolution.value !== "original") {
@@ -535,102 +561,34 @@ const buildFFmpegCommand = (inputExt: string, outputExt: string) => {
     command.push("-r", framerate.value);
   }
 
-  // 编码设置 - 根据质量设置CRF值
+  // 视频编码设置 - 根据质量设置CRF值
   const crf =
     videoQuality.value === "high" ? 18 : videoQuality.value === "medium" ? 23 : 28;
 
-  switch (outputExt) {
-    case "mp4":
-      command.push(
-        "-c:v",
-        "libx264",
-        "-preset",
-        "ultrafast",
-        "-crf",
-        crf.toString(),
-        "-c:a",
-        "aac",
-        "-b:a",
-        "128k"
-      );
-      break;
-    case "avi":
-      command.push(
-        "-c:v",
-        "libx264",
-        "-preset",
-        "ultrafast",
-        "-crf",
-        crf.toString(),
-        "-c:a",
-        "mp3",
-        "-b:a",
-        "128k"
-      );
-      break;
-    case "mov":
-      command.push(
-        "-c:v",
-        "libx264",
-        "-preset",
-        "ultrafast",
-        "-crf",
-        crf.toString(),
-        "-c:a",
-        "aac",
-        "-b:a",
-        "128k"
-      );
-      break;
-    case "mkv":
-      command.push(
-        "-c:v",
-        "libx264",
-        "-preset",
-        "ultrafast",
-        "-crf",
-        crf.toString(),
-        "-c:a",
-        "aac",
-        "-b:a",
-        "128k"
-      );
-      break;
-    case "wmv":
-      command.push(
-        "-c:v",
-        "libx264",
-        "-preset",
-        "ultrafast",
-        "-crf",
-        crf.toString(),
-        "-c:a",
-        "aac",
-        "-b:a",
-        "128k"
-      );
-      break;
-    case "flv":
-      command.push(
-        "-c:v",
-        "libx264",
-        "-preset",
-        "ultrafast",
-        "-crf",
-        crf.toString(),
-        "-c:a",
-        "aac",
-        "-b:a",
-        "128k"
-      );
-      break;
+  // 视频编码器设置
+  command.push("-c:v", "libx264", "-preset", "ultrafast", "-crf", crf.toString());
+
+  // 音频编码器设置（仅在需要音频时）
+  if (audioMode.value !== "none") {
+    switch (outputExt) {
+      case "mp4":
+      case "mov":
+      case "mkv":
+      case "wmv":
+      case "flv":
+        command.push("-c:a", "aac", "-b:a", "128k");
+        break;
+      case "avi":
+        command.push("-c:a", "mp3", "-b:a", "128k");
+        break;
+    }
   }
 
   command.push(`output.${outputExt}`);
-
+  
   // 打印完整命令用于调试
   console.log("FFmpeg命令:", command.join(" "));
-
+  
   return command;
 };
 
@@ -866,6 +824,25 @@ const downloadFile = () => {
                 <option value="24">24 FPS</option>
               </select>
             </div>
+
+            <!-- 音频处理 -->
+            <div>
+              <label
+                for="audio-mode"
+                class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                音频处理
+              </label>
+              <select
+                id="audio-mode"
+                v-model="audioMode"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              >
+                <option value="auto">自动（推荐）</option>
+                <option value="keep">保留音频</option>
+                <option value="none">仅视频</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -1014,30 +991,60 @@ const downloadFile = () => {
             </ul>
           </div>
         </div>
-        <div
-          class="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md"
-        >
-          <div class="flex items-start">
-            <svg
-              class="h-5 w-5 text-blue-400 mr-2 mt-0.5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              ></path>
-            </svg>
-            <div>
-              <h4 class="text-sm font-medium text-blue-800 dark:text-blue-200">
-                隐私保护
-              </h4>
-              <p class="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                所有视频转换都在您的浏览器本地进行，文件不会上传到服务器，确保您的隐私安全。
-              </p>
+        <div class="space-y-4">
+          <div
+            class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md"
+          >
+            <div class="flex items-start">
+              <svg
+                class="h-5 w-5 text-blue-400 mr-2 mt-0.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                ></path>
+              </svg>
+              <div>
+                <h4 class="text-sm font-medium text-blue-800 dark:text-blue-200">
+                  隐私保护
+                </h4>
+                <p class="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                  所有视频转换都在您的浏览器本地进行，文件不会上传到服务器，确保您的隐私安全。
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <div
+            class="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md"
+          >
+            <div class="flex items-start">
+              <svg
+                class="h-5 w-5 text-yellow-400 mr-2 mt-0.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
+                ></path>
+              </svg>
+              <div>
+                <h4 class="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                  音频处理说明
+                </h4>
+                <p class="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                  如果转换过程中音频处理失败，系统会自动尝试仅视频转换。建议选择"仅视频"选项以获得最佳兼容性。
+                </p>
+              </div>
             </div>
           </div>
         </div>
