@@ -84,7 +84,11 @@ onMounted(async () => {
     
     if (msg.includes("Video:")) {
       // 解析视频流信息
-      const resolutionMatch = msg.match(/(\d+)x(\d+)/);
+      console.log("解析视频信息行:", msg);
+      
+      // 更精确的分辨率匹配：在Video行中查找分辨率
+      // 分辨率通常出现在类似这样的格式中：Video: hevc (Main) (hev1 / 0x31766568), yuv420p(tv, bt709), 720x1280 [SAR 9:16 DAR 9:16], 30 fps, 30 tbr, 30 tbn, 30 tbc
+      const resolutionMatch = msg.match(/(\d{3,4})x(\d{3,4})/);
       const fpsMatch = msg.match(/(\d+) fps/);
       const codecMatch = msg.match(/Video: (\w+)/);
       const bitrateMatch = msg.match(/(\d+) kb\/s/);
@@ -101,19 +105,30 @@ onMounted(async () => {
       }
       
       if (resolutionMatch) {
-        tempVideoInfo.value.resolution = `${resolutionMatch[1]}x${resolutionMatch[2]}`;
+        const width = parseInt(resolutionMatch[1]);
+        const height = parseInt(resolutionMatch[2]);
+        // 验证分辨率是否合理（至少100x100）
+        if (width >= 100 && height >= 100) {
+          tempVideoInfo.value.resolution = `${width}x${height}`;
+          console.log("解析到分辨率:", tempVideoInfo.value.resolution);
+        } else {
+          console.log("分辨率值不合理，跳过:", width, "x", height);
+        }
       }
       
       if (fpsMatch) {
         tempVideoInfo.value.fps = parseInt(fpsMatch[1]);
+        console.log("解析到帧率:", tempVideoInfo.value.fps);
       }
       
       if (codecMatch) {
         tempVideoInfo.value.videoCodec = codecMatch[1];
+        console.log("解析到视频编解码器:", tempVideoInfo.value.videoCodec);
       }
       
       if (bitrateMatch) {
         tempVideoInfo.value.bitrate = `${bitrateMatch[1]} kb/s`;
+        console.log("解析到比特率:", tempVideoInfo.value.bitrate);
       }
     }
     
@@ -189,27 +204,27 @@ onMounted(async () => {
       console.log("FFmpeg对象:", ffmpeg);
       
       // 执行FFmpeg命令获取版本和帮助信息
-      try {
-        console.log("=== FFmpeg版本信息 ===");
-        await ffmpeg.exec(['-version']);
+    //   try {
+    //     console.log("=== FFmpeg版本信息 ===");
+    //     await ffmpeg.exec(['-version']);
         
-        console.log("=== FFmpeg帮助信息 ===");
-        await ffmpeg.exec(['-h']);
+    //     console.log("=== FFmpeg帮助信息 ===");
+    //     await ffmpeg.exec(['-h']);
         
-        console.log("=== FFmpeg支持的格式 ===");
-        await ffmpeg.exec(['-formats']);
+    //     console.log("=== FFmpeg支持的格式 ===");
+    //     await ffmpeg.exec(['-formats']);
         
-        console.log("=== FFmpeg支持的编码器 ===");
-        await ffmpeg.exec(['-codecs']);
+    //     console.log("=== FFmpeg支持的编码器 ===");
+    //     await ffmpeg.exec(['-codecs']);
         
-        console.log("=== FFmpeg支持的过滤器 ===");
-        await ffmpeg.exec(['-filters']);
+    //     console.log("=== FFmpeg支持的过滤器 ===");
+    //     await ffmpeg.exec(['-filters']);
         
-        setMessage("FFmpeg初始化完成，已获取详细信息");
-      } catch (infoError) {
-        console.warn("获取FFmpeg信息时出错:", infoError);
-        setMessage("FFmpeg初始化完成");
-      }
+    //     setMessage("FFmpeg初始化完成，已获取详细信息");
+    //   } catch (infoError) {
+    //     console.warn("获取FFmpeg信息时出错:", infoError);
+    //     setMessage("FFmpeg初始化完成");
+    //   }
       
       // 等待一秒让用户看到加载完成
       await new Promise(resolve => setTimeout(resolve, 1000));
