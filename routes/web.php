@@ -12,6 +12,10 @@ Route::get('/video-converter', function () {
     return Inertia::render('VideoConverter');
 })->name('video-converter');
 
+Route::get('/video-converter-test', function () {
+    return Inertia::render('VideoConverterTest');
+})->name('video-converter-test');
+
 Route::get('dashboard', function () {
     return Inertia::render('Dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
