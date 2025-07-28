@@ -483,23 +483,44 @@ const convertVideo = async () => {
       console.error("FFmpeg执行错误:", execError);
       console.error("错误详情:", execError.stack);
       
-      // 如果是音频处理失败，尝试仅视频转换
-      if (audioMode.value !== "none" && execError.message.includes("audio")) {
-        console.log("音频处理失败，尝试仅视频转换...");
-        setMessage("音频处理失败，尝试仅视频转换...");
+      // 检查是否是流映射相关错误
+      const isStreamMappingError = execError.message.includes("stream") || 
+                                  execError.message.includes("map") || 
+                                  execError.message.includes("audio") ||
+                                  execError.message.includes("invalid");
+      
+      if (isStreamMappingError) {
+        console.log("检测到流映射错误，尝试简化映射...");
+        setMessage("流映射错误，尝试简化映射...");
         
-        // 构建仅视频转换命令
-        const videoOnlyCommand = ["-i", `input.${inputExt}`, "-an", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-y", `output.${outputExt}`];
-        console.log("仅视频转换命令:", videoOnlyCommand.join(" "));
+        // 尝试不同的映射策略
+        const fallbackStrategies = [
+          // 策略1: 不使用映射，让FFmpeg自动选择
+          ["-i", `input.${inputExt}`, "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-c:a", "aac", "-b:a", "128k", "-y", `output.${outputExt}`],
+          // 策略2: 仅视频转换
+          ["-i", `input.${inputExt}`, "-an", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-y", `output.${outputExt}`],
+          // 策略3: 使用最基本的映射
+          ["-i", `input.${inputExt}`, "-map", "0:v", "-map", "0:a", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-c:a", "aac", "-b:a", "128k", "-y", `output.${outputExt}`]
+        ];
         
-        try {
-          await Promise.race([ffmpeg.exec(videoOnlyCommand), timeoutPromise]);
-          console.log("仅视频转换成功");
-          setMessage("仅视频转换成功（无音频）");
-          progress.value = 90;
-        } catch (videoOnlyError) {
-          console.error("仅视频转换也失败:", videoOnlyError);
-          throw new Error(`转换失败: ${execError.message}，仅视频转换也失败: ${videoOnlyError.message}`);
+        for (let i = 0; i < fallbackStrategies.length; i++) {
+          const strategy = fallbackStrategies[i];
+          console.log(`尝试策略 ${i + 1}:`, strategy.join(" "));
+          setMessage(`尝试策略 ${i + 1}...`);
+          
+          try {
+            await Promise.race([ffmpeg.exec(strategy), timeoutPromise]);
+            console.log(`策略 ${i + 1} 成功`);
+            setMessage(`策略 ${i + 1} 转换成功`);
+            progress.value = 90;
+            break;
+          } catch (strategyError) {
+            console.error(`策略 ${i + 1} 失败:`, strategyError.message);
+            if (i === fallbackStrategies.length - 1) {
+              // 所有策略都失败了
+              throw new Error(`所有转换策略都失败: ${execError.message}`);
+            }
+          }
         }
       } else {
         throw new Error(`转换执行失败: ${execError.message}`);
@@ -542,6 +563,10 @@ const convertVideo = async () => {
       errorMessage = "编码器错误，建议：1. 尝试不同的输出格式 2. 检查输入文件是否损坏";
     } else if (error.message.includes("内存")) {
       errorMessage = "内存不足，建议：1. 关闭其他程序 2. 尝试更小的文件";
+    } else if (error.message.includes("stream") || error.message.includes("map")) {
+      errorMessage = "流映射错误，建议：1. 尝试选择'仅视频'选项 2. 检查音频流是否兼容 3. 尝试不同的输出格式";
+    } else if (error.message.includes("音频") || error.message.includes("audio")) {
+      errorMessage = "音频处理错误，建议：1. 选择'仅视频'选项 2. 尝试不同的音频处理模式 3. 检查音频编码器兼容性";
     }
     
     setMessage(errorMessage);
@@ -572,27 +597,36 @@ const buildFFmpegCommand = (inputExt: string, outputExt: string) => {
   command.push("-y"); // 覆盖输出文件
   command.push("-loglevel", "info"); // 设置日志级别
 
+  // 输出流信息用于调试
+  console.log("=== 流映射调试信息 ===");
+  console.log("音频流数量:", audioStreams.value.length);
+  console.log("音频处理模式:", audioMode.value);
+  console.log("选中的音频流索引:", selectedAudioStream.value);
+  console.log("所有音频流:", audioStreams.value);
+
   // 音频处理模式
   if (audioMode.value === "none") {
     // 跳过音频流
     command.push("-an");
   } else {
-    // 使用流映射明确指定音频流
-    if (audioStreams.value.length > 0) {
-      // 映射视频流
+    // 根据音频流数量选择不同的映射策略
+    if (audioStreams.value.length === 1) {
+      // 只有一个音频流，使用简单映射
+      command.push("-map", "0:v", "-map", "0:a");
+      console.log("单个音频流，使用简单映射: -map 0:v -map 0:a");
+    } else if (audioStreams.value.length > 1) {
+      // 多个音频流，使用精确映射
       command.push("-map", "0:v");
-      // 映射选定的音频流
       const targetAudioStream = audioStreams.value[selectedAudioStream.value];
       if (targetAudioStream) {
-        command.push("-map", `0:a:${targetAudioStream.index - 1}`); // 音频流索引从0开始
-        console.log(`映射音频流 ${targetAudioStream.index}: ${targetAudioStream.codec}`);
+        command.push("-map", `0:a:${targetAudioStream.index - 1}`);
+        console.log(`多个音频流，映射音频流 ${targetAudioStream.index}: ${targetAudioStream.codec}`);
       } else {
-        // 如果没有找到选定的音频流，使用第一个
         command.push("-map", "0:a:0");
         console.log("使用默认音频流 0:a:0");
       }
     } else {
-      // 如果没有检测到音频流，使用默认映射
+      // 没有检测到音频流，使用默认映射
       console.log("未检测到音频流，使用默认映射");
     }
   }
@@ -1010,6 +1044,20 @@ const downloadFile = () => {
           <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
             正在转换中，请稍候...
           </p>
+          
+          <!-- 流映射状态 -->
+          <div v-if="audioStreams.length > 0" class="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md">
+            <h4 class="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">
+              流映射状态
+            </h4>
+            <div class="text-xs text-blue-700 dark:text-blue-300">
+              <div>音频流数量: {{ audioStreams.length }}</div>
+              <div>处理模式: {{ audioMode === 'auto' ? '自动' : audioMode === 'keep' ? '保留音频' : '仅视频' }}</div>
+              <div v-if="audioMode !== 'none' && audioStreams.length > 0">
+                选中音频流: {{ audioStreams[selectedAudioStream]?.codec || '未知' }}
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- 下载区域 -->
