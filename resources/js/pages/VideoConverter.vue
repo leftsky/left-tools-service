@@ -7,6 +7,7 @@ import { fetchFile, toBlobURL } from "@ffmpeg/util";
 // 响应式数据
 const isLoaded = ref(false);
 const isConverting = ref(false);
+const isLoading = ref(false);
 const progress = ref(0);
 const selectedFile = ref<File | null>(null);
 const convertedBlob = ref<Blob | null>(null);
@@ -35,6 +36,41 @@ onMounted(async () => {
       progress.value = Math.min(progress.value + 10, 90);
     }
   });
+
+  // 自动加载FFmpeg
+  try {
+    isLoading.value = true;
+    message.value = "正在加载FFmpeg...";
+    
+    // 模拟加载进度
+    const progressInterval = setInterval(() => {
+      if (progress.value < 80) {
+        progress.value += 5;
+        message.value = `正在加载FFmpeg... ${progress.value}%`;
+      }
+    }, 200);
+
+    await ffmpeg.load({
+      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+      workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, "text/javascript"),
+    });
+    
+    clearInterval(progressInterval);
+    progress.value = 100;
+    message.value = "FFmpeg加载完成！";
+    isLoaded.value = true;
+    isLoading.value = false;
+    
+    // 等待一秒让用户看到加载完成
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    message.value = "请选择视频文件开始转换";
+    progress.value = 0;
+  } catch (error) {
+    console.error("FFmpeg加载失败:", error);
+    message.value = "FFmpeg加载失败，请刷新页面重试";
+    isLoading.value = false;
+  }
 });
 
 // 文件选择处理
@@ -81,17 +117,10 @@ const convertVideo = async () => {
   message.value = "正在加载FFmpeg...";
 
   try {
-    // 设置日志监听
-
-    // 加载FFmpeg
+    // 检查FFmpeg是否已加载
     if (!isLoaded.value) {
-      console.log("加载FFmpeg");
-      await ffmpeg.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-        workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, "text/javascript"),
-      });
-      isLoaded.value = true;
+      message.value = "FFmpeg尚未加载完成，请稍候...";
+      return;
     }
 
     message.value = "开始转换...";
@@ -129,6 +158,7 @@ const convertVideo = async () => {
     alert("视频转换失败，请检查文件格式或重试");
   } finally {
     isConverting.value = false;
+    isLoading.value = false;
   }
 };
 
@@ -413,7 +443,7 @@ const downloadFile = () => {
         <div class="text-center">
           <button
             @click="convertVideo"
-            :disabled="!selectedFile || isConverting"
+            :disabled="!selectedFile || isConverting || !isLoaded"
             class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-3 px-8 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             <svg
@@ -448,8 +478,22 @@ const downloadFile = () => {
           </button>
         </div>
 
+        <!-- 加载进度 -->
+        <div v-if="isLoading" class="mt-8">
+          <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">FFmpeg加载进度</h3>
+          <div class="bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+            <div
+              class="bg-blue-600 h-2 rounded-full transition-all duration-300"
+              :style="{ width: progress + '%' }"
+            ></div>
+          </div>
+          <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+            正在加载FFmpeg核心文件，请稍候...
+          </p>
+        </div>
+
         <!-- 转换进度 -->
-        <div v-if="isConverting" class="mt-8">
+        <div v-if="isConverting && !isLoading" class="mt-8">
           <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">转换进度</h3>
           <div class="bg-gray-200 dark:bg-gray-700 rounded-full h-2">
             <div
