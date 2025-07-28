@@ -35,8 +35,6 @@ const outputFormat = ref("mp4");
 const videoQuality = ref("high");
 const resolution = ref("original");
 const framerate = ref("original");
-const useFastMode = ref(true); // 快速模式开关
-const isHEVC = ref(false); // 是否为HEVC编码
 
 // FFmpeg CDN配置
 const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.9/dist/esm";
@@ -183,35 +181,31 @@ const readVideoInfo = async () => {
     
     // 使用ffprobe获取视频信息
     const info = await ffmpeg.ffprobe(['-i', `temp_input.${inputExt}`]);
-    
-    console.log("视频信息:", info);
+    console.log("ffprobe返回的完整信息:", JSON.stringify(info, null, 2));
     
     if (info.streams && info.streams.length > 0) {
       const videoStream = info.streams.find(stream => stream.codec_type === 'video');
       
-                      if (videoStream) {
-          const duration = parseFloat(info.format?.duration || '0');
-          const fps = parseFrameRate(videoStream.r_frame_rate || '30/1'); // 解析帧率字符串
-          const totalFrames = Math.round(duration * fps);
-          const width = videoStream.width || 0;
-          const height = videoStream.height || 0;
-          const bitrate = info.format?.bit_rate || '0';
-          const codecName = videoStream.codec_name || '';
-          
-          // 检测是否为HEVC编码
-          isHEVC.value = codecName.toLowerCase() === 'hevc' || codecName.toLowerCase() === 'h265';
-          
-          videoInfo.value = {
-            duration,
-            fps,
-            totalFrames,
-            resolution: `${width}x${height}`,
-            bitrate: `${Math.round(parseInt(bitrate) / 1000)} kbps`,
-            format: info.format?.format_name || 'unknown'
-          };
-          
-          setMessage(`视频信息: ${duration.toFixed(2)}秒, ${fps.toFixed(2)}fps, ${totalFrames}帧, ${width}x${height}, 编码: ${codecName}`);
-        }
+      if (videoStream) {
+        const duration = parseFloat(info.format?.duration || '0');
+        const fps = parseFrameRate(videoStream.r_frame_rate || '30/1');
+        const totalFrames = Math.round(duration * fps);
+        const width = videoStream.width || 0;
+        const height = videoStream.height || 0;
+        const bitrate = info.format?.bit_rate || '0';
+        const codecName = videoStream.codec_name || '';
+        
+        videoInfo.value = {
+          duration,
+          fps,
+          totalFrames,
+          resolution: `${width}x${height}`,
+          bitrate: `${Math.round(parseInt(bitrate) / 1000)} kbps`,
+          format: info.format?.format_name || 'unknown'
+        };
+        
+        setMessage(`视频信息: ${duration.toFixed(2)}秒, ${fps.toFixed(2)}fps, ${totalFrames}帧, ${width}x${height}, 编码: ${codecName}`);
+      }
     }
     
     // 清理临时文件
@@ -219,7 +213,9 @@ const readVideoInfo = async () => {
     
   } catch (error) {
     console.error("读取视频信息失败:", error);
-    setMessage("读取视频信息失败，但可以继续转换");
+    setMessage("读取视频信息失败，无法继续转换");
+    videoInfo.value = null;
+    selectedFile.value = null;
   }
 };
 
@@ -258,12 +254,7 @@ const convertVideo = async () => {
     // 构建FFmpeg命令
     const command = buildFFmpegCommand(inputExt, outputExt);
 
-    // 如果是调试模式，先尝试简单转换
-    if (useFastMode.value) {
-      setMessage("使用快速模式转换...");
-    } else {
-      setMessage("使用标准模式转换...");
-    }
+    setMessage("开始转换...");
     
     // 添加超时机制
     const timeoutPromise = new Promise((_, reject) => {
@@ -273,35 +264,10 @@ const convertVideo = async () => {
     });
     
     // 执行转换
-    try {
-      await Promise.race([
-        ffmpeg.exec(command),
-        timeoutPromise
-      ]);
-    } catch (error) {
-      // 如果快速模式失败，尝试更简单的转换
-      if (useFastMode.value && (error.message.includes("超时") || isHEVC.value)) {
-        setMessage("快速模式失败，尝试极简转换...");
-        const simpleCommand = [
-          "-i", `input.${inputExt}`,
-          "-c:v", "libx264", 
-          "-preset", "ultrafast",
-          "-crf", "35", // 更低的质量，更快的速度
-          "-c:a", "aac",
-          "-b:a", "64k",
-          "-threads", "1",
-          "-y",
-          `output.${outputExt}`
-        ];
-        console.log("极简转换命令:", simpleCommand.join(" "));
-        await Promise.race([
-          ffmpeg.exec(simpleCommand),
-          timeoutPromise
-        ]);
-      } else {
-        throw error;
-      }
-    }
+    await Promise.race([
+      ffmpeg.exec(command),
+      timeoutPromise
+    ]);
     progress.value = 90;
 
     // 读取输出文件
@@ -334,18 +300,7 @@ const buildFFmpegCommand = (inputExt: string, outputExt: string) => {
   command.push("-y"); // 覆盖输出文件
   command.push("-loglevel", "info"); // 设置日志级别
 
-  // 视频质量设置
-  switch (videoQuality.value) {
-    case "high":
-      command.push("-crf", "18");
-      break;
-    case "medium":
-      command.push("-crf", "23");
-      break;
-    case "low":
-      command.push("-crf", "28");
-      break;
-  }
+  // 视频质量设置 - 移除重复的CRF设置，在后面的编码器设置中统一处理
 
   // 分辨率设置
   if (resolution.value !== "original") {
@@ -366,42 +321,27 @@ const buildFFmpegCommand = (inputExt: string, outputExt: string) => {
     command.push("-r", framerate.value);
   }
 
-  // 输出格式特定设置 - 根据快速模式和编码类型选择设置
-  let preset = useFastMode.value ? "ultrafast" : "fast";
-  let tune = useFastMode.value ? "fastdecode" : "";
-  let crf = videoQuality.value === "high" ? 28 : videoQuality.value === "medium" ? 32 : 36;
-  
-  // 如果是HEVC编码，使用更激进的设置
-  if (isHEVC.value && useFastMode.value) {
-    preset = "ultrafast";
-    tune = "fastdecode";
-    crf = 32; // 降低质量以提高速度
-    command.push("-threads", "1"); // 限制线程数
-  }
+  // 编码设置
+  const crf = videoQuality.value === "high" ? 28 : videoQuality.value === "medium" ? 32 : 36;
   
   switch (outputExt) {
     case "mp4":
-      command.push("-c:v", "libx264", "-preset", preset, "-crf", crf.toString(), "-c:a", "aac", "-b:a", "128k");
-      if (tune) command.push("-tune", tune);
+      command.push("-c:v", "libx264", "-preset", "ultrafast", "-crf", crf.toString(), "-c:a", "aac", "-b:a", "128k");
       break;
     case "avi":
-      command.push("-c:v", "libx264", "-preset", preset, "-crf", crf.toString(), "-c:a", "aac", "-b:a", "128k");
-      if (tune) command.push("-tune", tune);
+      command.push("-c:v", "libx264", "-preset", "ultrafast", "-crf", crf.toString(), "-c:a", "aac", "-b:a", "128k");
       break;
     case "mov":
-      command.push("-c:v", "libx264", "-preset", preset, "-crf", crf.toString(), "-c:a", "aac", "-b:a", "128k");
-      if (tune) command.push("-tune", tune);
+      command.push("-c:v", "libx264", "-preset", "ultrafast", "-crf", crf.toString(), "-c:a", "aac", "-b:a", "128k");
       break;
     case "mkv":
-      command.push("-c:v", "libx264", "-preset", preset, "-crf", crf.toString(), "-c:a", "aac", "-b:a", "128k");
-      if (tune) command.push("-tune", tune);
+      command.push("-c:v", "libx264", "-preset", "ultrafast", "-crf", crf.toString(), "-c:a", "aac", "-b:a", "128k");
       break;
     case "wmv":
-      command.push("-c:v", "libx264", "-preset", preset, "-crf", crf.toString(), "-c:a", "aac", "-b:a", "128k");
+      command.push("-c:v", "libx264", "-preset", "ultrafast", "-crf", crf.toString(), "-c:a", "aac", "-b:a", "128k");
       break;
     case "flv":
-      command.push("-c:v", "libx264", "-preset", preset, "-crf", crf.toString(), "-c:a", "aac", "-b:a", "128k");
-      if (tune) command.push("-tune", tune);
+      command.push("-c:v", "libx264", "-preset", "ultrafast", "-crf", crf.toString(), "-c:a", "aac", "-b:a", "128k");
       break;
   }
 
@@ -545,9 +485,7 @@ const downloadFile = () => {
                   <div>分辨率: {{ videoInfo.resolution }}</div>
                   <div>比特率: {{ videoInfo.bitrate }}</div>
                   <div>格式: {{ videoInfo.format }}</div>
-                  <div v-if="isHEVC" class="col-span-2 text-orange-600 dark:text-orange-400 font-medium">
-                    ⚠️ HEVC编码 - 转换可能较慢
-                  </div>
+
                 </div>
               </div>
             </div>
@@ -643,22 +581,7 @@ const downloadFile = () => {
               </select>
             </div>
 
-            <!-- 快速模式 -->
-            <div>
-              <label class="flex items-center">
-                <input
-                  type="checkbox"
-                  v-model="useFastMode"
-                  class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-                />
-                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                  快速模式 (推荐，转换更快)
-                </span>
-              </label>
-              <div v-if="isHEVC" class="mt-2 text-xs text-orange-600 dark:text-orange-400">
-                HEVC视频建议开启快速模式以获得更好的性能
-              </div>
-            </div>
+
           </div>
         </div>
 
@@ -666,7 +589,7 @@ const downloadFile = () => {
         <div class="text-center">
           <button
             @click="convertVideo"
-            :disabled="!selectedFile || isConverting || !isLoaded"
+            :disabled="!selectedFile || !videoInfo || isConverting || !isLoaded"
             class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-3 px-8 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             <svg
