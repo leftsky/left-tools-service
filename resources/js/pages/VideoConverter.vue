@@ -213,13 +213,13 @@ onMounted(async () => {
   // 自动加载FFmpeg
   try {
     isLoading.value = true;
-    setMessage("正在加载FFmpeg...");
+    setMessage("正在加载资源...");
 
     // 模拟加载进度
     const progressInterval = setInterval(() => {
       if (progress.value < 80) {
         progress.value += 5;
-        setMessage(`正在加载FFmpeg... ${progress.value}%`);
+        setMessage(`正在加载资源... ${progress.value}%`);
       }
     }, 200);
 
@@ -231,7 +231,7 @@ onMounted(async () => {
 
     clearInterval(progressInterval);
     progress.value = 100;
-    setMessage("FFmpeg加载完成！");
+    setMessage("资源加载完成！");
     isLoaded.value = true;
     isLoading.value = false;
 
@@ -268,7 +268,7 @@ onMounted(async () => {
     progress.value = 0;
   } catch (error) {
     console.error("FFmpeg加载失败:", error);
-    setMessage("FFmpeg加载失败，请刷新页面重试");
+    setMessage("资源加载失败，请刷新页面重试");
     isLoading.value = false;
   }
 });
@@ -317,10 +317,10 @@ const readVideoInfo = async () => {
     return;
   }
 
-  if (!isLoaded.value) {
-    setMessage("FFmpeg尚未加载完成，无法读取视频信息");
-    return;
-  }
+      if (!isLoaded.value) {
+      setMessage("资源尚未加载完成，无法读取视频信息");
+      return;
+    }
 
   try {
     setMessage("正在读取视频信息...");
@@ -408,7 +408,7 @@ const convertVideo = async () => {
   try {
     // 检查FFmpeg是否已加载
     if (!isLoaded.value) {
-      setMessage("FFmpeg尚未加载完成，请稍候...");
+      setMessage("资源尚未加载完成，请稍候...");
       return;
     }
 
@@ -745,36 +745,84 @@ const downloadFile = () => {
 
 <template>
   <Layout title="视频格式转换 - 小左子的工具箱">
-    <!-- 页面标题区域 -->
-    <div class="bg-white dark:bg-gray-800 shadow-sm">
-      <div class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-        <div class="flex items-center space-x-4">
-          <div class="h-12 w-12 rounded-lg bg-blue-600 flex items-center justify-center">
-            <svg
-              class="h-8 w-8 text-white"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-              ></path>
-            </svg>
-          </div>
-          <div>
-            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">视频格式转换</h1>
-            <p class="text-gray-600 dark:text-gray-400">支持多种格式视频转换，快速高效</p>
+
+
+    <!-- 主要内容区域 -->
+    <div class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+      <div class="grid grid-cols-1 lg:grid-cols-10 gap-8">
+        <!-- 左侧功能说明 -->
+        <div class="lg:col-span-3 order-2 lg:order-1">
+          <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 lg:sticky lg:top-8">
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">功能说明</h2>
+            <div class="space-y-4">
+              <div>
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                  支持的输入格式
+                </h3>
+                <ul class="text-gray-600 dark:text-gray-400 space-y-1 text-sm">
+                  <li>• MP4 (H.264, H.265)</li>
+                  <li>• AVI (Xvid, DivX)</li>
+                  <li>• MOV (QuickTime)</li>
+                  <li>• MKV (Matroska)</li>
+                  <li>• WMV (Windows Media)</li>
+                  <li>• FLV (Flash Video)</li>
+                </ul>
+              </div>
+              <div>
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                  支持的输出格式
+                </h3>
+                <ul class="text-gray-600 dark:text-gray-400 space-y-1 text-sm">
+                  <li>• MP4 (H.264, H.265)</li>
+                  <li>• AVI (Xvid)</li>
+                  <li>• MOV (QuickTime)</li>
+                  <li>• MKV (Matroska)</li>
+                  <li>• WMV (Windows Media)</li>
+                  <li>• FLV (Flash Video)</li>
+                </ul>
+              </div>
+            </div>
+            
+            <div class="mt-6">
+              <div
+                class="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md"
+              >
+                <div class="flex items-start">
+                  <svg
+                    class="h-5 w-5 text-green-400 mr-2 mt-0.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                    ></path>
+                  </svg>
+                  <div>
+                    <h4 class="text-sm font-medium text-green-800 dark:text-green-200">
+                      智能分离转码
+                    </h4>
+                    <p class="text-sm text-green-700 dark:text-green-300 mt-1">
+                      系统采用分离式转码技术，分别处理视频和音频，有效避免转换卡住问题，提供更稳定的转换体验。
+                    </p>
+                    <div class="mt-2 text-xs text-green-600 dark:text-green-400">
+                      <div>• 自动检测音频流并选择最佳处理方式</div>
+                      <div>• 视频和音频独立处理，避免相互影响</div>
+                      <div>• 支持多种音频编码器，兼容性更好</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    </div>
 
-    <!-- 转换工具区域 -->
-    <div class="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
-      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
+        <!-- 右侧转换工具 -->
+        <div class="lg:col-span-7 order-1 lg:order-2">
+          <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
         <!-- 状态消息 -->
         <div
           class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md"
@@ -1004,7 +1052,7 @@ const downloadFile = () => {
         <!-- 加载进度 -->
         <div v-if="isLoading" class="mt-8">
           <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
-            FFmpeg加载进度
+            资源加载进度
           </h3>
           <div class="bg-gray-200 dark:bg-gray-700 rounded-full h-2">
             <div
@@ -1013,7 +1061,7 @@ const downloadFile = () => {
             ></div>
           </div>
           <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-            正在加载FFmpeg核心文件，请稍候...
+            正在加载核心文件，请稍候...
           </p>
         </div>
 
@@ -1076,72 +1124,6 @@ const downloadFile = () => {
             </button>
           </div>
         </div>
-      </div>
-
-      <!-- 功能说明 -->
-      <div class="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
-        <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">功能说明</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
-              支持的输入格式
-            </h3>
-            <ul class="text-gray-600 dark:text-gray-400 space-y-1">
-              <li>• MP4 (H.264, H.265)</li>
-              <li>• AVI (Xvid, DivX)</li>
-              <li>• MOV (QuickTime)</li>
-              <li>• MKV (Matroska)</li>
-              <li>• WMV (Windows Media)</li>
-              <li>• FLV (Flash Video)</li>
-            </ul>
-          </div>
-          <div>
-            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
-              支持的输出格式
-            </h3>
-            <ul class="text-gray-600 dark:text-gray-400 space-y-1">
-              <li>• MP4 (H.264, H.265)</li>
-              <li>• AVI (Xvid)</li>
-              <li>• MOV (QuickTime)</li>
-              <li>• MKV (Matroska)</li>
-              <li>• WMV (Windows Media)</li>
-              <li>• FLV (Flash Video)</li>
-            </ul>
-          </div>
-        </div>
-        
-        <div class="mt-6">
-          <div
-            class="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md"
-          >
-            <div class="flex items-start">
-              <svg
-                class="h-5 w-5 text-green-400 mr-2 mt-0.5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                ></path>
-              </svg>
-              <div>
-                <h4 class="text-sm font-medium text-green-800 dark:text-green-200">
-                  智能分离转码
-                </h4>
-                <p class="text-sm text-green-700 dark:text-green-300 mt-1">
-                  系统采用分离式转码技术，分别处理视频和音频，有效避免转换卡住问题，提供更稳定的转换体验。
-                </p>
-                <div class="mt-2 text-xs text-green-600 dark:text-green-400">
-                  <div>• 自动检测音频流并选择最佳处理方式</div>
-                  <div>• 视频和音频独立处理，避免相互影响</div>
-                  <div>• 支持多种音频编码器，兼容性更好</div>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>
