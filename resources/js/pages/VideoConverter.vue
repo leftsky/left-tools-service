@@ -14,6 +14,16 @@ const convertedBlob = ref<Blob | null>(null);
 const downloadUrl = ref<string>("");
 const message = ref("请选择视频文件开始转换");
 
+// 视频信息
+const videoInfo = ref<{
+  duration: number;
+  fps: number;
+  totalFrames: number;
+  resolution: string;
+  bitrate: string;
+  format: string;
+} | null>(null);
+
 // 设置消息的辅助函数，同时打印控制台日志
 const setMessage = (msg: string) => {
   message.value = msg;
@@ -25,6 +35,7 @@ const outputFormat = ref("mp4");
 const videoQuality = ref("high");
 const resolution = ref("original");
 const framerate = ref("original");
+const useFastMode = ref(true); // 快速模式开关
 
 // FFmpeg CDN配置
 const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.9/dist/esm";
@@ -39,7 +50,23 @@ onMounted(async () => {
     setMessage(msg);
     // 根据日志更新进度
     if (msg.includes("frame=")) {
-      progress.value = Math.min(progress.value + 10, 90);
+      // 解析帧信息来更新进度
+      const frameMatch = msg.match(/frame=\s*(\d+)/);
+      if (frameMatch) {
+        const frame = parseInt(frameMatch[1]);
+        // 使用动态计算的帧数
+        const totalFrames = videoInfo.value?.totalFrames || 111;
+        const frameProgress = Math.min((frame / totalFrames) * 70, 70);
+        progress.value = 20 + frameProgress; // 从20%开始，最多到90%
+      }
+    }
+  });
+
+  // 设置进度监听
+  ffmpeg.on("progress", ({ progress: p, time }: any) => {
+    console.log(`[VideoConverter] 转换进度: ${p * 100}%, 时间: ${time}`);
+    if (p > 0) {
+      progress.value = 20 + (p * 70); // 从20%开始，最多到90%
     }
   });
 
@@ -80,7 +107,7 @@ onMounted(async () => {
 });
 
 // 文件选择处理
-const handleFileSelect = (event: Event) => {
+const handleFileSelect = async (event: Event) => {
   const target = event.target as HTMLInputElement;
   if (target.files && target.files[0]) {
     selectedFile.value = target.files[0];
@@ -88,12 +115,16 @@ const handleFileSelect = (event: Event) => {
     convertedBlob.value = null;
     downloadUrl.value = "";
     progress.value = 0;
+    videoInfo.value = null;
     setMessage(`已选择文件: ${selectedFile.value.name}`);
+    
+    // 读取视频信息
+    await readVideoInfo();
   }
 };
 
 // 拖拽处理
-const handleDrop = (event: DragEvent) => {
+const handleDrop = async (event: DragEvent) => {
   console.log(event);
   event.preventDefault();
   if (event.dataTransfer?.files && event.dataTransfer.files[0]) {
@@ -101,12 +132,90 @@ const handleDrop = (event: DragEvent) => {
     convertedBlob.value = null;
     downloadUrl.value = "";
     progress.value = 0;
+    videoInfo.value = null;
     setMessage(`已选择文件: ${selectedFile.value.name}`);
+    
+    // 读取视频信息
+    await readVideoInfo();
   }
 };
 
 const handleDragOver = (event: DragEvent) => {
   event.preventDefault();
+};
+
+// 解析帧率字符串 (如 "30/1" -> 30)
+const parseFrameRate = (frameRate: string): number => {
+  try {
+    const parts = frameRate.split('/');
+    if (parts.length === 2) {
+      const numerator = parseFloat(parts[0]);
+      const denominator = parseFloat(parts[1]);
+      return denominator > 0 ? numerator / denominator : 30;
+    }
+    return parseFloat(frameRate) || 30;
+  } catch {
+    console.warn("解析帧率失败，使用默认值30:", frameRate);
+    return 30;
+  }
+};
+
+// 读取视频信息
+const readVideoInfo = async () => {
+  if (!selectedFile.value) {
+    return;
+  }
+  
+  if (!isLoaded.value) {
+    setMessage("FFmpeg尚未加载完成，无法读取视频信息");
+    return;
+  }
+
+  try {
+    setMessage("正在读取视频信息...");
+    
+    // 获取文件扩展名
+    const inputExt = getFileExtension(selectedFile.value.name);
+    
+    // 写入临时文件
+    await ffmpeg.writeFile(`temp_input.${inputExt}`, await fetchFile(selectedFile.value));
+    
+    // 使用ffprobe获取视频信息
+    const info = await ffmpeg.ffprobe(`temp_input.${inputExt}`);
+    
+    console.log("视频信息:", info);
+    
+    if (info.streams && info.streams.length > 0) {
+      const videoStream = info.streams.find(stream => stream.codec_type === 'video');
+      
+              if (videoStream) {
+          const duration = parseFloat(info.format?.duration || '0');
+          const fps = parseFrameRate(videoStream.r_frame_rate || '30/1'); // 解析帧率字符串
+          const totalFrames = Math.round(duration * fps);
+        const width = videoStream.width || 0;
+        const height = videoStream.height || 0;
+        const bitrate = info.format?.bit_rate || '0';
+        
+        videoInfo.value = {
+          duration,
+          fps,
+          totalFrames,
+          resolution: `${width}x${height}`,
+          bitrate: `${Math.round(parseInt(bitrate) / 1000)} kbps`,
+          format: info.format?.format_name || 'unknown'
+        };
+        
+        setMessage(`视频信息: ${duration.toFixed(2)}秒, ${fps.toFixed(2)}fps, ${totalFrames}帧, ${width}x${height}`);
+      }
+    }
+    
+    // 清理临时文件
+    await ffmpeg.deleteFile(`temp_input.${inputExt}`);
+    
+  } catch (error) {
+    console.error("读取视频信息失败:", error);
+    setMessage("读取视频信息失败，但可以继续转换");
+  }
 };
 
 // 转换视频
@@ -144,9 +253,49 @@ const convertVideo = async () => {
     // 构建FFmpeg命令
     const command = buildFFmpegCommand(inputExt, outputExt);
 
-    setMessage("正在执行视频转换...");
+    // 如果是调试模式，先尝试简单转换
+    if (useFastMode.value) {
+      setMessage("使用快速模式转换...");
+    } else {
+      setMessage("使用标准模式转换...");
+    }
+    
+    // 添加超时机制
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error("转换超时，请尝试更小的文件或更低的设置"));
+      }, 300000); // 5分钟超时
+    });
+    
     // 执行转换
-    await ffmpeg.exec(command);
+    try {
+      await Promise.race([
+        ffmpeg.exec(command),
+        timeoutPromise
+      ]);
+    } catch (error) {
+      // 如果快速模式失败，尝试更简单的转换
+      if (useFastMode.value && error.message.includes("超时")) {
+        setMessage("快速模式超时，尝试更简单的转换...");
+        const simpleCommand = [
+          "-i", `input.${inputExt}`,
+          "-c:v", "libx264", 
+          "-preset", "ultrafast",
+          "-crf", "28",
+          "-c:a", "aac",
+          "-b:a", "64k",
+          "-y",
+          `output.${outputExt}`
+        ];
+        console.log("简单转换命令:", simpleCommand.join(" "));
+        await Promise.race([
+          ffmpeg.exec(simpleCommand),
+          timeoutPromise
+        ]);
+      } else {
+        throw error;
+      }
+    }
     progress.value = 90;
 
     // 读取输出文件
@@ -211,25 +360,33 @@ const buildFFmpegCommand = (inputExt: string, outputExt: string) => {
     command.push("-r", framerate.value);
   }
 
-  // 输出格式特定设置 - 简化编码器选择
+  // 输出格式特定设置 - 根据快速模式选择编码设置
+  const preset = useFastMode.value ? "ultrafast" : "fast";
+  const tune = useFastMode.value ? "fastdecode" : "";
+  
   switch (outputExt) {
     case "mp4":
-      command.push("-c:v", "libx264", "-preset", "fast", "-c:a", "aac");
+      command.push("-c:v", "libx264", "-preset", preset, "-c:a", "aac", "-b:a", "128k");
+      if (tune) command.push("-tune", tune);
       break;
     case "avi":
-      command.push("-c:v", "libx264", "-preset", "fast", "-c:a", "aac");
+      command.push("-c:v", "libx264", "-preset", preset, "-c:a", "aac", "-b:a", "128k");
+      if (tune) command.push("-tune", tune);
       break;
     case "mov":
-      command.push("-c:v", "libx264", "-preset", "fast", "-c:a", "aac");
+      command.push("-c:v", "libx264", "-preset", preset, "-c:a", "aac", "-b:a", "128k");
+      if (tune) command.push("-tune", tune);
       break;
     case "mkv":
-      command.push("-c:v", "libx264", "-preset", "fast", "-c:a", "aac");
+      command.push("-c:v", "libx264", "-preset", preset, "-c:a", "aac", "-b:a", "128k");
+      if (tune) command.push("-tune", tune);
       break;
     case "wmv":
-      command.push("-c:v", "libx264", "-preset", "fast", "-c:a", "aac");
+      command.push("-c:v", "libx264", "-preset", preset, "-c:a", "aac", "-b:a", "128k");
       break;
     case "flv":
-      command.push("-c:v", "libx264", "-preset", "fast", "-c:a", "aac");
+      command.push("-c:v", "libx264", "-preset", preset, "-c:a", "aac", "-b:a", "128k");
+      if (tune) command.push("-tune", tune);
       break;
   }
 
@@ -361,6 +518,20 @@ const downloadFile = () => {
               >
                 已选择: {{ selectedFile.name }}
               </p>
+              <div
+                v-if="videoInfo"
+                class="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-md"
+              >
+                <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">视频信息</h4>
+                <div class="grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-400">
+                  <div>时长: {{ videoInfo.duration.toFixed(2) }}秒</div>
+                  <div>帧率: {{ videoInfo.fps.toFixed(2) }}fps</div>
+                  <div>总帧数: {{ videoInfo.totalFrames }}</div>
+                  <div>分辨率: {{ videoInfo.resolution }}</div>
+                  <div>比特率: {{ videoInfo.bitrate }}</div>
+                  <div>格式: {{ videoInfo.format }}</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -452,6 +623,20 @@ const downloadFile = () => {
                 <option value="25">25 FPS</option>
                 <option value="24">24 FPS</option>
               </select>
+            </div>
+
+            <!-- 快速模式 -->
+            <div>
+              <label class="flex items-center">
+                <input
+                  type="checkbox"
+                  v-model="useFastMode"
+                  class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                />
+                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                  快速模式 (推荐，转换更快)
+                </span>
+              </label>
             </div>
           </div>
         </div>
