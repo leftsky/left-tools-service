@@ -14,6 +14,13 @@ const convertedBlob = ref<Blob | null>(null);
 const downloadUrl = ref<string>("");
 const message = ref("请选择视频文件开始转换");
 
+// 测试弹窗相关数据
+const showTestModal = ref(false);
+const testLoaded = ref(false);
+const testMessage = ref("点击加载FFmpeg");
+const testVideoUrl = ref("");
+let testFfmpeg: FFmpeg | null = null;
+
 // 视频信息
 const videoInfo = ref<{
   duration: number;
@@ -648,6 +655,65 @@ const downloadFile = () => {
     document.body.removeChild(a);
   }
 };
+
+// 测试弹窗相关函数
+const openTestModal = () => {
+  showTestModal.value = true;
+  testLoaded.value = false;
+  testMessage.value = "点击加载FFmpeg";
+  testVideoUrl.value = "";
+  testFfmpeg = new FFmpeg();
+};
+
+const closeTestModal = () => {
+  showTestModal.value = false;
+  testFfmpeg = null;
+};
+
+const loadTestFfmpeg = async () => {
+  if (!testFfmpeg) return;
+  
+  try {
+    testMessage.value = "正在加载FFmpeg...";
+    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+    
+    testFfmpeg.on('log', ({ message: msg }) => {
+      testMessage.value = msg;
+      console.log('[测试FFmpeg]', msg);
+    });
+    
+    await testFfmpeg.load({
+      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+    });
+    
+    testLoaded.value = true;
+    testMessage.value = "FFmpeg加载完成，点击开始转换";
+  } catch (error) {
+    console.error('测试FFmpeg加载失败:', error);
+    testMessage.value = `加载失败: ${error.message}`;
+  }
+};
+
+const testTranscode = async () => {
+  if (!testFfmpeg || !testLoaded.value) return;
+  
+  try {
+    testMessage.value = "开始转换...";
+    await testFfmpeg.writeFile('input.webm', await fetchFile('https://raw.githubusercontent.com/ffmpegwasm/testdata/master/Big_Buck_Bunny_180_10s.webm'));
+    testMessage.value = "文件写入完成，开始转换...";
+    
+    await testFfmpeg.exec(['-i', 'input.webm', 'output.mp4']);
+    testMessage.value = "转换完成，读取文件...";
+    
+    const data = await testFfmpeg.readFile('output.mp4');
+    testVideoUrl.value = URL.createObjectURL(new Blob([(data as Uint8Array).buffer], {type: 'video/mp4'}));
+    testMessage.value = "转换成功！";
+  } catch (error) {
+    console.error('测试转换失败:', error);
+    testMessage.value = `转换失败: ${error.message}`;
+  }
+};
 </script>
 
 <template>
@@ -866,7 +932,7 @@ const downloadFile = () => {
         </div>
 
         <!-- 转换按钮 -->
-        <div class="text-center">
+        <div class="text-center space-y-4">
           <button
             @click="convertVideo"
             :disabled="!selectedFile || !videoInfo || isConverting || !isLoaded"
@@ -902,6 +968,16 @@ const downloadFile = () => {
             </svg>
             {{ isConverting ? "转换中..." : "开始转换" }}
           </button>
+          
+          <!-- 测试按钮 -->
+          <div>
+            <button
+              @click="openTestModal"
+              class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+            >
+              🧪 测试FFmpeg转换
+            </button>
+          </div>
         </div>
 
         <!-- 加载进度 -->
@@ -1035,6 +1111,76 @@ const downloadFile = () => {
                 所有视频转换都在您的浏览器本地进行，文件不会上传到服务器，确保您的隐私安全。
               </p>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 测试弹窗 -->
+    <div
+      v-if="showTestModal"
+      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      @click="closeTestModal"
+    >
+      <div
+        class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4"
+        @click.stop
+      >
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+            🧪 FFmpeg转换测试
+          </h3>
+          <button
+            @click="closeTestModal"
+            class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          >
+            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+        
+        <div class="space-y-4">
+          <!-- 状态消息 -->
+          <div class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+            <p class="text-blue-800 dark:text-blue-200 text-sm">{{ testMessage }}</p>
+          </div>
+          
+          <!-- 控制按钮 -->
+          <div class="space-y-2">
+            <button
+              v-if="!testLoaded"
+              @click="loadTestFfmpeg"
+              class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
+            >
+              加载FFmpeg (~31 MB)
+            </button>
+            
+            <button
+              v-if="testLoaded"
+              @click="testTranscode"
+              class="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
+            >
+              转换 webm 到 mp4
+            </button>
+          </div>
+          
+          <!-- 测试视频播放器 -->
+          <div v-if="testVideoUrl" class="space-y-2">
+            <h4 class="text-sm font-medium text-gray-900 dark:text-white">转换结果：</h4>
+            <video
+              :src="testVideoUrl"
+              controls
+              class="w-full rounded-md"
+              preload="metadata"
+            ></video>
+          </div>
+          
+          <!-- 提示信息 -->
+          <div class="text-xs text-gray-500 dark:text-gray-400">
+            <p>• 打开开发者工具 (Ctrl+Shift+I) 查看详细日志</p>
+            <p>• 测试使用官方示例视频进行转换</p>
+            <p>• 用于验证FFmpeg基本功能是否正常</p>
           </div>
         </div>
       </div>
