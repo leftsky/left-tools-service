@@ -428,8 +428,38 @@ const convertVideo = async () => {
     console.log(`文件写入完成，耗时: ${writeTime}ms`);
     progress.value = 20;
 
-    // 始终使用分离式转码
-    await performSeparateTranscode(inputExt, outputExt);
+    // 检查输入文件是否有音频流
+    const hasAudioStream = tempVideoInfo.value?.audioCodec && tempVideoInfo.value.audioCodec !== "未知";
+    console.log("检测到音频编解码器:", tempVideoInfo.value?.audioCodec);
+    console.log("是否有音频流:", hasAudioStream);
+
+    if (hasAudioStream) {
+      // 有音频流，使用分离式转码
+      await performSeparateTranscode(inputExt, outputExt);
+    } else {
+      // 没有音频流，直接转码视频
+      console.log("没有检测到音频流，直接转码视频");
+      setMessage("正在转码视频...");
+      progress.value = 30;
+      
+      const videoCommand = buildVideoCommand(inputExt, outputExt);
+      console.log("视频转码命令:", videoCommand.join(" "));
+      
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error("转换超时，请尝试更小的文件或更低的设置"));
+        }, 1000 * 60);
+      });
+      
+      const startTime = Date.now();
+      await Promise.race([ffmpeg.exec(videoCommand), timeoutPromise]);
+      const convertTime = Date.now() - startTime;
+      console.log(`视频转码完成，耗时: ${convertTime}ms`);
+      progress.value = 90;
+      
+      // 直接使用视频文件作为输出
+      await ffmpeg.exec(["-i", `video_only.${outputExt}`, "-c", "copy", "-y", `output.${outputExt}`]);
+    }
 
     // 读取输出文件
     setMessage("正在读取输出文件...");
@@ -458,7 +488,28 @@ const convertVideo = async () => {
       await cleanupTempFiles(inputExt, outputExt);
     } catch (readError) {
       console.error("读取输出文件失败:", readError);
-      throw new Error(`读取输出文件失败: ${readError.message}`);
+      
+      // 检查是否有视频文件存在
+      try {
+        const videoData = await ffmpeg.readFile(`video_only.${outputExt}`);
+        if (videoData && (videoData as Uint8Array).length > 0) {
+          console.log("发现有效的视频文件，尝试直接使用");
+          convertedBlob.value = new Blob([(videoData as Uint8Array).buffer], {
+            type: `video/${outputExt}`,
+          });
+          downloadUrl.value = URL.createObjectURL(convertedBlob.value);
+          progress.value = 100;
+          setMessage("转换完成！（仅视频）");
+          console.log("=== 转换成功完成（仅视频）===");
+          console.log("输出文件大小:", (videoData as Uint8Array).length, "字节");
+          await cleanupTempFiles(inputExt, outputExt);
+          return;
+        }
+      } catch (videoError) {
+        console.error("视频文件也不存在:", videoError);
+      }
+      
+      throw new Error(`读取输出文件失败: ${readError.message || readError.toString()}`);
     }
   } catch (error) {
     console.error("=== 转换失败 ===");
@@ -530,7 +581,7 @@ const performSeparateTranscode = async (inputExt: string, outputExt: string) => 
     progress.value = 60;
     console.log("步骤2: 提取并转码音频");
 
-    const audioCommand = buildAudioCommand(inputExt, outputExt);
+    const audioCommand = buildAudioCommand(inputExt);
     console.log("音频转码命令:", audioCommand.join(" "));
 
     const audioStartTime = Date.now();
@@ -544,13 +595,28 @@ const performSeparateTranscode = async (inputExt: string, outputExt: string) => 
     progress.value = 80;
     console.log("步骤3: 重新组合视频和音频");
 
-    const mergeCommand = buildMergeCommand(outputExt);
-    console.log("合并命令:", mergeCommand.join(" "));
+    // 检查音频文件是否存在且有效
+    try {
+      const audioData = await ffmpeg.readFile("audio.aac");
+      if (!audioData || (audioData as Uint8Array).length === 0) {
+        console.warn("音频文件为空，跳过音频合并");
+        // 如果音频文件为空，直接复制视频文件作为输出
+        await ffmpeg.exec(["-i", `video_only.${outputExt}`, "-c", "copy", "-y", `output.${outputExt}`]);
+      } else {
+        const mergeCommand = buildMergeCommand(outputExt);
+        console.log("合并命令:", mergeCommand.join(" "));
 
-    const mergeStartTime = Date.now();
-    await Promise.race([ffmpeg.exec(mergeCommand), timeoutPromise]);
-    const mergeTime = Date.now() - mergeStartTime;
-    console.log(`合并完成，耗时: ${mergeTime}ms`);
+        const mergeStartTime = Date.now();
+        await Promise.race([ffmpeg.exec(mergeCommand), timeoutPromise]);
+        const mergeTime = Date.now() - mergeStartTime;
+        console.log(`合并完成，耗时: ${mergeTime}ms`);
+      }
+    } catch (audioError) {
+      console.warn("音频处理失败，使用仅视频输出:", audioError);
+      // 如果音频处理失败，直接复制视频文件作为输出
+      await ffmpeg.exec(["-i", `video_only.${outputExt}`, "-c", "copy", "-y", `output.${outputExt}`]);
+    }
+    
     progress.value = 90;
 
     console.log("=== 分离式转码完成 ===");
@@ -601,25 +667,14 @@ const buildVideoCommand = (inputExt: string, outputExt: string) => {
 };
 
 // 构建音频转码命令
-const buildAudioCommand = (inputExt: string, outputExt: string) => {
+const buildAudioCommand = (inputExt: string) => {
   const command = ["-i", `input.${inputExt}`];
 
   // 跳过视频
   command.push("-vn");
 
-  // 音频编码设置
-  switch (outputExt) {
-    case "mp4":
-    case "mov":
-    case "mkv":
-    case "wmv":
-    case "flv":
-      command.push("-c:a", "aac", "-b:a", "128k");
-      break;
-    case "avi":
-      command.push("-c:a", "mp3", "-b:a", "128k");
-      break;
-  }
+  // 音频编码设置 - 统一使用AAC格式
+  command.push("-c:a", "aac", "-b:a", "128k", "-ar", "48000");
 
   // 输出文件名
   command.push("-y", "audio.aac");
@@ -659,6 +714,7 @@ const cleanupTempFiles = async (inputExt: string, outputExt: string) => {
     for (const file of filesToDelete) {
       try {
         await ffmpeg.deleteFile(file);
+        console.log(`已删除临时文件: ${file}`);
       } catch (error) {
         console.warn(`删除临时文件 ${file} 失败:`, error);
       }
