@@ -88,7 +88,7 @@ const handleFileSelect = (event: Event) => {
     convertedBlob.value = null;
     downloadUrl.value = "";
     progress.value = 0;
-    message.value = `已选择文件: ${selectedFile.value.name}`;
+    setMessage(`已选择文件: ${selectedFile.value.name}`);
   }
 };
 
@@ -101,7 +101,7 @@ const handleDrop = (event: DragEvent) => {
     convertedBlob.value = null;
     downloadUrl.value = "";
     progress.value = 0;
-    message.value = `已选择文件: ${selectedFile.value.name}`;
+    setMessage(`已选择文件: ${selectedFile.value.name}`);
   }
 };
 
@@ -120,22 +120,23 @@ const convertVideo = async () => {
 
   isConverting.value = true;
   progress.value = 0;
-  message.value = "正在加载FFmpeg...";
+  setMessage("正在加载FFmpeg...");
 
   try {
     // 检查FFmpeg是否已加载
     if (!isLoaded.value) {
-      message.value = "FFmpeg尚未加载完成，请稍候...";
+      setMessage("FFmpeg尚未加载完成，请稍候...");
       return;
     }
 
-    message.value = "开始转换...";
+    setMessage("开始转换...");
     progress.value = 10;
 
     // 获取文件扩展名
     const inputExt = getFileExtension(selectedFile.value.name);
     const outputExt = outputFormat.value;
 
+    setMessage("正在写入输入文件...");
     // 写入输入文件
     await ffmpeg.writeFile(`input.${inputExt}`, await fetchFile(selectedFile.value));
     progress.value = 20;
@@ -143,11 +144,13 @@ const convertVideo = async () => {
     // 构建FFmpeg命令
     const command = buildFFmpegCommand(inputExt, outputExt);
 
+    setMessage("正在执行视频转换...");
     // 执行转换
     await ffmpeg.exec(command);
     progress.value = 90;
 
     // 读取输出文件
+    setMessage("正在读取输出文件...");
     const data = await ffmpeg.readFile(`output.${outputExt}`);
     convertedBlob.value = new Blob([(data as Uint8Array).buffer], {
       type: `video/${outputExt}`,
@@ -157,10 +160,10 @@ const convertVideo = async () => {
     downloadUrl.value = URL.createObjectURL(convertedBlob.value);
 
     progress.value = 100;
-    message.value = "转换完成！";
+    setMessage("转换完成！");
   } catch (error) {
     console.error("转换失败:", error);
-    message.value = "转换失败，请检查文件格式或重试";
+    setMessage("转换失败，请检查文件格式或重试");
     alert("视频转换失败，请检查文件格式或重试");
   } finally {
     isConverting.value = false;
@@ -171,6 +174,10 @@ const convertVideo = async () => {
 // 构建FFmpeg命令
 const buildFFmpegCommand = (inputExt: string, outputExt: string) => {
   const command = ["-i", `input.${inputExt}`];
+
+  // 添加更多调试信息和优化参数
+  command.push("-y"); // 覆盖输出文件
+  command.push("-loglevel", "info"); // 设置日志级别
 
   // 视频质量设置
   switch (videoQuality.value) {
@@ -204,29 +211,33 @@ const buildFFmpegCommand = (inputExt: string, outputExt: string) => {
     command.push("-r", framerate.value);
   }
 
-  // 输出格式特定设置
+  // 输出格式特定设置 - 简化编码器选择
   switch (outputExt) {
     case "mp4":
-      command.push("-c:v", "libx264", "-c:a", "aac");
+      command.push("-c:v", "libx264", "-preset", "fast", "-c:a", "aac");
       break;
     case "avi":
-      command.push("-c:v", "libx264", "-c:a", "mp3");
+      command.push("-c:v", "libx264", "-preset", "fast", "-c:a", "aac");
       break;
     case "mov":
-      command.push("-c:v", "libx264", "-c:a", "aac");
+      command.push("-c:v", "libx264", "-preset", "fast", "-c:a", "aac");
       break;
     case "mkv":
-      command.push("-c:v", "libx264", "-c:a", "aac");
+      command.push("-c:v", "libx264", "-preset", "fast", "-c:a", "aac");
       break;
     case "wmv":
-      command.push("-c:v", "wmv2", "-c:a", "wmav2");
+      command.push("-c:v", "libx264", "-preset", "fast", "-c:a", "aac");
       break;
     case "flv":
-      command.push("-c:v", "libx264", "-c:a", "mp3");
+      command.push("-c:v", "libx264", "-preset", "fast", "-c:a", "aac");
       break;
   }
 
   command.push(`output.${outputExt}`);
+  
+  // 打印完整命令用于调试
+  console.log("FFmpeg命令:", command.join(" "));
+  
   return command;
 };
 
