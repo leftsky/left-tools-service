@@ -4,7 +4,7 @@ import Layout from '@/components/Layout.vue';
 </script>
 
 <template>
-    <Layout title="Left Tools Service - 专业工具服务平台">
+    <Layout title="小左子的工具箱 - 专业工具服务平台">
             <!-- Hero 区域 -->
             <div class="relative overflow-hidden">
                 <div class="max-w-7xl mx-auto">

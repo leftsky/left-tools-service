@@ -10,7 +10,7 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
                             </svg>
                         </div>
-                        <span class="text-xl font-bold text-white">Left Tools</span>
+                        <span class="text-xl font-bold text-white">小左子的工具箱</span>
                     </div>
                     <p class="mt-4 text-gray-300">
                         专业工具服务平台，为您提供高效便捷的在线工具服务。

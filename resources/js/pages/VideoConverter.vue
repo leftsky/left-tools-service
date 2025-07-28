@@ -3,7 +3,7 @@ import Layout from '@/components/Layout.vue';
 </script>
 
 <template>
-    <Layout title="视频格式转换 - Left Tools Service">
+    <Layout title="视频格式转换 - 小左子的工具箱">
             <!-- 页面标题区域 -->
             <div class="bg-white dark:bg-gray-800 shadow-sm">
                 <div class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">

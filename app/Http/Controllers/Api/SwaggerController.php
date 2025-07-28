@@ -7,7 +7,7 @@ use OpenApi\Attributes as OA;
 
 #[OA\Info(
     version: '1.0.0',
-    title: 'Left Tools Service API',
+    title: '小左子的工具箱 API',
     description: '工具服务API文档',
     contact: new OA\Contact(
         name: 'LeftSky',

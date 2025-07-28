@@ -16,7 +16,7 @@ import { Link } from '@inertiajs/vue3';
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
                                 </svg>
                             </div>
-                            <span class="text-xl font-bold text-gray-900 dark:text-white">Left Tools</span>
+                            <span class="text-xl font-bold text-gray-900 dark:text-white">小左子的工具箱</span>
                         </Link>
                     </div>
                 </div>
