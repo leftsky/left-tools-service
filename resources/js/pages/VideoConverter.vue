@@ -14,6 +14,12 @@ const convertedBlob = ref<Blob | null>(null);
 const downloadUrl = ref<string>("");
 const message = ref("请选择视频文件开始转换");
 
+// 设置消息的辅助函数，同时打印控制台日志
+const setMessage = (msg: string) => {
+  message.value = msg;
+  console.log(`[VideoConverter] ${msg}`);
+};
+
 // 转换选项
 const outputFormat = ref("mp4");
 const videoQuality = ref("high");
@@ -30,7 +36,7 @@ const ffmpeg = new FFmpeg();
 onMounted(async () => {
   // 设置日志监听
   ffmpeg.on("log", ({ message: msg }: any) => {
-    message.value = msg;
+    setMessage(msg);
     // 根据日志更新进度
     if (msg.includes("frame=")) {
       progress.value = Math.min(progress.value + 10, 90);
@@ -40,13 +46,13 @@ onMounted(async () => {
   // 自动加载FFmpeg
   try {
     isLoading.value = true;
-    message.value = "正在加载FFmpeg...";
+    setMessage("正在加载FFmpeg...");
     
     // 模拟加载进度
     const progressInterval = setInterval(() => {
       if (progress.value < 80) {
         progress.value += 5;
-        message.value = `正在加载FFmpeg... ${progress.value}%`;
+        setMessage(`正在加载FFmpeg... ${progress.value}%`);
       }
     }, 200);
 
@@ -58,17 +64,17 @@ onMounted(async () => {
     
     clearInterval(progressInterval);
     progress.value = 100;
-    message.value = "FFmpeg加载完成！";
+    setMessage("FFmpeg加载完成！");
     isLoaded.value = true;
     isLoading.value = false;
     
     // 等待一秒让用户看到加载完成
     await new Promise(resolve => setTimeout(resolve, 1000));
-    message.value = "请选择视频文件开始转换";
+    setMessage("请选择视频文件开始转换");
     progress.value = 0;
   } catch (error) {
     console.error("FFmpeg加载失败:", error);
-    message.value = "FFmpeg加载失败，请刷新页面重试";
+    setMessage("FFmpeg加载失败，请刷新页面重试");
     isLoading.value = false;
   }
 });
