@@ -7,6 +7,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
+        "inertiajs/inertia-laravel": "^2.0",
         "darkaonline/l5-swagger": "^9.0",
         "filament/filament": "^3.3",
         "laravel/framework": "^12.0",
@@ -15,7 +16,8 @@
         "laravel/tinker": "^2.10.1",
         "livewire/flux": "^2.0",
         "livewire/volt": "^1.6.7",
-        "w7corp/easywechat": "^6.17"
+        "w7corp/easywechat": "^6.17",
+        "tightenco/ziggy": "^2.4"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
