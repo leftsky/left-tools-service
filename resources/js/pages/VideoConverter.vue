@@ -12,6 +12,7 @@ const progress = ref(0);
 const selectedFile = ref<File | null>(null);
 const convertedBlob = ref<Blob | null>(null);
 const downloadUrl = ref<string>('');
+const message = ref('请选择视频文件开始转换');
 
 // 转换选项
 const outputFormat = ref('mp4');
@@ -19,21 +20,13 @@ const videoQuality = ref('high');
 const resolution = ref('original');
 const framerate = ref('original');
 
+// FFmpeg CDN配置
+const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.9/dist/esm';
+
 // 初始化FFmpeg
 onMounted(async () => {
+    // 只创建FFmpeg实例，不进行其他操作
     ffmpeg.value = new FFmpeg();
-    
-    // 加载FFmpeg
-    try {
-        await ffmpeg.value.load({
-            coreURL: await toBlobURL('/ffmpeg/ffmpeg-core.js', 'text/javascript'),
-            wasmURL: await toBlobURL('/ffmpeg/ffmpeg-core.wasm', 'application/wasm'),
-        });
-        isLoaded.value = true;
-    } catch (error) {
-        console.error('FFmpeg加载失败:', error);
-        alert('FFmpeg加载失败，请刷新页面重试');
-    }
 });
 
 // 文件选择处理
@@ -45,6 +38,7 @@ const handleFileSelect = (event: Event) => {
         convertedBlob.value = null;
         downloadUrl.value = '';
         progress.value = 0;
+        message.value = `已选择文件: ${selectedFile.value.name}`;
     }
 };
 
@@ -56,6 +50,7 @@ const handleDrop = (event: DragEvent) => {
         convertedBlob.value = null;
         downloadUrl.value = '';
         progress.value = 0;
+        message.value = `已选择文件: ${selectedFile.value.name}`;
     }
 };
 
@@ -65,34 +60,65 @@ const handleDragOver = (event: DragEvent) => {
 
 // 转换视频
 const convertVideo = async () => {
-    if (!selectedFile.value || !ffmpeg.value || !isLoaded.value) {
+    if (!selectedFile.value || !ffmpeg.value) {
         alert('请先选择视频文件');
         return;
     }
 
     isConverting.value = true;
     progress.value = 0;
+    message.value = '正在加载FFmpeg...';
 
     try {
+        // 设置日志监听
+        ffmpeg.value.on('log', ({ message: msg }: any) => {
+            message.value = msg;
+            // 根据日志更新进度
+            if (msg.includes('frame=')) {
+                progress.value = Math.min(progress.value + 10, 90);
+            }
+        });
+
+        // 加载FFmpeg
+        if (!isLoaded.value) {
+            await ffmpeg.value.load({
+                coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+                wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+                workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, 'text/javascript')
+            });
+            isLoaded.value = true;
+        }
+
+        message.value = '开始转换...';
+        progress.value = 10;
+
+        // 获取文件扩展名
+        const inputExt = getFileExtension(selectedFile.value.name);
+        const outputExt = outputFormat.value;
+
         // 写入输入文件
-        await ffmpeg.value.writeFile('input.' + getFileExtension(selectedFile.value.name), await fetchFile(selectedFile.value));
+        await ffmpeg.value.writeFile(`input.${inputExt}`, await fetchFile(selectedFile.value));
+        progress.value = 20;
 
         // 构建FFmpeg命令
-        const commandParts = buildFFmpegCommand();
+        const command = buildFFmpegCommand(inputExt, outputExt);
         
         // 执行转换
-        await ffmpeg.value.exec(commandParts);
+        await ffmpeg.value.exec(command);
+        progress.value = 90;
 
         // 读取输出文件
-        const data = await ffmpeg.value.readFile(`output.${outputFormat.value}`);
-        convertedBlob.value = new Blob([data], { type: `video/${outputFormat.value}` });
+        const data = await ffmpeg.value.readFile(`output.${outputExt}`);
+        convertedBlob.value = new Blob([(data as Uint8Array).buffer], { type: `video/${outputExt}` });
         
         // 创建下载链接
         downloadUrl.value = URL.createObjectURL(convertedBlob.value);
         
         progress.value = 100;
+        message.value = '转换完成！';
     } catch (error) {
         console.error('转换失败:', error);
+        message.value = '转换失败，请检查文件格式或重试';
         alert('视频转换失败，请检查文件格式或重试');
     } finally {
         isConverting.value = false;
@@ -100,22 +126,19 @@ const convertVideo = async () => {
 };
 
 // 构建FFmpeg命令
-const buildFFmpegCommand = () => {
-    const inputExt = getFileExtension(selectedFile.value!.name);
-    const outputExt = outputFormat.value;
-    
-    const commandParts = ['-i', `input.${inputExt}`];
+const buildFFmpegCommand = (inputExt: string, outputExt: string) => {
+    const command = ['-i', `input.${inputExt}`];
     
     // 视频质量设置
     switch (videoQuality.value) {
         case 'high':
-            commandParts.push('-crf', '18');
+            command.push('-crf', '18');
             break;
         case 'medium':
-            commandParts.push('-crf', '23');
+            command.push('-crf', '23');
             break;
         case 'low':
-            commandParts.push('-crf', '28');
+            command.push('-crf', '28');
             break;
     }
     
@@ -127,38 +150,38 @@ const buildFFmpegCommand = () => {
             '720p': '1280:720',
             '480p': '854:480'
         };
-        commandParts.push('-vf', `scale=${resolutions[resolution.value as keyof typeof resolutions]}`);
+        command.push('-vf', `scale=${resolutions[resolution.value as keyof typeof resolutions]}`);
     }
     
     // 帧率设置
     if (framerate.value !== 'original') {
-        commandParts.push('-r', framerate.value);
+        command.push('-r', framerate.value);
     }
     
     // 输出格式特定设置
     switch (outputExt) {
         case 'mp4':
-            commandParts.push('-c:v', 'libx264', '-c:a', 'aac');
+            command.push('-c:v', 'libx264', '-c:a', 'aac');
             break;
         case 'avi':
-            commandParts.push('-c:v', 'libx264', '-c:a', 'mp3');
+            command.push('-c:v', 'libx264', '-c:a', 'mp3');
             break;
         case 'mov':
-            commandParts.push('-c:v', 'libx264', '-c:a', 'aac');
+            command.push('-c:v', 'libx264', '-c:a', 'aac');
             break;
         case 'mkv':
-            commandParts.push('-c:v', 'libx264', '-c:a', 'aac');
+            command.push('-c:v', 'libx264', '-c:a', 'aac');
             break;
         case 'wmv':
-            commandParts.push('-c:v', 'wmv2', '-c:a', 'wmav2');
+            command.push('-c:v', 'wmv2', '-c:a', 'wmav2');
             break;
         case 'flv':
-            commandParts.push('-c:v', 'libx264', '-c:a', 'mp3');
+            command.push('-c:v', 'libx264', '-c:a', 'mp3');
             break;
     }
     
-    commandParts.push(`output.${outputExt}`);
-    return commandParts;
+    command.push(`output.${outputExt}`);
+    return command;
 };
 
 // 获取文件扩展名
@@ -177,8 +200,6 @@ const downloadFile = () => {
         document.body.removeChild(a);
     }
 };
-
-
 </script>
 
 <template>
@@ -203,13 +224,13 @@ const downloadFile = () => {
         <!-- 转换工具区域 -->
         <div class="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
-                <!-- FFmpeg加载状态 -->
-                <div v-if="!isLoaded" class="mb-8 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md">
+                <!-- 状态消息 -->
+                <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
                     <div class="flex items-center">
-                        <svg class="h-5 w-5 text-yellow-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        <svg class="h-5 w-5 text-blue-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
-                        <span class="text-yellow-800 dark:text-yellow-200">正在加载FFmpeg，请稍候...</span>
+                        <span class="text-blue-800 dark:text-blue-200">{{ message }}</span>
                     </div>
                 </div>
 
@@ -328,7 +349,7 @@ const downloadFile = () => {
                 <div class="text-center">
                     <button 
                         @click="convertVideo"
-                        :disabled="!selectedFile || !isLoaded || isConverting"
+                        :disabled="!selectedFile || isConverting"
                         class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-3 px-8 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                     >
                         <svg v-if="!isConverting" class="inline-block h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
