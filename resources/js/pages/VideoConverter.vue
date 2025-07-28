@@ -294,6 +294,14 @@ const convertVideo = async () => {
 
 // 构建FFmpeg命令
 const buildFFmpegCommand = (inputExt: string, outputExt: string) => {
+  // 拦截逻辑：如果是MP4转AVI，使用简洁命令
+  if (inputExt === "mp4" && outputExt === "avi") {
+    const command = ["-i", `input.${inputExt}`, `output.${outputExt}`];
+    console.log("使用简洁转换命令:", command.join(" "));
+    return command;
+  }
+
+  // 原有的复杂命令逻辑
   const command = ["-i", `input.${inputExt}`];
 
   // 添加更多调试信息和优化参数
