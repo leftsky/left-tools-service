@@ -63,10 +63,25 @@ onMounted(async () => {
 
   // 设置日志监听
   ffmpeg.on("log", ({ message: msg }: any) => {
-    // 只在转换过程中输出详细日志，避免干扰视频信息读取
+    // 只在转换过程中输出关键日志，避免过多信息
     if (isConverting.value) {
-      console.log(`[FFmpeg转换] ${msg}`);
-      setMessage(msg);
+      // 只输出关键信息，过滤掉详细的进度日志
+      if (msg.includes("frame=") && msg.includes("fps=")) {
+        // 跳过详细的帧进度日志
+        return;
+      }
+      if (msg.includes("size=") && msg.includes("bitrate=")) {
+        // 跳过详细的比特率日志
+        return;
+      }
+      // 只输出重要的转换信息
+      if (msg.includes("Stream mapping:") || 
+          msg.includes("Output #") || 
+          msg.includes("video:") || 
+          msg.includes("audio:") ||
+          msg.includes("muxing overhead:")) {
+        console.log(`[FFmpeg转换] ${msg}`);
+      }
     } else {
       // 在非转换状态下，只输出关键信息
       if (msg.includes("Duration:") || msg.includes("Video:") || msg.includes("Audio:")) {
@@ -168,7 +183,7 @@ onMounted(async () => {
       }
     }
 
-    // 根据日志更新进度
+    // 根据日志更新进度（简化版本）
     if (msg.includes("frame=")) {
       // 解析帧信息来更新进度
       const frameMatch = msg.match(/frame=\s*(\d+)/);
@@ -176,13 +191,9 @@ onMounted(async () => {
         const frame = parseInt(frameMatch[1]);
         // 使用动态计算的帧数，如果没有视频信息则使用默认值
         const totalFrames = videoInfo.value?.totalFrames || 111;
-        const frameProgress = Math.min((frame / totalFrames) * 70, 70);
-        progress.value = 20 + frameProgress; // 从20%开始，最多到90%
-        console.log(
-          `[转换进度] ${frame}/${totalFrames} 帧 (${progress.value.toFixed(
-            1
-          )}%) - ${new Date().toLocaleTimeString()}`
-        );
+        const frameProgress = Math.min((frame / totalFrames) * 0.4, 0.4); // 视频转码占40%
+        progress.value = frameProgress * 100; // 转换为百分比
+        // 移除详细的进度日志，只保留关键节点
       }
     }
 
@@ -192,12 +203,6 @@ onMounted(async () => {
         console.log("[转换阶段] 开始流映射...");
       } else if (msg.includes("Output #0")) {
         console.log("[转换阶段] 开始输出...");
-      } else if (msg.includes("frame=") && msg.includes("fps=")) {
-        // 解析FPS信息
-        const fpsMatch = msg.match(/fps=\s*(\d+)/);
-        if (fpsMatch) {
-          console.log(`[转换性能] 当前FPS: ${fpsMatch[1]}`);
-        }
       }
     }
   });
@@ -206,7 +211,8 @@ onMounted(async () => {
   ffmpeg.on("progress", ({ progress: p, time }: any) => {
     console.log(`[VideoConverter] 转换进度: ${p * 100}%, 时间: ${time}`);
     if (p > 0) {
-      progress.value = 20 + p * 70; // 从20%开始，最多到90%
+      // 根据当前转换阶段调整进度
+      // 这里暂时保持简单，主要依赖手动设置的阶段进度
     }
   });
 
@@ -417,7 +423,7 @@ const convertVideo = async () => {
     }
 
     setMessage("开始转换...");
-    progress.value = 10;
+    progress.value = 0;
 
     setMessage("正在写入输入文件...");
     console.log("开始写入输入文件...");
@@ -426,7 +432,7 @@ const convertVideo = async () => {
     await ffmpeg.writeFile(`input.${inputExt}`, await fetchFile(selectedFile.value));
     const writeTime = Date.now() - startTime;
     console.log(`文件写入完成，耗时: ${writeTime}ms`);
-    progress.value = 20;
+    progress.value = 0; // 文件写入完成，准备开始转码
 
     // 始终使用分离式转码，参考成功代码的逻辑
     await performSeparateTranscode(inputExt, outputExt);
@@ -539,7 +545,7 @@ const performSeparateTranscode = async (inputExt: string, outputExt: string) => 
   try {
     // 第一步：转码视频（无音频）
     setMessage("正在转码视频...");
-    progress.value = 30;
+    progress.value = 0; // 视频转码开始：0%
     console.log("步骤1: 转码视频（无音频）");
 
     const videoCommand = buildVideoCommand(inputExt, outputExt);
@@ -549,25 +555,25 @@ const performSeparateTranscode = async (inputExt: string, outputExt: string) => 
     await Promise.race([ffmpeg.exec(videoCommand), timeoutPromise]);
     videoTime = Date.now() - videoStartTime;
     console.log(`视频转码完成，耗时: ${videoTime}ms`);
-    progress.value = 50;
+    progress.value = 40; // 视频转码完成：40%
 
     // 第二步：提取并转码音频
     setMessage("正在处理音频...");
-    progress.value = 60;
+    progress.value = 40; // 音频处理开始：40%
     console.log("步骤2: 提取并转码音频");
 
-    const audioCommand = buildAudioCommand(inputExt);
+    const audioCommand = buildAudioCommand(inputExt, outputExt);
     console.log("音频转码命令:", audioCommand.join(" "));
 
     const audioStartTime = Date.now();
     await Promise.race([ffmpeg.exec(audioCommand), timeoutPromise]);
     audioTime = Date.now() - audioStartTime;
     console.log(`音频转码完成，耗时: ${audioTime}ms`);
-    progress.value = 70;
+    progress.value = 80; // 音频处理完成：80%
 
     // 第三步：重新组合视频和音频
     setMessage("正在合并视频和音频...");
-    progress.value = 80;
+    progress.value = 80; // 合并开始：80%
     console.log("步骤3: 重新组合视频和音频");
 
     const mergeCommand = buildMergeCommand(outputExt);
@@ -577,7 +583,7 @@ const performSeparateTranscode = async (inputExt: string, outputExt: string) => 
     await Promise.race([ffmpeg.exec(mergeCommand), timeoutPromise]);
     mergeTime = Date.now() - mergeStartTime;
     console.log(`合并完成，耗时: ${mergeTime}ms`);
-    progress.value = 90;
+    progress.value = 100; // 合并完成：100%
 
     console.log("=== 分离式转码完成 ===");
     console.log(`总耗时: ${videoTime + audioTime + mergeTime}ms`);
@@ -627,28 +633,35 @@ const buildVideoCommand = (inputExt: string, outputExt: string) => {
 };
 
 // 构建音频转码命令
-const buildAudioCommand = (inputExt: string) => {
+const buildAudioCommand = (inputExt: string, outputExt: string) => {
   const command = ["-i", `input.${inputExt}`];
 
   // 跳过视频
   command.push("-vn");
 
-  // 音频编码设置 - 统一使用AAC格式
-  command.push("-c:a", "aac", "-b:a", "128k", "-ar", "48000");
-
-  // 输出文件名
-  command.push("-y", "audio.aac");
+  // 根据输出格式选择音频编码
+  if (outputExt === "avi") {
+    // AVI 格式使用 MP3 音频编码
+    command.push("-c:a", "mp3", "-b:a", "128k", "-ar", "44100");
+    command.push("-y", "audio.mp3");
+  } else {
+    // 其他格式使用 AAC 音频编码
+    command.push("-c:a", "aac", "-b:a", "128k", "-ar", "48000");
+    command.push("-y", "audio.aac");
+  }
 
   return command;
 };
 
 // 构建合并命令
 const buildMergeCommand = (outputExt: string) => {
+  const audioFile = outputExt === "avi" ? "audio.mp3" : "audio.aac";
+  
   const command = [
     "-i",
     `video_only.${outputExt}`,
     "-i",
-    "audio.aac",
+    audioFile,
     "-c:v",
     "copy",
     "-c:a",
@@ -664,10 +677,11 @@ const buildMergeCommand = (outputExt: string) => {
 // 清理临时文件
 const cleanupTempFiles = async (inputExt: string, outputExt: string) => {
   try {
+    const audioFile = outputExt === "avi" ? "audio.mp3" : "audio.aac";
     const filesToDelete = [
       `input.${inputExt}`,
       `video_only.${outputExt}`,
-      "audio.aac",
+      audioFile,
       `output.${outputExt}`,
     ];
 
@@ -1014,31 +1028,31 @@ const downloadFile = () => {
           <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
             资源加载进度
           </h3>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm text-gray-600 dark:text-gray-400">正在加载核心文件，请稍候...</span>
+            <span class="text-sm font-medium text-blue-600 dark:text-blue-400">{{ Math.round(progress) }}%</span>
+          </div>
           <div class="bg-gray-200 dark:bg-gray-700 rounded-full h-2">
             <div
               class="bg-blue-600 h-2 rounded-full transition-all duration-300"
               :style="{ width: progress + '%' }"
             ></div>
           </div>
-          <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-            正在加载核心文件，请稍候...
-          </p>
         </div>
 
         <!-- 转换进度 -->
         <div v-if="isConverting && !isLoading" class="mt-8">
           <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">转换进度</h3>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm text-gray-600 dark:text-gray-400">正在转换中，请稍候...</span>
+            <span class="text-sm font-medium text-blue-600 dark:text-blue-400">{{ Math.round(progress) }}%</span>
+          </div>
           <div class="bg-gray-200 dark:bg-gray-700 rounded-full h-2">
             <div
               class="bg-blue-600 h-2 rounded-full transition-all duration-300"
               :style="{ width: progress + '%' }"
             ></div>
           </div>
-          <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-            正在转换中，请稍候...
-          </p>
-
-
         </div>
 
         <!-- 下载区域 -->
