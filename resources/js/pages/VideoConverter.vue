@@ -751,10 +751,10 @@ const downloadFile = () => {
     <div class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
       <div class="grid grid-cols-1 lg:grid-cols-10 gap-8">
         <!-- 左侧功能说明 -->
-        <div class="lg:col-span-3 order-2 lg:order-1">
+        <div class="lg:col-span-4 order-2 lg:order-1">
           <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 lg:sticky lg:top-8">
             <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">功能说明</h2>
-            <div class="space-y-4">
+            <div class="grid grid-cols-2 gap-4">
               <div>
                 <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
                   支持的输入格式
@@ -821,7 +821,7 @@ const downloadFile = () => {
         </div>
 
         <!-- 右侧转换工具 -->
-        <div class="lg:col-span-7 order-1 lg:order-2">
+        <div class="lg:col-span-6 order-1 lg:order-2">
           <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
         <!-- 状态消息 -->
         <div
