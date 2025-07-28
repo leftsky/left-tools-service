@@ -421,7 +421,7 @@ const convertVideo = async () => {
     return;
   }
 
-  console.log("=== 开始转换 ===");
+  console.log("=== 开始分离式转换 ===");
   console.log("FFmpeg实例:", ffmpeg);
   console.log("选择文件:", selectedFile.value.name, "大小:", (selectedFile.value.size / 1024 / 1024).toFixed(2), "MB");
   console.log("输出格式:", outputFormat.value);
@@ -456,75 +456,16 @@ const convertVideo = async () => {
     console.log(`文件写入完成，耗时: ${writeTime}ms`);
     progress.value = 20;
 
-    // 构建FFmpeg命令
-    const command = buildFFmpegCommand(inputExt, outputExt);
+    // 检查是否有音频流
+    const hasAudio = audioStreams.value.length > 0 && audioMode.value !== "none";
+    console.log("是否有音频流:", hasAudio);
 
-        setMessage("开始转换...");
-    console.log("执行FFmpeg命令:", command.join(" "));
-    console.log("转换开始时间:", new Date().toLocaleTimeString());
-    
-    // 添加超时机制
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => {
-        reject(new Error("转换超时，请尝试更小的文件或更低的设置"));
-      }, 1000 * 60); // 1分钟超时
-    });
-    
-    // 执行转换
-    try {
-      const convertStartTime = Date.now();
-      await Promise.race([ffmpeg.exec(command), timeoutPromise]);
-      const convertTime = Date.now() - convertStartTime;
-      console.log("FFmpeg转换命令执行完成");
-      console.log(`转换耗时: ${convertTime}ms`);
-      console.log("转换结束时间:", new Date().toLocaleTimeString());
-      progress.value = 90;
-    } catch (execError) {
-      console.error("FFmpeg执行错误:", execError);
-      console.error("错误详情:", execError.stack);
-      
-      // 检查是否是流映射相关错误
-      const isStreamMappingError = execError.message.includes("stream") || 
-                                  execError.message.includes("map") || 
-                                  execError.message.includes("audio") ||
-                                  execError.message.includes("invalid");
-      
-      if (isStreamMappingError) {
-        console.log("检测到流映射错误，尝试简化映射...");
-        setMessage("流映射错误，尝试简化映射...");
-        
-        // 尝试不同的映射策略
-        const fallbackStrategies = [
-          // 策略1: 不使用映射，让FFmpeg自动选择
-          ["-i", `input.${inputExt}`, "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-c:a", "aac", "-b:a", "128k", "-y", `output.${outputExt}`],
-          // 策略2: 仅视频转换
-          ["-i", `input.${inputExt}`, "-an", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-y", `output.${outputExt}`],
-          // 策略3: 使用最基本的映射
-          ["-i", `input.${inputExt}`, "-map", "0:v", "-map", "0:a", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-c:a", "aac", "-b:a", "128k", "-y", `output.${outputExt}`]
-        ];
-        
-        for (let i = 0; i < fallbackStrategies.length; i++) {
-          const strategy = fallbackStrategies[i];
-          console.log(`尝试策略 ${i + 1}:`, strategy.join(" "));
-          setMessage(`尝试策略 ${i + 1}...`);
-          
-          try {
-            await Promise.race([ffmpeg.exec(strategy), timeoutPromise]);
-            console.log(`策略 ${i + 1} 成功`);
-            setMessage(`策略 ${i + 1} 转换成功`);
-            progress.value = 90;
-            break;
-          } catch (strategyError) {
-            console.error(`策略 ${i + 1} 失败:`, strategyError.message);
-            if (i === fallbackStrategies.length - 1) {
-              // 所有策略都失败了
-              throw new Error(`所有转换策略都失败: ${execError.message}`);
-            }
-          }
-        }
-      } else {
-        throw new Error(`转换执行失败: ${execError.message}`);
-      }
+    if (hasAudio) {
+      // 分离式转码：分别处理视频和音频
+      await performSeparateTranscode(inputExt, outputExt);
+    } else {
+      // 仅视频转码
+      await performVideoOnlyTranscode(inputExt, outputExt);
     }
 
     // 读取输出文件
@@ -541,15 +482,9 @@ const convertVideo = async () => {
     setMessage("转换完成！");
 
     // 清理临时文件
-    try {
-      const inputExt = getFileExtension(selectedFile.value?.name || "");
-      await ffmpeg.deleteFile(`input.${inputExt}`);
-      await ffmpeg.deleteFile(`output.${outputExt}`);
-      console.log("转换完成，已清理临时文件");
-    } catch (cleanupError) {
-      console.warn("清理临时文件失败:", cleanupError);
-    }
-    } catch (error) {
+    await cleanupTempFiles(inputExt, outputExt);
+    
+  } catch (error) {
     console.error("=== 转换失败 ===");
     console.error("错误类型:", error.constructor.name);
     console.error("错误消息:", error.message);
@@ -573,15 +508,7 @@ const convertVideo = async () => {
     alert(errorMessage);
     
     // 清理临时文件
-    try {
-      const inputExt = getFileExtension(selectedFile.value?.name || "");
-      const outputExt = outputFormat.value;
-      await ffmpeg.deleteFile(`input.${inputExt}`);
-      await ffmpeg.deleteFile(`output.${outputExt}`);
-      console.log("已清理临时文件");
-    } catch (cleanupError) {
-      console.warn("清理临时文件失败:", cleanupError);
-    }
+    await cleanupTempFiles(inputExt, outputFormat.value);
   } finally {
     isConverting.value = false;
     isLoading.value = false;
@@ -589,47 +516,103 @@ const convertVideo = async () => {
   }
 };
 
-// 构建FFmpeg命令
-const buildFFmpegCommand = (inputExt: string, outputExt: string) => {
-  const command = ["-i", `input.${inputExt}`];
 
-  // 添加更多调试信息和优化参数
-  command.push("-y"); // 覆盖输出文件
-  command.push("-loglevel", "info"); // 设置日志级别
 
-  // 输出流信息用于调试
-  console.log("=== 流映射调试信息 ===");
-  console.log("音频流数量:", audioStreams.value.length);
-  console.log("音频处理模式:", audioMode.value);
-  console.log("选中的音频流索引:", selectedAudioStream.value);
-  console.log("所有音频流:", audioStreams.value);
+// 分离式转码：分别处理视频和音频
+const performSeparateTranscode = async (inputExt: string, outputExt: string) => {
+  console.log("=== 开始分离式转码 ===");
+  
+  // 超时机制
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => {
+      reject(new Error("转换超时，请尝试更小的文件或更低的设置"));
+    }, 1000 * 60); // 1分钟超时
+  });
 
-  // 音频处理模式
-  if (audioMode.value === "none") {
-    // 跳过音频流
-    command.push("-an");
-  } else {
-    // 根据音频流数量选择不同的映射策略
-    if (audioStreams.value.length === 1) {
-      // 只有一个音频流，使用简单映射
-      command.push("-map", "0:v", "-map", "0:a");
-      console.log("单个音频流，使用简单映射: -map 0:v -map 0:a");
-    } else if (audioStreams.value.length > 1) {
-      // 多个音频流，使用精确映射
-      command.push("-map", "0:v");
-      const targetAudioStream = audioStreams.value[selectedAudioStream.value];
-      if (targetAudioStream) {
-        command.push("-map", `0:a:${targetAudioStream.index - 1}`);
-        console.log(`多个音频流，映射音频流 ${targetAudioStream.index}: ${targetAudioStream.codec}`);
-      } else {
-        command.push("-map", "0:a:0");
-        console.log("使用默认音频流 0:a:0");
-      }
-    } else {
-      // 没有检测到音频流，使用默认映射
-      console.log("未检测到音频流，使用默认映射");
-    }
+  try {
+    // 第一步：转码视频（无音频）
+    setMessage("正在转码视频...");
+    progress.value = 30;
+    console.log("步骤1: 转码视频（无音频）");
+    
+    const videoCommand = buildVideoCommand(inputExt, outputExt);
+    console.log("视频转码命令:", videoCommand.join(" "));
+    
+    const videoStartTime = Date.now();
+    await Promise.race([ffmpeg.exec(videoCommand), timeoutPromise]);
+    const videoTime = Date.now() - videoStartTime;
+    console.log(`视频转码完成，耗时: ${videoTime}ms`);
+    progress.value = 50;
+
+    // 第二步：提取并转码音频
+    setMessage("正在处理音频...");
+    progress.value = 60;
+    console.log("步骤2: 提取并转码音频");
+    
+    const audioCommand = buildAudioCommand(inputExt, outputExt);
+    console.log("音频转码命令:", audioCommand.join(" "));
+    
+    const audioStartTime = Date.now();
+    await Promise.race([ffmpeg.exec(audioCommand), timeoutPromise]);
+    const audioTime = Date.now() - audioStartTime;
+    console.log(`音频转码完成，耗时: ${audioTime}ms`);
+    progress.value = 70;
+
+    // 第三步：重新组合视频和音频
+    setMessage("正在合并视频和音频...");
+    progress.value = 80;
+    console.log("步骤3: 重新组合视频和音频");
+    
+    const mergeCommand = buildMergeCommand(outputExt);
+    console.log("合并命令:", mergeCommand.join(" "));
+    
+    const mergeStartTime = Date.now();
+    await Promise.race([ffmpeg.exec(mergeCommand), timeoutPromise]);
+    const mergeTime = Date.now() - mergeStartTime;
+    console.log(`合并完成，耗时: ${mergeTime}ms`);
+    progress.value = 90;
+
+    console.log("=== 分离式转码完成 ===");
+    console.log(`总耗时: ${videoTime + audioTime + mergeTime}ms`);
+    
+  } catch (error) {
+    console.error("分离式转码失败:", error);
+    throw error;
   }
+};
+
+// 仅视频转码
+const performVideoOnlyTranscode = async (inputExt: string, outputExt: string) => {
+  console.log("=== 开始仅视频转码 ===");
+  
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => {
+      reject(new Error("转换超时，请尝试更小的文件或更低的设置"));
+    }, 1000 * 60);
+  });
+
+  try {
+    setMessage("正在转码视频...");
+    progress.value = 30;
+    
+    const videoCommand = buildVideoCommand(inputExt, outputExt);
+    console.log("仅视频转码命令:", videoCommand.join(" "));
+    
+    const startTime = Date.now();
+    await Promise.race([ffmpeg.exec(videoCommand), timeoutPromise]);
+    const convertTime = Date.now() - startTime;
+    console.log(`仅视频转码完成，耗时: ${convertTime}ms`);
+    progress.value = 90;
+    
+  } catch (error) {
+    console.error("仅视频转码失败:", error);
+    throw error;
+  }
+};
+
+// 构建视频转码命令
+const buildVideoCommand = (inputExt: string, outputExt: string) => {
+  const command = ["-i", `input.${inputExt}`];
 
   // 分辨率设置
   if (resolution.value !== "original") {
@@ -650,35 +633,81 @@ const buildFFmpegCommand = (inputExt: string, outputExt: string) => {
     command.push("-r", framerate.value);
   }
 
-  // 视频编码设置 - 根据质量设置CRF值
-  const crf =
-    videoQuality.value === "high" ? 18 : videoQuality.value === "medium" ? 23 : 28;
-
-  // 视频编码器设置
+  // 视频编码设置
+  const crf = videoQuality.value === "high" ? 18 : videoQuality.value === "medium" ? 23 : 28;
   command.push("-c:v", "libx264", "-preset", "ultrafast", "-crf", crf.toString());
 
-  // 音频编码器设置（仅在需要音频时）
-  if (audioMode.value !== "none") {
-    switch (outputExt) {
-      case "mp4":
-      case "mov":
-      case "mkv":
-      case "wmv":
-      case "flv":
-        command.push("-c:a", "aac", "-b:a", "128k");
-        break;
-      case "avi":
-        command.push("-c:a", "mp3", "-b:a", "128k");
-        break;
-    }
-  }
+  // 跳过音频
+  command.push("-an");
 
-  command.push(`output.${outputExt}`);
-  
-  // 打印完整命令用于调试
-  console.log("FFmpeg命令:", command.join(" "));
+  // 输出文件名
+  command.push("-y", `video_only.${outputExt}`);
   
   return command;
+};
+
+// 构建音频转码命令
+const buildAudioCommand = (inputExt: string, outputExt: string) => {
+  const command = ["-i", `input.${inputExt}`];
+
+  // 跳过视频
+  command.push("-vn");
+
+  // 音频编码设置
+  switch (outputExt) {
+    case "mp4":
+    case "mov":
+    case "mkv":
+    case "wmv":
+    case "flv":
+      command.push("-c:a", "aac", "-b:a", "128k");
+      break;
+    case "avi":
+      command.push("-c:a", "mp3", "-b:a", "128k");
+      break;
+  }
+
+  // 输出文件名
+  command.push("-y", "audio.aac");
+  
+  return command;
+};
+
+// 构建合并命令
+const buildMergeCommand = (outputExt: string) => {
+  const command = [
+    "-i", `video_only.${outputExt}`,
+    "-i", "audio.aac",
+    "-c:v", "copy",
+    "-c:a", "copy",
+    "-shortest",
+    "-y", `output.${outputExt}`
+  ];
+  
+  return command;
+};
+
+// 清理临时文件
+const cleanupTempFiles = async (inputExt: string, outputExt: string) => {
+  try {
+    const filesToDelete = [
+      `input.${inputExt}`,
+      `video_only.${outputExt}`,
+      "audio.aac",
+      `output.${outputExt}`
+    ];
+    
+    for (const file of filesToDelete) {
+      try {
+        await ffmpeg.deleteFile(file);
+      } catch (error) {
+        console.warn(`删除临时文件 ${file} 失败:`, error);
+      }
+    }
+    console.log("转换完成，已清理临时文件");
+  } catch (cleanupError) {
+    console.warn("清理临时文件失败:", cleanupError);
+  }
 };
 
 // 获取文件扩展名
@@ -1166,11 +1195,11 @@ const downloadFile = () => {
           </div>
           
           <div
-            class="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md"
+            class="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md"
           >
             <div class="flex items-start">
               <svg
-                class="h-5 w-5 text-yellow-400 mr-2 mt-0.5"
+                class="h-5 w-5 text-green-400 mr-2 mt-0.5"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -1179,16 +1208,21 @@ const downloadFile = () => {
                   stroke-linecap="round"
                   stroke-linejoin="round"
                   stroke-width="2"
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                 ></path>
               </svg>
               <div>
-                <h4 class="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                  音频处理说明
+                <h4 class="text-sm font-medium text-green-800 dark:text-green-200">
+                  智能分离转码
                 </h4>
-                <p class="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                  如果转换过程中音频处理失败，系统会自动尝试仅视频转换。建议选择"仅视频"选项以获得最佳兼容性。
+                <p class="text-sm text-green-700 dark:text-green-300 mt-1">
+                  系统采用分离式转码技术，分别处理视频和音频，有效避免转换卡住问题，提供更稳定的转换体验。
                 </p>
+                <div class="mt-2 text-xs text-green-600 dark:text-green-400">
+                  <div>• 自动检测音频流并选择最佳处理方式</div>
+                  <div>• 视频和音频独立处理，避免相互影响</div>
+                  <div>• 支持多种音频编码器，兼容性更好</div>
+                </div>
               </div>
             </div>
           </div>
