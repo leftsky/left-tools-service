@@ -26,9 +26,8 @@ onMounted(async () => {
     // 加载FFmpeg
     try {
         await ffmpeg.value.load({
-            coreURL: await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js', 'text/javascript'),
-            wasmURL: await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm', 'application/wasm'),
-            workerURL: await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-worker.js', 'text/javascript'),
+            coreURL: await toBlobURL('/ffmpeg/ffmpeg-core.js', 'text/javascript'),
+            wasmURL: await toBlobURL('/ffmpeg/ffmpeg-core.wasm', 'application/wasm'),
         });
         isLoaded.value = true;
     } catch (error) {
