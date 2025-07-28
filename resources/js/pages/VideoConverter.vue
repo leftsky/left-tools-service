@@ -56,8 +56,13 @@ const ffmpeg = new FFmpeg();
 onMounted(async () => {
   // 设置日志监听
   ffmpeg.on("log", ({ message: msg }: any) => {
-    setMessage(msg);
-    
+    console.log(`[FFmpeg] ${msg}`);
+
+    // 只在转换过程中更新消息，避免干扰视频信息读取
+    if (isConverting.value) {
+      setMessage(msg);
+    }
+
     // 解析视频信息
     if (msg.includes("Duration:")) {
       // 解析时长
@@ -67,7 +72,7 @@ onMounted(async () => {
         const minutes = parseInt(durationMatch[2]);
         const seconds = parseFloat(durationMatch[3]);
         const totalSeconds = hours * 3600 + minutes * 60 + seconds;
-        
+
         if (!tempVideoInfo.value) {
           tempVideoInfo.value = {
             duration: 0,
@@ -75,24 +80,24 @@ onMounted(async () => {
             resolution: "未知",
             bitrate: "未知",
             videoCodec: "未知",
-            audioCodec: "未知"
+            audioCodec: "未知",
           };
         }
         tempVideoInfo.value.duration = totalSeconds;
       }
     }
-    
+
     if (msg.includes("Video:")) {
       // 解析视频流信息
       console.log("解析视频信息行:", msg);
-      
+
       // 更精确的分辨率匹配：在Video行中查找分辨率
       // 分辨率通常出现在类似这样的格式中：Video: hevc (Main) (hev1 / 0x31766568), yuv420p(tv, bt709), 720x1280 [SAR 9:16 DAR 9:16], 30 fps, 30 tbr, 30 tbn, 30 tbc
       const resolutionMatch = msg.match(/(\d{3,4})x(\d{3,4})/);
       const fpsMatch = msg.match(/(\d+) fps/);
       const codecMatch = msg.match(/Video: (\w+)/);
       const bitrateMatch = msg.match(/(\d+) kb\/s/);
-      
+
       if (!tempVideoInfo.value) {
         tempVideoInfo.value = {
           duration: 0,
@@ -100,10 +105,10 @@ onMounted(async () => {
           resolution: "未知",
           bitrate: "未知",
           videoCodec: "未知",
-          audioCodec: "未知"
+          audioCodec: "未知",
         };
       }
-      
+
       if (resolutionMatch) {
         const width = parseInt(resolutionMatch[1]);
         const height = parseInt(resolutionMatch[2]);
@@ -115,27 +120,27 @@ onMounted(async () => {
           console.log("分辨率值不合理，跳过:", width, "x", height);
         }
       }
-      
+
       if (fpsMatch) {
         tempVideoInfo.value.fps = parseInt(fpsMatch[1]);
         console.log("解析到帧率:", tempVideoInfo.value.fps);
       }
-      
+
       if (codecMatch) {
         tempVideoInfo.value.videoCodec = codecMatch[1];
         console.log("解析到视频编解码器:", tempVideoInfo.value.videoCodec);
       }
-      
+
       if (bitrateMatch) {
         tempVideoInfo.value.bitrate = `${bitrateMatch[1]} kb/s`;
         console.log("解析到比特率:", tempVideoInfo.value.bitrate);
       }
     }
-    
+
     if (msg.includes("Audio:")) {
       // 解析音频流信息
       const audioCodecMatch = msg.match(/Audio: (\w+)/);
-      
+
       if (!tempVideoInfo.value) {
         tempVideoInfo.value = {
           duration: 0,
@@ -143,25 +148,28 @@ onMounted(async () => {
           resolution: "未知",
           bitrate: "未知",
           videoCodec: "未知",
-          audioCodec: "未知"
+          audioCodec: "未知",
         };
       }
-      
+
       if (audioCodecMatch) {
         tempVideoInfo.value.audioCodec = audioCodecMatch[1];
       }
     }
-    
+
     // 根据日志更新进度
     if (msg.includes("frame=")) {
       // 解析帧信息来更新进度
       const frameMatch = msg.match(/frame=\s*(\d+)/);
-      if (frameMatch) {
+      if (frameMatch && isConverting.value) {
         const frame = parseInt(frameMatch[1]);
         // 使用动态计算的帧数，如果没有视频信息则使用默认值
         const totalFrames = videoInfo.value?.totalFrames || 111;
         const frameProgress = Math.min((frame / totalFrames) * 70, 70);
         progress.value = 20 + frameProgress; // 从20%开始，最多到90%
+        console.log(
+          `转换进度: ${frame}/${totalFrames} 帧 (${progress.value.toFixed(1)}%)`
+        );
       }
     }
   });
@@ -170,66 +178,66 @@ onMounted(async () => {
   ffmpeg.on("progress", ({ progress: p, time }: any) => {
     console.log(`[VideoConverter] 转换进度: ${p * 100}%, 时间: ${time}`);
     if (p > 0) {
-      progress.value = 20 + (p * 70); // 从20%开始，最多到90%
+      progress.value = 20 + p * 70; // 从20%开始，最多到90%
     }
   });
 
-      // 自动加载FFmpeg
-    try {
-      isLoading.value = true;
-      setMessage("正在加载FFmpeg...");
-      
-      // 模拟加载进度
-      const progressInterval = setInterval(() => {
-        if (progress.value < 80) {
-          progress.value += 5;
-          setMessage(`正在加载FFmpeg... ${progress.value}%`);
-        }
-      }, 200);
+  // 自动加载FFmpeg
+  try {
+    isLoading.value = true;
+    setMessage("正在加载FFmpeg...");
 
-      await ffmpeg.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-        workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, "text/javascript"),
-      });
-      
-      clearInterval(progressInterval);
-      progress.value = 100;
-      setMessage("FFmpeg加载完成！");
-      isLoaded.value = true;
-      isLoading.value = false;
-      
-      // 检查ffprobe是否可用
-      console.log("检查ffprobe可用性:", typeof ffmpeg.ffprobe);
-      console.log("FFmpeg对象:", ffmpeg);
-      
-      // 执行FFmpeg命令获取版本和帮助信息
+    // 模拟加载进度
+    const progressInterval = setInterval(() => {
+      if (progress.value < 80) {
+        progress.value += 5;
+        setMessage(`正在加载FFmpeg... ${progress.value}%`);
+      }
+    }, 200);
+
+    await ffmpeg.load({
+      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+      workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, "text/javascript"),
+    });
+
+    clearInterval(progressInterval);
+    progress.value = 100;
+    setMessage("FFmpeg加载完成！");
+    isLoaded.value = true;
+    isLoading.value = false;
+
+    // 检查ffprobe是否可用
+    console.log("检查ffprobe可用性:", typeof ffmpeg.ffprobe);
+    console.log("FFmpeg对象:", ffmpeg);
+
+    // 执行FFmpeg命令获取版本和帮助信息
     //   try {
     //     console.log("=== FFmpeg版本信息 ===");
     //     await ffmpeg.exec(['-version']);
-        
+
     //     console.log("=== FFmpeg帮助信息 ===");
     //     await ffmpeg.exec(['-h']);
-        
+
     //     console.log("=== FFmpeg支持的格式 ===");
     //     await ffmpeg.exec(['-formats']);
-        
+
     //     console.log("=== FFmpeg支持的编码器 ===");
     //     await ffmpeg.exec(['-codecs']);
-        
+
     //     console.log("=== FFmpeg支持的过滤器 ===");
     //     await ffmpeg.exec(['-filters']);
-        
+
     //     setMessage("FFmpeg初始化完成，已获取详细信息");
     //   } catch (infoError) {
     //     console.warn("获取FFmpeg信息时出错:", infoError);
     //     setMessage("FFmpeg初始化完成");
     //   }
-      
-      // 等待一秒让用户看到加载完成
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setMessage("请选择视频文件开始转换");
-      progress.value = 0;
+
+    // 等待一秒让用户看到加载完成
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    setMessage("请选择视频文件开始转换");
+    progress.value = 0;
   } catch (error) {
     console.error("FFmpeg加载失败:", error);
     setMessage("FFmpeg加载失败，请刷新页面重试");
@@ -248,7 +256,7 @@ const handleFileSelect = async (event: Event) => {
     progress.value = 0;
     videoInfo.value = null;
     setMessage(`已选择文件: ${selectedFile.value.name}`);
-    
+
     // 读取视频信息
     await readVideoInfo();
   }
@@ -265,7 +273,7 @@ const handleDrop = async (event: DragEvent) => {
     progress.value = 0;
     videoInfo.value = null;
     setMessage(`已选择文件: ${selectedFile.value.name}`);
-    
+
     // 读取视频信息
     await readVideoInfo();
   }
@@ -275,14 +283,12 @@ const handleDragOver = (event: DragEvent) => {
   event.preventDefault();
 };
 
-
-
 // 读取视频信息
 const readVideoInfo = async () => {
   if (!selectedFile.value) {
     return;
   }
-  
+
   if (!isLoaded.value) {
     setMessage("FFmpeg尚未加载完成，无法读取视频信息");
     return;
@@ -290,36 +296,42 @@ const readVideoInfo = async () => {
 
   try {
     setMessage("正在读取视频信息...");
-    
+
     // 重置临时视频信息
     tempVideoInfo.value = null;
-    
+
     // 获取文件扩展名
     const inputExt = getFileExtension(selectedFile.value.name);
-    
+
     // 写入临时文件
     await ffmpeg.writeFile(`temp_input.${inputExt}`, await fetchFile(selectedFile.value));
-    
+
     // 使用exec命令获取视频信息
     console.log("尝试使用exec获取视频信息...");
     try {
-      await ffmpeg.exec(['-i', `temp_input.${inputExt}`]);
-      
+      await ffmpeg.exec(["-i", `temp_input.${inputExt}`]);
+
       // 检查是否成功解析到视频信息
       if (tempVideoInfo.value && tempVideoInfo.value.duration > 0) {
         // 计算总帧数
-        const totalFrames = Math.round(tempVideoInfo.value.duration * tempVideoInfo.value.fps);
-        
+        const totalFrames = Math.round(
+          tempVideoInfo.value.duration * tempVideoInfo.value.fps
+        );
+
         videoInfo.value = {
           duration: tempVideoInfo.value.duration,
           fps: tempVideoInfo.value.fps,
           totalFrames: totalFrames,
           resolution: tempVideoInfo.value.resolution,
           bitrate: tempVideoInfo.value.bitrate,
-          format: inputExt
+          format: inputExt,
         };
-        
-        setMessage(`视频信息读取成功: ${tempVideoInfo.value.resolution}, ${tempVideoInfo.value.duration.toFixed(2)}秒, ${tempVideoInfo.value.fps}fps`);
+
+        setMessage(
+          `视频信息读取成功: ${
+            tempVideoInfo.value.resolution
+          }, ${tempVideoInfo.value.duration.toFixed(2)}秒, ${tempVideoInfo.value.fps}fps`
+        );
         console.log("解析到的视频信息:", tempVideoInfo.value);
       } else {
         // 如果没有解析到有效信息，说明文件可能有问题
@@ -329,10 +341,9 @@ const readVideoInfo = async () => {
       console.error("exec命令失败:", execError);
       throw new Error("无法读取视频信息");
     }
-    
+
     // 清理临时文件
     await ffmpeg.deleteFile(`temp_input.${inputExt}`);
-    
   } catch (error) {
     console.error("读取视频信息失败:", error);
     setMessage("读取视频信息失败，无法继续转换");
@@ -377,20 +388,24 @@ const convertVideo = async () => {
     const command = buildFFmpegCommand(inputExt, outputExt);
 
     setMessage("开始转换...");
-    
+    console.log("执行FFmpeg命令:", command.join(" "));
+
     // 添加超时机制
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => {
         reject(new Error("转换超时，请尝试更小的文件或更低的设置"));
-      }, 300000); // 5分钟超时
+      }, 1000 * 60); // 1分钟超时
     });
-    
+
     // 执行转换
-    await Promise.race([
-      ffmpeg.exec(command),
-      timeoutPromise
-    ]);
-    progress.value = 90;
+    try {
+      await Promise.race([ffmpeg.exec(command), timeoutPromise]);
+      console.log("FFmpeg转换命令执行完成");
+      progress.value = 90;
+    } catch (execError) {
+      console.error("FFmpeg执行错误:", execError);
+      throw new Error(`转换执行失败: ${execError.message}`);
+    }
 
     // 读取输出文件
     setMessage("正在读取输出文件...");
@@ -404,10 +419,31 @@ const convertVideo = async () => {
 
     progress.value = 100;
     setMessage("转换完成！");
+
+    // 清理临时文件
+    try {
+      const inputExt = getFileExtension(selectedFile.value?.name || "");
+      await ffmpeg.deleteFile(`input.${inputExt}`);
+      await ffmpeg.deleteFile(`output.${outputExt}`);
+      console.log("转换完成，已清理临时文件");
+    } catch (cleanupError) {
+      console.warn("清理临时文件失败:", cleanupError);
+    }
   } catch (error) {
     console.error("转换失败:", error);
     setMessage("转换失败，请检查文件格式或重试");
     alert("视频转换失败，请检查文件格式或重试");
+
+    // 清理临时文件
+    try {
+      const inputExt = getFileExtension(selectedFile.value?.name || "");
+      const outputExt = outputFormat.value;
+      await ffmpeg.deleteFile(`input.${inputExt}`);
+      await ffmpeg.deleteFile(`output.${outputExt}`);
+      console.log("已清理临时文件");
+    } catch (cleanupError) {
+      console.warn("清理临时文件失败:", cleanupError);
+    }
   } finally {
     isConverting.value = false;
     isLoading.value = false;
@@ -416,14 +452,6 @@ const convertVideo = async () => {
 
 // 构建FFmpeg命令
 const buildFFmpegCommand = (inputExt: string, outputExt: string) => {
-  // 拦截逻辑：如果是MP4转AVI，使用简洁命令
-  if (inputExt === "mp4" && outputExt === "avi") {
-    const command = ["-i", `input.${inputExt}`, `output.${outputExt}`];
-    console.log("使用简洁转换命令:", command.join(" "));
-    return command;
-  }
-
-  // 原有的复杂命令逻辑
   const command = ["-i", `input.${inputExt}`];
 
   // 添加更多调试信息和优化参数
@@ -451,35 +479,102 @@ const buildFFmpegCommand = (inputExt: string, outputExt: string) => {
     command.push("-r", framerate.value);
   }
 
-  // 编码设置
-  const crf = videoQuality.value === "high" ? 28 : videoQuality.value === "medium" ? 32 : 36;
-  
+  // 编码设置 - 根据质量设置CRF值
+  const crf =
+    videoQuality.value === "high" ? 18 : videoQuality.value === "medium" ? 23 : 28;
+
   switch (outputExt) {
     case "mp4":
-      command.push("-c:v", "libx264", "-preset", "ultrafast", "-crf", crf.toString(), "-c:a", "aac", "-b:a", "128k");
+      command.push(
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-crf",
+        crf.toString(),
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k"
+      );
       break;
     case "avi":
-      command.push("-c:v", "libx264", "-preset", "ultrafast", "-crf", crf.toString(), "-c:a", "aac", "-b:a", "128k");
+      command.push(
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-crf",
+        crf.toString(),
+        "-c:a",
+        "mp3",
+        "-b:a",
+        "128k"
+      );
       break;
     case "mov":
-      command.push("-c:v", "libx264", "-preset", "ultrafast", "-crf", crf.toString(), "-c:a", "aac", "-b:a", "128k");
+      command.push(
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-crf",
+        crf.toString(),
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k"
+      );
       break;
     case "mkv":
-      command.push("-c:v", "libx264", "-preset", "ultrafast", "-crf", crf.toString(), "-c:a", "aac", "-b:a", "128k");
+      command.push(
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-crf",
+        crf.toString(),
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k"
+      );
       break;
     case "wmv":
-      command.push("-c:v", "libx264", "-preset", "ultrafast", "-crf", crf.toString(), "-c:a", "aac", "-b:a", "128k");
+      command.push(
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-crf",
+        crf.toString(),
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k"
+      );
       break;
     case "flv":
-      command.push("-c:v", "libx264", "-preset", "ultrafast", "-crf", crf.toString(), "-c:a", "aac", "-b:a", "128k");
+      command.push(
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-crf",
+        crf.toString(),
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k"
+      );
       break;
   }
 
   command.push(`output.${outputExt}`);
-  
+
   // 打印完整命令用于调试
   console.log("FFmpeg命令:", command.join(" "));
-  
+
   return command;
 };
 
@@ -607,15 +702,18 @@ const downloadFile = () => {
                 v-if="videoInfo"
                 class="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-md"
               >
-                <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">视频信息</h4>
-                <div class="grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-400">
+                <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                  视频信息
+                </h4>
+                <div
+                  class="grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-400"
+                >
                   <div>时长: {{ videoInfo.duration.toFixed(2) }}秒</div>
                   <div>帧率: {{ videoInfo.fps.toFixed(2) }}fps</div>
                   <div>总帧数: {{ videoInfo.totalFrames }}</div>
                   <div>分辨率: {{ videoInfo.resolution }}</div>
                   <div>比特率: {{ videoInfo.bitrate }}</div>
                   <div>格式: {{ videoInfo.format }}</div>
-
                 </div>
               </div>
             </div>
@@ -710,8 +808,6 @@ const downloadFile = () => {
                 <option value="24">24 FPS</option>
               </select>
             </div>
-
-
           </div>
         </div>
 
@@ -756,7 +852,9 @@ const downloadFile = () => {
 
         <!-- 加载进度 -->
         <div v-if="isLoading" class="mt-8">
-          <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">FFmpeg加载进度</h3>
+          <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+            FFmpeg加载进度
+          </h3>
           <div class="bg-gray-200 dark:bg-gray-700 rounded-full h-2">
             <div
               class="bg-blue-600 h-2 rounded-full transition-all duration-300"
