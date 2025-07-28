@@ -24,6 +24,16 @@ const videoInfo = ref<{
   format: string;
 } | null>(null);
 
+// 临时存储解析的视频信息
+const tempVideoInfo = ref<{
+  duration: number;
+  fps: number;
+  resolution: string;
+  bitrate: string;
+  videoCodec: string;
+  audioCodec: string;
+} | null>(null);
+
 // 设置消息的辅助函数，同时打印控制台日志
 const setMessage = (msg: string) => {
   message.value = msg;
@@ -47,6 +57,86 @@ onMounted(async () => {
   // 设置日志监听
   ffmpeg.on("log", ({ message: msg }: any) => {
     setMessage(msg);
+    
+    // 解析视频信息
+    if (msg.includes("Duration:")) {
+      // 解析时长
+      const durationMatch = msg.match(/Duration: (\d{2}):(\d{2}):(\d{2}\.\d{2})/);
+      if (durationMatch) {
+        const hours = parseInt(durationMatch[1]);
+        const minutes = parseInt(durationMatch[2]);
+        const seconds = parseFloat(durationMatch[3]);
+        const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+        
+        if (!tempVideoInfo.value) {
+          tempVideoInfo.value = {
+            duration: 0,
+            fps: 30,
+            resolution: "未知",
+            bitrate: "未知",
+            videoCodec: "未知",
+            audioCodec: "未知"
+          };
+        }
+        tempVideoInfo.value.duration = totalSeconds;
+      }
+    }
+    
+    if (msg.includes("Video:")) {
+      // 解析视频流信息
+      const resolutionMatch = msg.match(/(\d+)x(\d+)/);
+      const fpsMatch = msg.match(/(\d+) fps/);
+      const codecMatch = msg.match(/Video: (\w+)/);
+      const bitrateMatch = msg.match(/(\d+) kb\/s/);
+      
+      if (!tempVideoInfo.value) {
+        tempVideoInfo.value = {
+          duration: 0,
+          fps: 30,
+          resolution: "未知",
+          bitrate: "未知",
+          videoCodec: "未知",
+          audioCodec: "未知"
+        };
+      }
+      
+      if (resolutionMatch) {
+        tempVideoInfo.value.resolution = `${resolutionMatch[1]}x${resolutionMatch[2]}`;
+      }
+      
+      if (fpsMatch) {
+        tempVideoInfo.value.fps = parseInt(fpsMatch[1]);
+      }
+      
+      if (codecMatch) {
+        tempVideoInfo.value.videoCodec = codecMatch[1];
+      }
+      
+      if (bitrateMatch) {
+        tempVideoInfo.value.bitrate = `${bitrateMatch[1]} kb/s`;
+      }
+    }
+    
+    if (msg.includes("Audio:")) {
+      // 解析音频流信息
+      const audioCodecMatch = msg.match(/Audio: (\w+)/);
+      
+      if (!tempVideoInfo.value) {
+        tempVideoInfo.value = {
+          duration: 0,
+          fps: 30,
+          resolution: "未知",
+          bitrate: "未知",
+          videoCodec: "未知",
+          audioCodec: "未知"
+        };
+      }
+      
+      if (audioCodecMatch) {
+        tempVideoInfo.value.audioCodec = audioCodecMatch[1];
+      }
+    }
+    
     // 根据日志更新进度
     if (msg.includes("frame=")) {
       // 解析帧信息来更新进度
@@ -186,6 +276,9 @@ const readVideoInfo = async () => {
   try {
     setMessage("正在读取视频信息...");
     
+    // 重置临时视频信息
+    tempVideoInfo.value = null;
+    
     // 获取文件扩展名
     const inputExt = getFileExtension(selectedFile.value.name);
     
@@ -197,17 +290,26 @@ const readVideoInfo = async () => {
     try {
       await ffmpeg.exec(['-i', `temp_input.${inputExt}`]);
       
-      // 如果exec成功，说明文件是有效的视频文件
-      // 但我们无法从exec获取结构化信息，所以设置基本信息
-      setMessage("视频文件有效，但无法获取详细信息");
-      videoInfo.value = {
-        duration: 0,
-        fps: 30,
-        totalFrames: 0,
-        resolution: "未知",
-        bitrate: "未知",
-        format: inputExt
-      };
+      // 检查是否成功解析到视频信息
+      if (tempVideoInfo.value && tempVideoInfo.value.duration > 0) {
+        // 计算总帧数
+        const totalFrames = Math.round(tempVideoInfo.value.duration * tempVideoInfo.value.fps);
+        
+        videoInfo.value = {
+          duration: tempVideoInfo.value.duration,
+          fps: tempVideoInfo.value.fps,
+          totalFrames: totalFrames,
+          resolution: tempVideoInfo.value.resolution,
+          bitrate: tempVideoInfo.value.bitrate,
+          format: inputExt
+        };
+        
+        setMessage(`视频信息读取成功: ${tempVideoInfo.value.resolution}, ${tempVideoInfo.value.duration.toFixed(2)}秒, ${tempVideoInfo.value.fps}fps`);
+        console.log("解析到的视频信息:", tempVideoInfo.value);
+      } else {
+        // 如果没有解析到有效信息，说明文件可能有问题
+        throw new Error("无法解析视频信息");
+      }
     } catch (execError) {
       console.error("exec命令失败:", execError);
       throw new Error("无法读取视频信息");
