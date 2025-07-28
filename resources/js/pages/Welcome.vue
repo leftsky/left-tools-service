@@ -1,63 +1,10 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Link } from '@inertiajs/vue3';
+import Layout from '@/components/Layout.vue';
 </script>
 
 <template>
-    <Head title="Left Tools Service - 专业工具服务平台">
-        <link rel="preconnect" href="https://rsms.me/" />
-        <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
-    </Head>
-    
-    <div class="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100 dark:from-gray-900 dark:via-blue-900 dark:to-gray-900">
-        <!-- 导航栏 -->
-        <header class="relative z-10">
-            <nav class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                <div class="flex h-16 items-center justify-between">
-                    <!-- Logo -->
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <div class="flex items-center space-x-2">
-                                <div class="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center">
-                                    <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                                    </svg>
-                                </div>
-                                <span class="text-xl font-bold text-gray-900 dark:text-white">Left Tools</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- 导航链接 -->
-                    <div class="hidden md:block">
-                        <div class="ml-10 flex items-baseline space-x-4">
-                            <a href="#features" class="text-gray-700 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 px-3 py-2 rounded-md text-sm font-medium transition-colors">
-                                功能特色
-                            </a>
-                            <a href="#tools" class="text-gray-700 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 px-3 py-2 rounded-md text-sm font-medium transition-colors">
-                                工具列表
-                            </a>
-                            <a href="#about" class="text-gray-700 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 px-3 py-2 rounded-md text-sm font-medium transition-colors">
-                                关于我们
-                            </a>
-                        </div>
-                    </div>
-                    
-                    <!-- 用户菜单 -->
-                    <div class="flex items-center space-x-4">
-                        <Link
-                            v-if="$page.props.auth.user"
-                            :href="route('dashboard')"
-                            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-                        >
-                            控制台
-                        </Link>
-                    </div>
-                </div>
-            </nav>
-        </header>
-
-        <!-- 主要内容 -->
-        <main class="relative">
+    <Layout title="Left Tools Service - 专业工具服务平台">
             <!-- Hero 区域 -->
             <div class="relative overflow-hidden">
                 <div class="max-w-7xl mx-auto">
@@ -182,12 +129,31 @@ import { Head, Link } from '@inertiajs/vue3';
 
                     <div class="mt-10">
                         <div class="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+                            <!-- 视频格式转换 -->
+                            <Link href="/video-converter" class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg hover:shadow-lg transition-shadow">
+                                <div class="p-6">
+                                    <div class="flex items-center">
+                                        <div class="flex-shrink-0">
+                                            <div class="h-10 w-10 rounded-md bg-blue-500 flex items-center justify-center">
+                                                <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                                </svg>
+                                            </div>
+                                        </div>
+                                        <div class="ml-4">
+                                            <h3 class="text-lg font-medium text-gray-900 dark:text-white">视频格式转换</h3>
+                                            <p class="text-sm text-gray-500 dark:text-gray-400">支持多种格式视频转换</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </Link>
+
                             <!-- 抖音文案提取 -->
                             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
                                 <div class="p-6">
                                     <div class="flex items-center">
                                         <div class="flex-shrink-0">
-                                            <div class="h-10 w-10 rounded-md bg-blue-500 flex items-center justify-center">
+                                            <div class="h-10 w-10 rounded-md bg-green-500 flex items-center justify-center">
                                                 <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
                                                 </svg>
@@ -201,12 +167,69 @@ import { Head, Link } from '@inertiajs/vue3';
                                 </div>
                             </div>
 
-                            <!-- 更多工具可以在这里添加 -->
+                            <!-- 音频处理 -->
                             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
                                 <div class="p-6">
                                     <div class="flex items-center">
                                         <div class="flex-shrink-0">
-                                            <div class="h-10 w-10 rounded-md bg-green-500 flex items-center justify-center">
+                                            <div class="h-10 w-10 rounded-md bg-purple-500 flex items-center justify-center">
+                                                <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                                                </svg>
+                                            </div>
+                                        </div>
+                                        <div class="ml-4">
+                                            <h3 class="text-lg font-medium text-gray-900 dark:text-white">音频处理</h3>
+                                            <p class="text-sm text-gray-500 dark:text-gray-400">音频格式转换与编辑</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 文档转换 -->
+                            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                                <div class="p-6">
+                                    <div class="flex items-center">
+                                        <div class="flex-shrink-0">
+                                            <div class="h-10 w-10 rounded-md bg-orange-500 flex items-center justify-center">
+                                                <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                                </svg>
+                                            </div>
+                                        </div>
+                                        <div class="ml-4">
+                                            <h3 class="text-lg font-medium text-gray-900 dark:text-white">文档转换</h3>
+                                            <p class="text-sm text-gray-500 dark:text-gray-400">PDF、Word等格式转换</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 图片处理 -->
+                            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                                <div class="p-6">
+                                    <div class="flex items-center">
+                                        <div class="flex-shrink-0">
+                                            <div class="h-10 w-10 rounded-md bg-pink-500 flex items-center justify-center">
+                                                <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 002 2v12a2 2 0 002 2z"></path>
+                                                </svg>
+                                            </div>
+                                        </div>
+                                        <div class="ml-4">
+                                            <h3 class="text-lg font-medium text-gray-900 dark:text-white">图片处理</h3>
+                                            <p class="text-sm text-gray-500 dark:text-gray-400">智能图片编辑与优化</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 数据分析 -->
+                            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                                <div class="p-6">
+                                    <div class="flex items-center">
+                                        <div class="flex-shrink-0">
+                                            <div class="h-10 w-10 rounded-md bg-indigo-500 flex items-center justify-center">
                                                 <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                                                 </svg>
@@ -215,24 +238,6 @@ import { Head, Link } from '@inertiajs/vue3';
                                         <div class="ml-4">
                                             <h3 class="text-lg font-medium text-gray-900 dark:text-white">数据分析</h3>
                                             <p class="text-sm text-gray-500 dark:text-gray-400">智能数据分析与可视化</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
-                                <div class="p-6">
-                                    <div class="flex items-center">
-                                        <div class="flex-shrink-0">
-                                            <div class="h-10 w-10 rounded-md bg-purple-500 flex items-center justify-center">
-                                                <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                                                </svg>
-                                            </div>
-                                        </div>
-                                        <div class="ml-4">
-                                            <h3 class="text-lg font-medium text-gray-900 dark:text-white">图片处理</h3>
-                                            <p class="text-sm text-gray-500 dark:text-gray-400">智能图片编辑与优化</p>
                                         </div>
                                     </div>
                                 </div>
@@ -248,7 +253,7 @@ import { Head, Link } from '@inertiajs/vue3';
                     <div class="lg:text-center">
                         <h2 class="text-base text-blue-600 dark:text-blue-400 font-semibold tracking-wide uppercase">关于我们</h2>
                         <p class="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-4xl">
-                            Left Tools Service
+                            小左子的工具箱
                         </p>
                         <p class="mt-4 max-w-2xl text-xl text-gray-500 dark:text-gray-400 lg:mx-auto">
                             致力于为用户提供高质量、高效率的在线工具服务，让技术更好地服务于生活。
@@ -275,46 +280,5 @@ import { Head, Link } from '@inertiajs/vue3';
                     </div>
                 </div>
             </div>
-        </main>
-
-        <!-- 页脚 -->
-        <footer class="bg-gray-800 dark:bg-gray-900">
-            <div class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    <div>
-                        <div class="flex items-center space-x-2">
-                            <div class="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center">
-                                <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                                </svg>
-                            </div>
-                            <span class="text-xl font-bold text-white">Left Tools</span>
-                        </div>
-                        <p class="mt-4 text-gray-300">
-                            专业工具服务平台，为您提供高效便捷的在线工具服务。
-                        </p>
-                    </div>
-                    <div>
-                        <h3 class="text-sm font-semibold text-gray-400 tracking-wider uppercase">产品</h3>
-                        <ul class="mt-4 space-y-4">
-                            <li><a href="#tools" class="text-base text-gray-300 hover:text-white transition-colors">工具列表</a></li>
-                            <li><a href="#features" class="text-base text-gray-300 hover:text-white transition-colors">功能特色</a></li>
-                        </ul>
-                    </div>
-                    <div>
-                        <h3 class="text-sm font-semibold text-gray-400 tracking-wider uppercase">支持</h3>
-                        <ul class="mt-4 space-y-4">
-                            <li><a href="#about" class="text-base text-gray-300 hover:text-white transition-colors">关于我们</a></li>
-                            <li><a href="#" class="text-base text-gray-300 hover:text-white transition-colors">联系我们</a></li>
-                        </ul>
-                    </div>
-                </div>
-                <div class="mt-8 border-t border-gray-700 pt-8">
-                    <p class="text-base text-gray-400 text-center">
-                        © 2024 Left Tools Service. 保留所有权利。
-                    </p>
-                </div>
-            </div>
-        </footer>
-    </div>
+    </Layout>
 </template>
