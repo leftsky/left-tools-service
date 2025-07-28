@@ -14,8 +14,6 @@ const convertedBlob = ref<Blob | null>(null);
 const downloadUrl = ref<string>("");
 const message = ref("请选择视频文件开始转换");
 
-
-
 // 视频信息
 const videoInfo = ref<{
   duration: number;
@@ -26,15 +24,7 @@ const videoInfo = ref<{
   format: string;
 } | null>(null);
 
-// 音频流信息
-const audioStreams = ref<Array<{
-  index: number;
-  codec: string;
-  channels: number;
-  sampleRate: number;
-  language?: string;
-}>>([]);
-const selectedAudioStream = ref<number>(0);
+
 
 // 临时存储解析的视频信息
 const tempVideoInfo = ref<{
@@ -57,7 +47,7 @@ const outputFormat = ref("mp4");
 const videoQuality = ref("high");
 const resolution = ref("original");
 const framerate = ref("original");
-const audioMode = ref("auto"); // 音频处理模式：auto, keep, none
+
 
 // FFmpeg CDN配置
 const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.10/dist/esm";
@@ -70,8 +60,8 @@ onMounted(async () => {
   // 清理之前的事件监听器（如果有的话）
   ffmpeg.off("log");
   ffmpeg.off("progress");
-  
-    // 设置日志监听
+
+  // 设置日志监听
   ffmpeg.on("log", ({ message: msg }: any) => {
     // 只在转换过程中输出详细日志，避免干扰视频信息读取
     if (isConverting.value) {
@@ -161,10 +151,6 @@ onMounted(async () => {
     if (msg.includes("Audio:")) {
       // 解析音频流信息
       const audioCodecMatch = msg.match(/Audio: (\w+)/);
-      const audioStreamMatch = msg.match(/Stream #0:(\d+)/);
-      const channelsMatch = msg.match(/(\d+) channels/);
-      const sampleRateMatch = msg.match(/(\d+) Hz/);
-      const languageMatch = msg.match(/\((\w+)\)/);
 
       if (!tempVideoInfo.value) {
         tempVideoInfo.value = {
@@ -180,25 +166,6 @@ onMounted(async () => {
       if (audioCodecMatch) {
         tempVideoInfo.value.audioCodec = audioCodecMatch[1];
       }
-
-      // 解析音频流详细信息
-      if (audioStreamMatch) {
-        const streamIndex = parseInt(audioStreamMatch[1]);
-        const audioStream = {
-          index: streamIndex,
-          codec: audioCodecMatch ? audioCodecMatch[1] : "未知",
-          channels: channelsMatch ? parseInt(channelsMatch[1]) : 2,
-          sampleRate: sampleRateMatch ? parseInt(sampleRateMatch[1]) : 48000,
-          language: languageMatch ? languageMatch[1] : undefined,
-        };
-        
-        // 检查是否已存在该音频流
-        const existingIndex = audioStreams.value.findIndex(stream => stream.index === streamIndex);
-        if (existingIndex === -1) {
-          audioStreams.value.push(audioStream);
-          console.log("检测到音频流:", audioStream);
-        }
-      }
     }
 
     // 根据日志更新进度
@@ -212,11 +179,13 @@ onMounted(async () => {
         const frameProgress = Math.min((frame / totalFrames) * 70, 70);
         progress.value = 20 + frameProgress; // 从20%开始，最多到90%
         console.log(
-          `[转换进度] ${frame}/${totalFrames} 帧 (${progress.value.toFixed(1)}%) - ${new Date().toLocaleTimeString()}`
+          `[转换进度] ${frame}/${totalFrames} 帧 (${progress.value.toFixed(
+            1
+          )}%) - ${new Date().toLocaleTimeString()}`
         );
       }
     }
-    
+
     // 监控关键转换阶段
     if (isConverting.value) {
       if (msg.includes("Stream mapping:")) {
@@ -356,10 +325,8 @@ const readVideoInfo = async () => {
   try {
     setMessage("正在读取视频信息...");
 
-    // 重置临时视频信息和音频流信息
+    // 重置临时视频信息
     tempVideoInfo.value = null;
-    audioStreams.value = [];
-    selectedAudioStream.value = 0;
 
     // 获取文件扩展名
     const inputExt = getFileExtension(selectedFile.value.name);
@@ -394,7 +361,6 @@ const readVideoInfo = async () => {
           }, ${tempVideoInfo.value.duration.toFixed(2)}秒, ${tempVideoInfo.value.fps}fps`
         );
         console.log("解析到的视频信息:", tempVideoInfo.value);
-        console.log("检测到的音频流:", audioStreams.value);
       } else {
         // 如果没有解析到有效信息，说明文件可能有问题
         throw new Error("无法解析视频信息");
@@ -423,7 +389,13 @@ const convertVideo = async () => {
 
   console.log("=== 开始分离式转换 ===");
   console.log("FFmpeg实例:", ffmpeg);
-  console.log("选择文件:", selectedFile.value.name, "大小:", (selectedFile.value.size / 1024 / 1024).toFixed(2), "MB");
+  console.log(
+    "选择文件:",
+    selectedFile.value.name,
+    "大小:",
+    (selectedFile.value.size / 1024 / 1024).toFixed(2),
+    "MB"
+  );
   console.log("输出格式:", outputFormat.value);
   console.log("视频质量:", videoQuality.value);
   console.log("分辨率设置:", resolution.value);
@@ -456,57 +428,68 @@ const convertVideo = async () => {
     console.log(`文件写入完成，耗时: ${writeTime}ms`);
     progress.value = 20;
 
-    // 检查是否有音频流
-    const hasAudio = audioStreams.value.length > 0 && audioMode.value !== "none";
-    console.log("是否有音频流:", hasAudio);
-
-    if (hasAudio) {
-      // 分离式转码：分别处理视频和音频
-      await performSeparateTranscode(inputExt, outputExt);
-    } else {
-      // 仅视频转码
-      await performVideoOnlyTranscode(inputExt, outputExt);
-    }
+    // 始终使用分离式转码
+    await performSeparateTranscode(inputExt, outputExt);
 
     // 读取输出文件
     setMessage("正在读取输出文件...");
-    const data = await ffmpeg.readFile(`output.${outputExt}`);
-    convertedBlob.value = new Blob([(data as Uint8Array).buffer], {
-      type: `video/${outputExt}`,
-    });
 
-    // 创建下载链接
-    downloadUrl.value = URL.createObjectURL(convertedBlob.value);
+    try {
+      const data = await ffmpeg.readFile(`output.${outputExt}`);
 
-    progress.value = 100;
-    setMessage("转换完成！");
+      // 检查输出文件是否有效
+      if (!data || (data as Uint8Array).length === 0) {
+        throw new Error("输出文件为空或无效");
+      }
 
-    // 清理临时文件
-    await cleanupTempFiles(inputExt, outputExt);
-    
+      convertedBlob.value = new Blob([(data as Uint8Array).buffer], {
+        type: `video/${outputExt}`,
+      });
+
+      // 创建下载链接
+      downloadUrl.value = URL.createObjectURL(convertedBlob.value);
+
+      progress.value = 100;
+      setMessage("转换完成！");
+      console.log("=== 转换成功完成 ===");
+      console.log("输出文件大小:", (data as Uint8Array).length, "字节");
+
+      // 清理临时文件
+      await cleanupTempFiles(inputExt, outputExt);
+    } catch (readError) {
+      console.error("读取输出文件失败:", readError);
+      throw new Error(`读取输出文件失败: ${readError.message}`);
+    }
   } catch (error) {
     console.error("=== 转换失败 ===");
+    console.error("错误对象:", error);
     console.error("错误类型:", error.constructor.name);
     console.error("错误消息:", error.message);
+    console.error("错误字符串:", error.toString());
     console.error("错误堆栈:", error.stack);
-    
+
     // 根据错误类型提供不同的建议
     let errorMessage = "转换失败，请检查文件格式或重试";
-    if (error.message.includes("超时")) {
-      errorMessage = "转换超时，建议：1. 尝试更小的文件 2. 降低视频质量设置 3. 检查网络连接";
-    } else if (error.message.includes("编码器")) {
+    const errorMsg = error.message || error.toString() || "";
+
+    if (errorMsg.includes("超时")) {
+      errorMessage =
+        "转换超时，建议：1. 尝试更小的文件 2. 降低视频质量设置 3. 检查网络连接";
+    } else if (errorMsg.includes("编码器")) {
       errorMessage = "编码器错误，建议：1. 尝试不同的输出格式 2. 检查输入文件是否损坏";
-    } else if (error.message.includes("内存")) {
+    } else if (errorMsg.includes("内存")) {
       errorMessage = "内存不足，建议：1. 关闭其他程序 2. 尝试更小的文件";
-    } else if (error.message.includes("stream") || error.message.includes("map")) {
-      errorMessage = "流映射错误，建议：1. 尝试选择'仅视频'选项 2. 检查音频流是否兼容 3. 尝试不同的输出格式";
-    } else if (error.message.includes("音频") || error.message.includes("audio")) {
-      errorMessage = "音频处理错误，建议：1. 选择'仅视频'选项 2. 尝试不同的音频处理模式 3. 检查音频编码器兼容性";
+    } else if (errorMsg.includes("stream") || errorMsg.includes("map")) {
+      errorMessage =
+        "流映射错误，建议：1. 尝试选择'仅视频'选项 2. 检查音频流是否兼容 3. 尝试不同的输出格式";
+    } else if (errorMsg.includes("音频") || errorMsg.includes("audio")) {
+      errorMessage =
+        "音频处理错误，建议：1. 选择'仅视频'选项 2. 尝试不同的音频处理模式 3. 检查音频编码器兼容性";
     }
-    
+
     setMessage(errorMessage);
     alert(errorMessage);
-    
+
     // 清理临时文件
     await cleanupTempFiles(inputExt, outputFormat.value);
   } finally {
@@ -516,12 +499,10 @@ const convertVideo = async () => {
   }
 };
 
-
-
 // 分离式转码：分别处理视频和音频
 const performSeparateTranscode = async (inputExt: string, outputExt: string) => {
   console.log("=== 开始分离式转码 ===");
-  
+
   // 超时机制
   const timeoutPromise = new Promise((_, reject) => {
     setTimeout(() => {
@@ -534,10 +515,10 @@ const performSeparateTranscode = async (inputExt: string, outputExt: string) => 
     setMessage("正在转码视频...");
     progress.value = 30;
     console.log("步骤1: 转码视频（无音频）");
-    
+
     const videoCommand = buildVideoCommand(inputExt, outputExt);
     console.log("视频转码命令:", videoCommand.join(" "));
-    
+
     const videoStartTime = Date.now();
     await Promise.race([ffmpeg.exec(videoCommand), timeoutPromise]);
     const videoTime = Date.now() - videoStartTime;
@@ -548,10 +529,10 @@ const performSeparateTranscode = async (inputExt: string, outputExt: string) => 
     setMessage("正在处理音频...");
     progress.value = 60;
     console.log("步骤2: 提取并转码音频");
-    
+
     const audioCommand = buildAudioCommand(inputExt, outputExt);
     console.log("音频转码命令:", audioCommand.join(" "));
-    
+
     const audioStartTime = Date.now();
     await Promise.race([ffmpeg.exec(audioCommand), timeoutPromise]);
     const audioTime = Date.now() - audioStartTime;
@@ -562,10 +543,10 @@ const performSeparateTranscode = async (inputExt: string, outputExt: string) => 
     setMessage("正在合并视频和音频...");
     progress.value = 80;
     console.log("步骤3: 重新组合视频和音频");
-    
+
     const mergeCommand = buildMergeCommand(outputExt);
     console.log("合并命令:", mergeCommand.join(" "));
-    
+
     const mergeStartTime = Date.now();
     await Promise.race([ffmpeg.exec(mergeCommand), timeoutPromise]);
     const mergeTime = Date.now() - mergeStartTime;
@@ -574,41 +555,13 @@ const performSeparateTranscode = async (inputExt: string, outputExt: string) => 
 
     console.log("=== 分离式转码完成 ===");
     console.log(`总耗时: ${videoTime + audioTime + mergeTime}ms`);
-    
   } catch (error) {
     console.error("分离式转码失败:", error);
     throw error;
   }
 };
 
-// 仅视频转码
-const performVideoOnlyTranscode = async (inputExt: string, outputExt: string) => {
-  console.log("=== 开始仅视频转码 ===");
-  
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => {
-      reject(new Error("转换超时，请尝试更小的文件或更低的设置"));
-    }, 1000 * 60);
-  });
 
-  try {
-    setMessage("正在转码视频...");
-    progress.value = 30;
-    
-    const videoCommand = buildVideoCommand(inputExt, outputExt);
-    console.log("仅视频转码命令:", videoCommand.join(" "));
-    
-    const startTime = Date.now();
-    await Promise.race([ffmpeg.exec(videoCommand), timeoutPromise]);
-    const convertTime = Date.now() - startTime;
-    console.log(`仅视频转码完成，耗时: ${convertTime}ms`);
-    progress.value = 90;
-    
-  } catch (error) {
-    console.error("仅视频转码失败:", error);
-    throw error;
-  }
-};
 
 // 构建视频转码命令
 const buildVideoCommand = (inputExt: string, outputExt: string) => {
@@ -634,7 +587,8 @@ const buildVideoCommand = (inputExt: string, outputExt: string) => {
   }
 
   // 视频编码设置
-  const crf = videoQuality.value === "high" ? 18 : videoQuality.value === "medium" ? 23 : 28;
+  const crf =
+    videoQuality.value === "high" ? 18 : videoQuality.value === "medium" ? 23 : 28;
   command.push("-c:v", "libx264", "-preset", "ultrafast", "-crf", crf.toString());
 
   // 跳过音频
@@ -642,7 +596,7 @@ const buildVideoCommand = (inputExt: string, outputExt: string) => {
 
   // 输出文件名
   command.push("-y", `video_only.${outputExt}`);
-  
+
   return command;
 };
 
@@ -669,21 +623,26 @@ const buildAudioCommand = (inputExt: string, outputExt: string) => {
 
   // 输出文件名
   command.push("-y", "audio.aac");
-  
+
   return command;
 };
 
 // 构建合并命令
 const buildMergeCommand = (outputExt: string) => {
   const command = [
-    "-i", `video_only.${outputExt}`,
-    "-i", "audio.aac",
-    "-c:v", "copy",
-    "-c:a", "copy",
+    "-i",
+    `video_only.${outputExt}`,
+    "-i",
+    "audio.aac",
+    "-c:v",
+    "copy",
+    "-c:a",
+    "copy",
     "-shortest",
-    "-y", `output.${outputExt}`
+    "-y",
+    `output.${outputExt}`,
   ];
-  
+
   return command;
 };
 
@@ -694,9 +653,9 @@ const cleanupTempFiles = async (inputExt: string, outputExt: string) => {
       `input.${inputExt}`,
       `video_only.${outputExt}`,
       "audio.aac",
-      `output.${outputExt}`
+      `output.${outputExt}`,
     ];
-    
+
     for (const file of filesToDelete) {
       try {
         await ffmpeg.deleteFile(file);
@@ -726,8 +685,6 @@ const downloadFile = () => {
     document.body.removeChild(a);
   }
 };
-
-
 </script>
 
 <template>
@@ -849,24 +806,8 @@ const downloadFile = () => {
                   <div>比特率: {{ videoInfo.bitrate }}</div>
                   <div>格式: {{ videoInfo.format }}</div>
                 </div>
-                
-                <!-- 音频流信息 -->
-                <div v-if="audioStreams.length > 0" class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
-                  <h5 class="text-xs font-medium text-gray-900 dark:text-white mb-2">
-                    音频流 ({{ audioStreams.length }}个)
-                  </h5>
-                  <div class="space-y-1 text-xs text-gray-600 dark:text-gray-400">
-                    <div
-                      v-for="stream in audioStreams"
-                      :key="stream.index"
-                      :class="{ 'text-blue-600 dark:text-blue-400 font-medium': stream.index === selectedAudioStream }"
-                    >
-                      流 {{ stream.index }}: {{ stream.codec }} ({{ stream.channels }}声道, {{ stream.sampleRate }}Hz)
-                      {{ stream.language ? `[${stream.language}]` : '' }}
-                      {{ stream.index === selectedAudioStream ? '✓' : '' }}
-                    </div>
-                  </div>
-                </div>
+
+
               </div>
             </div>
           </div>
@@ -961,48 +902,7 @@ const downloadFile = () => {
               </select>
             </div>
 
-            <!-- 音频处理 -->
-            <div>
-              <label
-                for="audio-mode"
-                class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                音频处理
-              </label>
-              <select
-                id="audio-mode"
-                v-model="audioMode"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              >
-                <option value="auto">自动（推荐）</option>
-                <option value="keep">保留音频</option>
-                <option value="none">仅视频</option>
-              </select>
-            </div>
 
-            <!-- 音频流选择 -->
-            <div v-if="audioMode !== 'none' && audioStreams.length > 1">
-              <label
-                for="audio-stream"
-                class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                音频流选择
-              </label>
-              <select
-                id="audio-stream"
-                v-model="selectedAudioStream"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              >
-                <option
-                  v-for="stream in audioStreams"
-                  :key="stream.index"
-                  :value="stream.index"
-                >
-                  流 {{ stream.index }}: {{ stream.codec }} ({{ stream.channels }}声道, {{ stream.sampleRate }}Hz)
-                  {{ stream.language ? `[${stream.language}]` : '' }}
-                </option>
-              </select>
-            </div>
           </div>
         </div>
 
@@ -1073,20 +973,8 @@ const downloadFile = () => {
           <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
             正在转换中，请稍候...
           </p>
-          
-          <!-- 流映射状态 -->
-          <div v-if="audioStreams.length > 0" class="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md">
-            <h4 class="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">
-              流映射状态
-            </h4>
-            <div class="text-xs text-blue-700 dark:text-blue-300">
-              <div>音频流数量: {{ audioStreams.length }}</div>
-              <div>处理模式: {{ audioMode === 'auto' ? '自动' : audioMode === 'keep' ? '保留音频' : '仅视频' }}</div>
-              <div v-if="audioMode !== 'none' && audioStreams.length > 0">
-                选中音频流: {{ audioStreams[selectedAudioStream]?.codec || '未知' }}
-              </div>
-            </div>
-          </div>
+
+
         </div>
 
         <!-- 下载区域 -->
@@ -1165,35 +1053,8 @@ const downloadFile = () => {
             </ul>
           </div>
         </div>
-        <div class="space-y-4">
-          <div
-            class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md"
-          >
-            <div class="flex items-start">
-              <svg
-                class="h-5 w-5 text-blue-400 mr-2 mt-0.5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                ></path>
-              </svg>
-              <div>
-                <h4 class="text-sm font-medium text-blue-800 dark:text-blue-200">
-                  隐私保护
-                </h4>
-                <p class="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                  所有视频转换都在您的浏览器本地进行，文件不会上传到服务器，确保您的隐私安全。
-                </p>
-              </div>
-            </div>
-          </div>
-          
+        
+        <div class="mt-6">
           <div
             class="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md"
           >
