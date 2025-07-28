@@ -8,6 +8,8 @@ import { fetchFile, toBlobURL } from "@ffmpeg/util";
 const testLoaded = ref(false);
 const testMessage = ref("点击加载FFmpeg");
 const testVideoUrl = ref("");
+const selectedFile = ref<File | null>(null);
+const isConverting = ref(false);
 let testFfmpeg: FFmpeg | null = null;
 
 // 加载测试FFmpeg
@@ -37,16 +39,55 @@ const loadTestFfmpeg = async () => {
   }
 };
 
+// 文件选择处理
+const handleFileSelect = async (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  if (target.files && target.files[0]) {
+    selectedFile.value = target.files[0];
+    testVideoUrl.value = "";
+    testMessage.value = `已选择文件: ${selectedFile.value.name} (${(selectedFile.value.size / 1024 / 1024).toFixed(2)} MB)`;
+  }
+};
+
+// 拖拽处理
+const handleDrop = async (event: DragEvent) => {
+  event.preventDefault();
+  if (event.dataTransfer?.files && event.dataTransfer.files[0]) {
+    selectedFile.value = event.dataTransfer.files[0];
+    testVideoUrl.value = "";
+    testMessage.value = `已选择文件: ${selectedFile.value.name} (${(selectedFile.value.size / 1024 / 1024).toFixed(2)} MB)`;
+  }
+};
+
+const handleDragOver = (event: DragEvent) => {
+  event.preventDefault();
+};
+
+// 获取文件扩展名
+const getFileExtension = (filename: string) => {
+  return filename.split(".").pop()?.toLowerCase() || "mp4";
+};
+
 // 测试转换
 const testTranscode = async () => {
   if (!testFfmpeg || !testLoaded.value) return;
   
+  if (!selectedFile.value) {
+    testMessage.value = "请先选择要转换的视频文件";
+    return;
+  }
+  
   try {
+    isConverting.value = true;
     testMessage.value = "开始转换...";
-    await testFfmpeg.writeFile('input.webm', await fetchFile('https://raw.githubusercontent.com/ffmpegwasm/testdata/master/Big_Buck_Bunny_180_10s.webm'));
+    
+    const inputExt = getFileExtension(selectedFile.value.name);
+    console.log("转换文件:", selectedFile.value.name, "格式:", inputExt);
+    
+    await testFfmpeg.writeFile(`input.${inputExt}`, await fetchFile(selectedFile.value));
     testMessage.value = "文件写入完成，开始转换...";
     
-    await testFfmpeg.exec(['-i', 'input.webm', 'output.mp4']);
+    await testFfmpeg.exec(['-i', `input.${inputExt}`, 'output.mp4']);
     testMessage.value = "转换完成，读取文件...";
     
     const data = await testFfmpeg.readFile('output.mp4');
@@ -55,6 +96,8 @@ const testTranscode = async () => {
   } catch (error) {
     console.error('测试转换失败:', error);
     testMessage.value = `转换失败: ${error.message}`;
+  } finally {
+    isConverting.value = false;
   }
 };
 
@@ -135,16 +178,91 @@ initTest();
             加载FFmpeg (~31 MB)
           </button>
           
-          <button
-            v-if="testLoaded"
-            @click="testTranscode"
-            class="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-6 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-          >
-            <svg class="inline-block h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-            </svg>
-            转换 webm 到 mp4
-          </button>
+          <!-- 文件上传区域 -->
+          <div v-if="testLoaded" class="space-y-4">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white">选择视频文件</h3>
+            <div
+              @drop="handleDrop"
+              @dragover="handleDragOver"
+              class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center hover:border-blue-400 dark:hover:border-blue-400 transition-colors"
+              :class="{ 'border-blue-400 bg-blue-50 dark:bg-blue-900/20': selectedFile }"
+            >
+              <svg
+                class="mx-auto h-12 w-12 text-gray-400"
+                stroke="currentColor"
+                fill="none"
+                viewBox="0 0 48 48"
+              >
+                <path
+                  d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              <div class="mt-4">
+                <label
+                  for="file-upload"
+                  class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
+                >
+                  选择文件
+                </label>
+                <input
+                  id="file-upload"
+                  name="file-upload"
+                  type="file"
+                  class="sr-only"
+                  accept="video/*"
+                  @change="handleFileSelect"
+                />
+                <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                  支持 MP4, AVI, MOV, MKV, WMV 等格式
+                </p>
+                <p
+                  v-if="selectedFile"
+                  class="mt-2 text-sm text-blue-600 dark:text-blue-400"
+                >
+                  已选择: {{ selectedFile.name }}
+                </p>
+              </div>
+            </div>
+            
+            <button
+              @click="testTranscode"
+              :disabled="!selectedFile || isConverting"
+              class="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-3 px-6 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+            >
+              <svg
+                v-if="!isConverting"
+                class="inline-block h-5 w-5 mr-2"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                ></path>
+              </svg>
+              <svg
+                v-else
+                class="inline-block h-5 w-5 mr-2 animate-spin"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                ></path>
+              </svg>
+              {{ isConverting ? "转换中..." : "开始转换" }}
+            </button>
+          </div>
         </div>
         
         <!-- 测试视频播放器 -->
@@ -174,7 +292,7 @@ initTest();
               <svg class="h-5 w-5 text-green-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
               </svg>
-              <span>测试使用官方示例视频进行转换</span>
+              <span>支持拖拽上传或点击选择视频文件</span>
             </div>
             <div class="flex items-start">
               <svg class="h-5 w-5 text-green-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -187,6 +305,12 @@ initTest();
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
               </svg>
               <span>测试网络连接和CDN是否正常</span>
+            </div>
+            <div class="flex items-start">
+              <svg class="h-5 w-5 text-green-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+              <span>所有转换都在浏览器本地进行，保护隐私</span>
             </div>
           </div>
         </div>
