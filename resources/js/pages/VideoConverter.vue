@@ -52,6 +52,7 @@ const handleFileSelect = (event: Event) => {
 
 // 拖拽处理
 const handleDrop = (event: DragEvent) => {
+  console.log(event);
   event.preventDefault();
   if (event.dataTransfer?.files && event.dataTransfer.files[0]) {
     selectedFile.value = event.dataTransfer.files[0];

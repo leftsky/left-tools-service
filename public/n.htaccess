@@ -1,3 +1,13 @@
+# 只在video-converter页面添加FFmpeg.wasm所需的头部
+# location ~ ^/video-converter {
+#    add_header Cross-Origin-Embedder-Policy "require-corp" always;
+#    add_header Cross-Origin-Opener-Policy "same-origin" always;
+#    try_files $uri $uri/ /index.php$is_args$query_string;
+#}
+
+add_header Cross-Origin-Embedder-Policy "require-corp" always;
+add_header Cross-Origin-Opener-Policy "same-origin" always;
+
 location / {
     try_files $uri $uri/ /index.php$is_args$query_string;
 }
