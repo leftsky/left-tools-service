@@ -116,6 +116,7 @@ return [
         'livewire*',
         'nova-api*',
         'pulse*',
+        'api/auth/h5-login',
     ],
 
     'ignore_commands' => [
