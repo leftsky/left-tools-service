@@ -319,6 +319,11 @@ class ToolController extends Controller
             $cacheKey = 'douyin_parse_' . md5($shareText);
             $cachedResult = Cache::get($cacheKey);
             if ($cachedResult) {
+                // 记录工具使用
+                ToolUsageLog::recordUsage(
+                    toolName: '抖音视频解析',
+                    userId: $request->user()->id
+                );
                 return $this->success($cachedResult, '解析成功（缓存）');
             }
 
@@ -412,7 +417,6 @@ class ToolController extends Controller
             ]);
 
             return $this->success($result, '解析成功');
-
         } catch (ValidationException $e) {
             return $this->validationError($e->errors(), '参数错误');
         } catch (\Exception $e) {
@@ -538,7 +542,6 @@ class ToolController extends Controller
                 'user_id' => $userId,
                 'used_at' => $usageLog->used_at,
             ], '使用记录已保存');
-
         } catch (ValidationException $e) {
             return $this->validationError($e->errors(), '参数错误');
         } catch (\Exception $e) {
@@ -662,7 +665,6 @@ class ToolController extends Controller
                 'user_id' => $userId,
                 'used_at' => $usageLog->used_at,
             ], '使用记录已保存');
-
         } catch (ValidationException $e) {
             return $this->validationError($e->errors(), '参数错误');
         } catch (\Exception $e) {
