@@ -12,6 +12,14 @@ Route::get('/video-converter', function () {
     return Inertia::render('VideoConverter');
 })->name('video-converter');
 
+Route::get('/douyin-extract', function () {
+    return Inertia::render('DouyinExtract');
+})->name('douyin-extract');
+
+Route::get('/douyin-download', function () {
+    return Inertia::render('DouyinDownload');
+})->name('douyin-download');
+
 // Sitemap 路由
 Route::get('/sitemap.xml', function () {
     $content = '<?xml version="1.0" encoding="UTF-8"?>
@@ -24,6 +32,18 @@ Route::get('/sitemap.xml', function () {
     </url>
     <url>
         <loc>' . url('/video-converter') . '</loc>
+        <lastmod>' . date('Y-m-d') . '</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.9</priority>
+    </url>
+    <url>
+        <loc>' . url('/douyin-extract') . '</loc>
+        <lastmod>' . date('Y-m-d') . '</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.9</priority>
+    </url>
+    <url>
+        <loc>' . url('/douyin-download') . '</loc>
         <lastmod>' . date('Y-m-d') . '</lastmod>
         <changefreq>weekly</changefreq>
         <priority>0.9</priority>

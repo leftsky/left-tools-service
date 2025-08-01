@@ -57,6 +57,44 @@ import Layout from '@/components/Layout.vue';
 
                     <div class="mt-10">
                         <div class="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+                            <!-- 抖音文案提取 -->
+                            <Link href="/douyin-extract" class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg hover:shadow-lg transition-shadow">
+                                <div class="p-6">
+                                    <div class="flex items-center">
+                                        <div class="flex-shrink-0">
+                                            <div class="h-10 w-10 rounded-md bg-green-500 flex items-center justify-center">
+                                                <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
+                                                </svg>
+                                            </div>
+                                        </div>
+                                        <div class="ml-4">
+                                            <h3 class="text-lg font-medium text-gray-900 dark:text-white">抖音文案提取</h3>
+                                            <p class="text-sm text-gray-500 dark:text-gray-400">快速提取抖音视频文案内容</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </Link>
+
+                            <!-- 抖音视频去水印 -->
+                            <Link href="/douyin-download" class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg hover:shadow-lg transition-shadow">
+                                <div class="p-6">
+                                    <div class="flex items-center">
+                                        <div class="flex-shrink-0">
+                                            <div class="h-10 w-10 rounded-md bg-red-500 flex items-center justify-center">
+                                                <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                                </svg>
+                                            </div>
+                                        </div>
+                                        <div class="ml-4">
+                                            <h3 class="text-lg font-medium text-gray-900 dark:text-white">抖音视频去水印</h3>
+                                            <p class="text-sm text-gray-500 dark:text-gray-400">下载无水印抖音视频</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </Link>
+
                             <!-- 视频格式转换 -->
                             <Link href="/video-converter" class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg hover:shadow-lg transition-shadow">
                                 <div class="p-6">
@@ -75,25 +113,6 @@ import Layout from '@/components/Layout.vue';
                                     </div>
                                 </div>
                             </Link>
-
-                            <!-- 抖音文案提取 -->
-                            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
-                                <div class="p-6">
-                                    <div class="flex items-center">
-                                        <div class="flex-shrink-0">
-                                            <div class="h-10 w-10 rounded-md bg-green-500 flex items-center justify-center">
-                                                <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
-                                                </svg>
-                                            </div>
-                                        </div>
-                                        <div class="ml-4">
-                                            <h3 class="text-lg font-medium text-gray-900 dark:text-white">抖音文案提取</h3>
-                                            <p class="text-sm text-gray-500 dark:text-gray-400">快速提取抖音视频文案内容</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
 
                             <!-- 音频处理 -->
                             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
@@ -147,25 +166,6 @@ import Layout from '@/components/Layout.vue';
                                         <div class="ml-4">
                                             <h3 class="text-lg font-medium text-gray-900 dark:text-white">图片处理</h3>
                                             <p class="text-sm text-gray-500 dark:text-gray-400">智能图片编辑与优化</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- 数据分析 -->
-                            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
-                                <div class="p-6">
-                                    <div class="flex items-center">
-                                        <div class="flex-shrink-0">
-                                            <div class="h-10 w-10 rounded-md bg-indigo-500 flex items-center justify-center">
-                                                <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                                                </svg>
-                                            </div>
-                                        </div>
-                                        <div class="ml-4">
-                                            <h3 class="text-lg font-medium text-gray-900 dark:text-white">数据分析</h3>
-                                            <p class="text-sm text-gray-500 dark:text-gray-400">智能数据分析与可视化</p>
                                         </div>
                                     </div>
                                 </div>

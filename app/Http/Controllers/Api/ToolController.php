@@ -187,12 +187,12 @@ class ToolController extends Controller
             // 记录工具使用
             ToolUsageLog::recordUsage(
                 toolName: '抖音提取文案',
-                userId: $request->user()->id
+                userId: $request->user()?->id
             );
 
             // 记录使用日志
             Log::info('抖音文案提取成功', [
-                'user_id' => $request->user()->id,
+                'user_id' => $request->user()?->id,
                 'share_url' => $shareUrl,
                 'content_length' => strlen($content),
             ]);
@@ -319,11 +319,11 @@ class ToolController extends Controller
             $cacheKey = 'douyin_parse_' . md5($shareText);
             $cachedResult = Cache::get($cacheKey);
             if ($cachedResult) {
-                // 记录工具使用
-                ToolUsageLog::recordUsage(
-                    toolName: '抖音视频解析',
-                    userId: $request->user()->id
-                );
+                            // 记录工具使用
+            ToolUsageLog::recordUsage(
+                toolName: '抖音视频解析',
+                userId: $request->user()?->id
+            );
                 return $this->success($cachedResult, '解析成功（缓存）');
             }
 
@@ -404,12 +404,12 @@ class ToolController extends Controller
             // 记录工具使用
             ToolUsageLog::recordUsage(
                 toolName: '抖音视频解析',
-                userId: $request->user()->id
+                userId: $request->user()?->id
             );
 
             // 记录使用日志
             Log::info('抖音视频解析成功', [
-                'user_id' => $request->user()->id,
+                'user_id' => $request->user()?->id,
                 'share_text' => $shareText,
                 'title' => $result['title'],
                 'author' => $result['author'],
