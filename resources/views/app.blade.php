@@ -3,66 +3,11 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        
-        <!-- SEO Meta Tags -->
-        <title inertia>{{ config('app.name', '小左子的工具箱 - 专业在线工具服务平台') }}</title>
-        <meta name="description" content="专业的在线工具服务平台，提供视频格式转换、抖音文案提取、音频处理、文档转换、图片处理等实用工具。支持MP4、AVI、MOV、MKV等多种视频格式转换，免费在线使用。">
-        <meta name="keywords" content="视频格式转换,在线视频转换器,MP4转换器,AVI转换器,MOV转换器,MKV转换器,视频转码工具,抖音文案提取,无水印视频下载,音频格式转换,文档转换,图片处理,在线工具,免费工具">
-        <meta name="author" content="小左子的工具箱">
-        <meta name="robots" content="index, follow">
-        
-        <!-- Open Graph Meta Tags -->
-        <meta property="og:title" content="小左子的工具箱 - 专业在线工具服务平台">
-        <meta property="og:description" content="提供视频格式转换、抖音文案提取、音频处理等实用工具，支持多种格式转换，免费在线使用。">
-        <meta property="og:type" content="website">
-        <meta property="og:url" content="{{ request()->url() }}">
-        <meta property="og:site_name" content="小左子的工具箱">
 
-        <!-- Canonical URL -->
-        <link rel="canonical" href="{{ request()->url() }}">
-        
-        <!-- Favicon -->
-        <link rel="icon" type="image/x-icon" href="/favicon.ico">
-        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
-        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
-        
-        <!-- Preconnect to external domains -->
+        <title inertia>{{ config('app.name', '小左子的工具箱 - 专业在线工具服务平台') }}</title>
+
         <link rel="preconnect" href="https://fonts.bunny.net">
-        <link rel="preconnect" href="https://cdn.jsdelivr.net">
-        
-        <!-- Fonts -->
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
-        
-        <!-- Structured Data -->
-        <script type="application/ld+json">
-        {
-            "@context": "https://schema.org",
-            "@type": "WebApplication",
-            "name": "小左子的工具箱",
-            "description": "专业的在线工具服务平台，提供视频格式转换、抖音文案提取、音频处理、文档转换、图片处理等实用工具",
-            "url": "{{ request()->root() }}",
-            "applicationCategory": "工具软件",
-            "operatingSystem": "Web",
-            "offers": {
-                "@type": "Offer",
-                "price": "0",
-                "priceCurrency": "CNY"
-            },
-            "featureList": [
-                "视频格式转换",
-                "抖音文案提取", 
-                "音频处理",
-                "文档转换",
-                "图片处理",
-                "数据分析"
-            ],
-            "author": {
-                "@type": "Organization",
-                "name": "小左子的工具箱"
-            }
-        }
-        </script>
 
         @routes
         @vite(['resources/js/app.ts'])
