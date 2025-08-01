@@ -24,9 +24,6 @@ import { Link } from '@inertiajs/vue3';
                 <!-- 导航链接 -->
                 <div class="hidden md:block">
                     <div class="ml-10 flex items-baseline space-x-4">
-                        <a href="/#features" class="text-gray-700 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 px-3 py-2 rounded-md text-sm font-medium transition-colors">
-                            功能特色
-                        </a>
                         <a href="/#tools" class="text-gray-700 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 px-3 py-2 rounded-md text-sm font-medium transition-colors">
                             工具列表
                         </a>

@@ -8,8 +8,8 @@ import Layout from '@/components/Layout.vue';
             <!-- Hero 区域 -->
             <div class="relative overflow-hidden">
                 <div class="max-w-7xl mx-auto">
-                    <div class="relative z-10 pb-8 sm:pb-16 md:pb-20 lg:max-w-2xl lg:w-full lg:pb-28 xl:pb-32">
-                        <div class="mt-10 mx-auto max-w-7xl px-4 sm:mt-12 sm:px-6 md:mt-16 lg:mt-20 lg:px-8 xl:mt-28">
+                    <div class="relative z-10 pb-8 sm:pb-12 md:pb-16 lg:max-w-2xl lg:w-full lg:pb-20 xl:pb-24">
+                        <div class="mt-8 mx-auto max-w-7xl px-4 sm:mt-10 sm:px-6 md:mt-12 lg:mt-16 lg:px-8 xl:mt-20">
                             <div class="sm:text-center lg:text-left">
                                 <h1 class="text-4xl tracking-tight font-extrabold text-gray-900 dark:text-white sm:text-5xl md:text-6xl">
                                     <span class="block">专业工具</span>
@@ -24,11 +24,6 @@ import Layout from '@/components/Layout.vue';
                                             开始使用
                                         </a>
                                     </div>
-                                    <div class="mt-3 sm:mt-0 sm:ml-3">
-                                        <a href="#features" class="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 md:py-4 md:text-lg md:px-10 transition-colors">
-                                            了解更多
-                                        </a>
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -37,78 +32,11 @@ import Layout from '@/components/Layout.vue';
                 
                 <!-- 装饰性背景 -->
                 <div class="lg:absolute lg:inset-y-0 lg:right-0 lg:w-1/2">
-                    <div class="h-56 w-full bg-gradient-to-r from-blue-400 to-blue-600 sm:h-72 md:h-96 lg:w-full lg:h-full flex items-center justify-center">
+                    <div class="h-48 w-full bg-gradient-to-r from-blue-400 to-blue-600 sm:h-56 md:h-64 lg:w-full lg:h-full flex items-center justify-center">
                         <div class="text-center text-white">
-                            <svg class="mx-auto h-32 w-32 opacity-20" fill="currentColor" viewBox="0 0 24 24">
+                            <svg class="mx-auto h-24 w-24 opacity-20" fill="currentColor" viewBox="0 0 24 24">
                                 <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
                             </svg>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 功能特色区域 -->
-            <div id="features" class="py-12 bg-white dark:bg-gray-800">
-                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div class="lg:text-center">
-                        <h2 class="text-base text-blue-600 dark:text-blue-400 font-semibold tracking-wide uppercase">功能特色</h2>
-                        <p class="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-4xl">
-                            为什么选择我们
-                        </p>
-                        <p class="mt-4 max-w-2xl text-xl text-gray-500 dark:text-gray-400 lg:mx-auto">
-                            我们提供专业、高效、易用的工具服务，让您的工作更加便捷。
-                        </p>
-                    </div>
-
-                    <div class="mt-10">
-                        <div class="space-y-10 md:space-y-0 md:grid md:grid-cols-2 md:gap-x-8 md:gap-y-10">
-                            <div class="relative">
-                                <div class="absolute flex items-center justify-center h-12 w-12 rounded-md bg-blue-500 text-white">
-                                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                                    </svg>
-                                </div>
-                                <p class="ml-16 text-lg leading-6 font-medium text-gray-900 dark:text-white">高效便捷</p>
-                                <p class="mt-2 ml-16 text-base text-gray-500 dark:text-gray-400">
-                                    一键操作，快速获取结果，节省您宝贵的时间。
-                                </p>
-                            </div>
-
-                            <div class="relative">
-                                <div class="absolute flex items-center justify-center h-12 w-12 rounded-md bg-blue-500 text-white">
-                                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
-                                    </svg>
-                                </div>
-                                <p class="ml-16 text-lg leading-6 font-medium text-gray-900 dark:text-white">安全可靠</p>
-                                <p class="mt-2 ml-16 text-base text-gray-500 dark:text-gray-400">
-                                    数据加密传输，保护您的隐私和信息安全。
-                                </p>
-                            </div>
-
-                            <div class="relative">
-                                <div class="absolute flex items-center justify-center h-12 w-12 rounded-md bg-blue-500 text-white">
-                                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
-                                    </svg>
-                                </div>
-                                <p class="ml-16 text-lg leading-6 font-medium text-gray-900 dark:text-white">智能推荐</p>
-                                <p class="mt-2 ml-16 text-base text-gray-500 dark:text-gray-400">
-                                    基于使用习惯，智能推荐最适合您的工具。
-                                </p>
-                            </div>
-
-                            <div class="relative">
-                                <div class="absolute flex items-center justify-center h-12 w-12 rounded-md bg-blue-500 text-white">
-                                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
-                                    </svg>
-                                </div>
-                                <p class="ml-16 text-lg leading-6 font-medium text-gray-900 dark:text-white">移动适配</p>
-                                <p class="mt-2 ml-16 text-base text-gray-500 dark:text-gray-400">
-                                    完美适配各种设备，随时随地使用我们的服务。
-                                </p>
-                            </div>
                         </div>
                     </div>
                 </div>
