@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ToolController;
+use App\Http\Controllers\SeoController;
 
 // 小程序登录接口
 Route::post('/auth/mini-login', [AuthController::class, 'miniLogin']);
@@ -33,3 +34,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
 // 无需认证的工具接口
 Route::post('/tools/record-usage-public', [ToolController::class, 'recordUsagePublic']);
+
+// SEO相关接口
+Route::get('/seo/page-info', [SeoController::class, 'getPageSeo']);
+Route::get('/seo/structured-data', [SeoController::class, 'getStructuredData']);
