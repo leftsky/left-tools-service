@@ -98,7 +98,12 @@ const sendToBackend = async () => {
     });
     
     if (response.ok) {
-      console.log('访问日志已记录');
+      const result = await response.json();
+      if (result.code === 1) {
+        console.log('访问日志已记录');
+      } else {
+        console.warn('访问日志记录失败:', result.message);
+      }
     } else {
       console.warn('访问日志记录失败:', response.status);
       // 尝试解析错误信息

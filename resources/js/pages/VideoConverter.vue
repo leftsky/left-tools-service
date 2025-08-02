@@ -432,11 +432,18 @@ const convertVideo = async () => {
     return;
   }
 
+  // 检查文件大小（限制为100MB）
+  const maxSize = 100 * 1024 * 1024; // 100MB
+  if (selectedFile.value.size > maxSize) {
+    alert("文件过大，请选择小于100MB的文件");
+    return;
+  }
+
   // 在函数开始处定义所有变量，确保在错误处理时可用
   const inputExt = getFileExtension(selectedFile.value.name);
   const outputExt = outputFormat.value;
 
-  console.log("开始转换:", selectedFile.value.name, "→", outputFormat.value);
+  console.log("开始转换:", selectedFile.value.name, "→", outputFormat.value, "文件大小:", selectedFile.value.size, "字节");
 
   isConverting.value = true;
   progress.value = 0;
@@ -522,8 +529,12 @@ const convertVideo = async () => {
         "转换超时，建议：1. 尝试更小的文件 2. 降低视频质量设置 3. 检查网络连接";
     } else if (errorMsg.includes("编码器")) {
       errorMessage = "编码器错误，建议：1. 尝试不同的输出格式 2. 检查输入文件是否损坏";
-    } else if (errorMsg.includes("内存")) {
-      errorMessage = "内存不足，建议：1. 关闭其他程序 2. 尝试更小的文件";
+    } else if (errorMsg.includes("内存") || errorMsg.includes("memory access out of bounds")) {
+      errorMessage = "内存不足，建议：1. 关闭其他程序 2. 尝试更小的文件 3. 降低视频质量设置";
+    } else if (errorMsg.includes("FS error") || errorMsg.includes("文件")) {
+      errorMessage = "文件系统错误，建议：1. 刷新页面重试 2. 检查文件格式 3. 尝试不同的输出格式";
+    } else if (outputExt === "avi" && (errorMsg.includes("内存") || errorMsg.includes("memory"))) {
+      errorMessage = "AVI格式转换失败，建议：1. 尝试其他输出格式（如MP4） 2. 降低视频质量设置 3. 检查输入文件是否损坏";
     } else if (errorMsg.includes("stream") || errorMsg.includes("map")) {
       errorMessage =
         "流映射错误，建议：1. 尝试选择'仅视频'选项 2. 检查音频流是否兼容 3. 尝试不同的输出格式";
@@ -534,6 +545,9 @@ const convertVideo = async () => {
 
     setMessage(errorMessage);
     alert(errorMessage);
+
+    // 记录错误日志
+    await logConversionError(error, inputExt, outputExt);
 
     // 清理临时文件
     await cleanupTempFiles(inputExt, outputExt);
@@ -636,7 +650,8 @@ const buildVideoCommand = (inputExt: string, outputExt: string) => {
     videoQuality.value === "high" ? 18 : videoQuality.value === "medium" ? 23 : 28;
   
   if (videoCodec === "libx264" || videoCodec === "libx265") {
-    command.push("-c:v", videoCodec, "-preset", "ultrafast", "-crf", crf.toString());
+    // 添加内存限制和线程数限制
+    command.push("-c:v", videoCodec, "-preset", "ultrafast", "-crf", crf.toString(), "-threads", "2", "-max_muxing_queue_size", "1024");
   } else if (videoCodec === "libvpx") {
     // WebM VP8/VP9 编码
     const quality = videoQuality.value === "high" ? "good" : videoQuality.value === "medium" ? "realtime" : "realtime";
@@ -654,9 +669,9 @@ const buildVideoCommand = (inputExt: string, outputExt: string) => {
     const bitrate = videoQuality.value === "high" ? "4000k" : videoQuality.value === "medium" ? "2000k" : "1000k";
     command.push("-c:v", videoCodec, "-b:v", bitrate);
   } else if (videoCodec === "libxvid") {
-    // Xvid 编码
+    // Xvid 编码 - AVI格式特殊处理
     const qscale = videoQuality.value === "high" ? "3" : videoQuality.value === "medium" ? "5" : "7";
-    command.push("-c:v", videoCodec, "-qscale:v", qscale);
+    command.push("-c:v", videoCodec, "-qscale:v", qscale, "-pix_fmt", "yuv420p");
   } else if (videoCodec === "gif" || videoCodec === "apng") {
     // GIF/APNG 编码
     command.push("-c:v", videoCodec);
@@ -684,6 +699,8 @@ const buildVideoCommand = (inputExt: string, outputExt: string) => {
   return command;
 };
 
+
+
 // 构建音频转码命令
 const buildAudioCommand = (inputExt: string, outputExt: string) => {
   const command = ["-i", `input.${inputExt}`];
@@ -701,7 +718,8 @@ const buildAudioCommand = (inputExt: string, outputExt: string) => {
   }
 
   if (audioCodec === "mp3") {
-    command.push("-c:a", "mp3", "-b:a", "128k", "-ar", "44100");
+    // AVI格式的MP3音频特殊处理
+    command.push("-c:a", "mp3", "-b:a", "128k", "-ar", "44100", "-ac", "2");
     command.push("-y", "audio.mp3");
   } else if (audioCodec === "aac") {
     command.push("-c:a", "aac", "-b:a", "128k", "-ar", "48000");
@@ -755,9 +773,14 @@ const buildMergeCommand = (outputExt: string) => {
     "-c:a",
     "copy",
     "-shortest",
-    "-y",
-    `output.${outputExt}`,
   ];
+
+  // AVI格式特殊处理
+  if (outputExt === "avi") {
+    command.push("-pix_fmt", "yuv420p");
+  }
+
+  command.push("-y", `output.${outputExt}`);
 
   return command;
 };
@@ -801,6 +824,65 @@ const cleanupTempFiles = async (inputExt: string, outputExt: string) => {
 // 获取文件扩展名
 const getFileExtension = (filename: string) => {
   return filename.split(".").pop()?.toLowerCase() || "mp4";
+};
+
+// 记录转换错误日志
+const logConversionError = async (error: any, inputExt: string, outputExt: string) => {
+  try {
+    // 检测设备类型
+    const detectDeviceType = () => {
+      const userAgent = navigator.userAgent.toLowerCase();
+      const screenWidth = window.screen.width;
+      
+      const isMobile = /mobile|android|iphone|ipad|phone|blackberry|opera mini|iemobile/i.test(userAgent);
+      const isTablet = /tablet|ipad|android(?=.*\b(?!mobile\b)(?:tablet|sdk))/i.test(userAgent);
+      
+      const isSmallScreen = screenWidth <= 768;
+      const isMediumScreen = screenWidth > 768 && screenWidth <= 1024;
+      
+      if (isMobile || isSmallScreen) {
+        return 'mobile';
+      } else if (isTablet || isMediumScreen) {
+        return 'tablet';
+      } else {
+        return 'desktop';
+      }
+    };
+
+    const errorData = {
+      error_type: 'video_conversion_failed',
+      error_message: (error as any).message || error.toString(),
+      input_format: inputExt,
+      output_format: outputExt,
+      file_size: selectedFile.value?.size || 0,
+      user_agent: navigator.userAgent,
+      browser_fingerprint: '', // 暂时为空，后续可以从BrowserFingerprint组件获取
+      device_type: detectDeviceType(),
+      screen_resolution: `${window.screen.width}x${window.screen.height}`,
+    };
+
+    const response = await fetch('/api/access-log/error', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: JSON.stringify(errorData)
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      if (result.code === 1) {
+        console.log('转换错误日志已记录');
+      } else {
+        console.warn('记录转换错误失败:', result.message);
+      }
+    } else {
+      console.warn('记录转换错误失败:', response.status);
+    }
+  } catch (logError) {
+    console.warn('记录转换错误时出错:', logError);
+  }
 };
 
 // 记录工具使用
