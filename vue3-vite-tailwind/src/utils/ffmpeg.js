@@ -182,9 +182,9 @@ class FFmpegConverter {
             // URL输入
             try {
                 if (onProgress) {
-                    onProgress("正在获取在线文件...", 0);
+                    onProgress("正在获取在线文件...", 0.00);
                 }
-                
+
                 const response = await fetch(input);
                 if (!response.ok) {
                     throw new Error(`无法获取文件: ${response.statusText}`);
@@ -194,9 +194,9 @@ class FFmpegConverter {
                 inputFile = new File([blob], 'input_video', { type: blob.type });
                 inputExt = this.getFileExtensionFromUrl(input) || 'mp4';
                 originalFilename = `input_video.${inputExt}`;
-                
+
                 if (onProgress) {
-                    onProgress("在线文件获取完成", 5);
+                    onProgress("在线文件获取完成", 5.00);
                 }
             } catch (error) {
                 throw new Error(`获取在线文件失败: ${error instanceof Error ? error.message : '未知错误'}`);
@@ -218,20 +218,20 @@ class FFmpegConverter {
 
         try {
             if (onProgress) {
-                onProgress("正在写入输入文件...", 5);
+                onProgress("正在写入输入文件...", 5.00);
             }
 
             await this.ffmpeg.writeFile(`input.${inputExt}`, await fetchFile(inputFile));
 
             if (onProgress) {
-                onProgress("输入文件写入完成，开始转码...", 10);
+                onProgress("输入文件写入完成，开始转码...", 10.00);
             }
 
             // 使用分离式转码，传入进度回调
             await this.performSeparateTranscode(inputExt, outputExt, options, onProgress);
 
             if (onProgress) {
-                onProgress("正在读取输出文件...", 90);
+                onProgress("正在读取输出文件...", 90.00);
             }
 
             // 读取输出文件
@@ -249,7 +249,7 @@ class FFmpegConverter {
             });
 
             if (onProgress) {
-                onProgress("转换完成！", 100);
+                onProgress("转换完成！", 100.00);
             }
 
             // 清理临时文件
@@ -288,7 +288,7 @@ class FFmpegConverter {
         }
     }
 
-    // 分离式转码：分别处理视频和音频
+        // 分离式转码：分别处理视频和音频
     async performSeparateTranscode(inputExt, outputExt, options, onProgress) {
         let videoTime = 0;
         let audioTime = 0;
@@ -302,9 +302,12 @@ class FFmpegConverter {
         });
 
         try {
+            // 清理之前的事件监听器，避免进度串扰
+            this.ffmpeg.off('log');
+            
             // 设置FFmpeg进度监听
             if (onProgress) {
-                this.ffmpeg.on('log', ({ message }) => {
+                const logHandler = ({ message }) => {
                     // 解析FFmpeg日志中的进度信息
                     if (message.includes('frame=')) {
                         const frameMatch = message.match(/frame=\s*(\d+)/);
@@ -312,15 +315,18 @@ class FFmpegConverter {
                             const frame = parseInt(frameMatch[1]);
                             // 估算进度：视频转码占40%，音频转码占30%，合并占20%
                             const currentProgress = Math.min(10 + (frame / 1000) * 30, 40);
-                            onProgress(`正在转码视频... (帧: ${frame})`, currentProgress);
+                            onProgress(`正在转码视频... (帧: ${frame})`, parseFloat(currentProgress.toFixed(2)));
                         }
                     }
-                });
+                };
+                
+                // 存储监听器引用，以便后续清理
+                this.ffmpeg.on('log', logHandler);
             }
 
             // 第一步：转码视频（无音频）
             if (onProgress) {
-                onProgress("开始转码视频...", 10);
+                onProgress("开始转码视频...", 10.00);
             }
 
             const videoCommand = this.buildVideoCommand(inputExt, outputExt, options);
@@ -329,7 +335,7 @@ class FFmpegConverter {
             videoTime = Date.now() - videoStartTime;
 
             if (onProgress) {
-                onProgress("视频转码完成，开始处理音频...", 40);
+                onProgress("视频转码完成，开始处理音频...", 40.00);
             }
 
             // 第二步：提取并转码音频
@@ -339,7 +345,7 @@ class FFmpegConverter {
             audioTime = Date.now() - audioStartTime;
 
             if (onProgress) {
-                onProgress("音频处理完成，开始合并...", 70);
+                onProgress("音频处理完成，开始合并...", 70.00);
             }
 
             // 第三步：重新组合视频和音频
@@ -349,12 +355,22 @@ class FFmpegConverter {
             mergeTime = Date.now() - mergeStartTime;
 
             if (onProgress) {
-                onProgress("合并完成", 90);
+                onProgress("合并完成", 90.00);
             }
 
             console.log("转码完成，总耗时:", videoTime + audioTime + mergeTime, "ms");
+            
+            // 转换完成后立即清理监听器
+            if (onProgress) {
+                this.ffmpeg.off('log');
+            }
         } catch (error) {
             console.error("转码失败:", error);
+            
+            // 出错时也要清理监听器
+            if (onProgress) {
+                this.ffmpeg.off('log');
+            }
             throw error;
         }
     }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, onMounted, nextTick } from "vue";
 import ffmpegConverter, { 
   OUTPUT_FORMATS, 
   VIDEO_QUALITY_OPTIONS, 
@@ -184,94 +184,100 @@ const handleDownload = () => {
   }
 };
 
-// 批量测试转换
-const runFormatTest = async () => {
-  if (!selectedFile.value) {
-    showErrorDialog("请先选择视频文件");
-    return;
-  }
-
-  isTesting.value = true;
-  showTestResults.value = true;
-  testResults.value = [];
-  
-  // 初始化测试结果
-  const testFormats = OUTPUT_FORMATS.slice(0, 10); // 限制测试前10个格式，避免时间过长
-  testResults.value = testFormats.map(format => ({
-    format: format.value,
-    status: 'pending' as const,
-    message: '等待测试...'
-  }));
-
-  setMessage("开始批量格式测试...");
-
-  for (let i = 0; i < testFormats.length; i++) {
-    const format = testFormats[i];
-    const startTime = Date.now();
-    const currentFormat = format.value; // 保存当前格式值
-    
-    try {
-      // 更新当前测试状态
-      testResults.value[i].status = 'pending';
-      testResults.value[i].message = '正在转换...';
-      
-      setMessage(`正在测试 ${format.label} 格式...`);
-
-      const options = {
-        outputFormat: format.value,
-        videoQuality: 'medium',
-        resolution: 'original',
-        framerate: 'original'
-      };
-
-      const result = await ffmpegConverter.convert(
-        selectedFile.value,
-        options,
-        (msg: string, progressValue?: number) => {
-          // 使用闭包确保只更新当前测试项的进度
-          const currentIndex = i;
-          const currentFormatValue = currentFormat;
-          
-          // 确保数组索引有效且格式匹配
-          if (testResults.value[currentIndex] && 
-              testResults.value[currentIndex].format === currentFormatValue) {
-            testResults.value[currentIndex].message = `${msg} (${progressValue || 0}%)`;
-          }
-        }
-      );
-
-      const duration = Date.now() - startTime;
-      
-      // 再次检查确保更新正确的项
-      if (testResults.value[i] && testResults.value[i].format === currentFormat) {
-        testResults.value[i].status = 'success';
-        testResults.value[i].message = `转换成功 (${duration}ms)`;
-        testResults.value[i].size = result.size;
-        testResults.value[i].duration = duration;
-      }
-
-      setMessage(`${format.label} 测试完成`);
-
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      
-      // 确保更新正确的项
-      if (testResults.value[i] && testResults.value[i].format === currentFormat) {
-        testResults.value[i].status = 'failed';
-        testResults.value[i].message = `转换失败: ${error instanceof Error ? error.message : '未知错误'} (${duration}ms)`;
-        testResults.value[i].duration = duration;
-      }
-
-      setMessage(`${format.label} 测试失败`);
+  // 批量测试转换
+  const runFormatTest = async () => {
+    if (!selectedFile.value) {
+      showErrorDialog("请先选择视频文件");
+      return;
     }
 
-    // 短暂延迟，避免过于频繁的转换
-    await new Promise(resolve => setTimeout(resolve, 500));
-  }
+    isTesting.value = true;
+    showTestResults.value = true;
+    testResults.value = [];
+    
+    // 初始化测试结果
+    const testFormats = OUTPUT_FORMATS.slice(0, 10); // 限制测试前10个格式，避免时间过长
+    testResults.value = testFormats.map(format => ({
+      format: format.value,
+      status: 'pending' as const,
+      message: '等待测试...'
+    }));
 
-  isTesting.value = false;
-  setMessage("批量格式测试完成！");
-};
+    setMessage("开始批量格式测试...");
+
+    // 串行执行测试，避免并发冲突
+    for (let i = 0; i < testFormats.length; i++) {
+      const format = testFormats[i];
+      const startTime = Date.now();
+      const currentFormat = format.value;
+      const currentIndex = i;
+      
+      try {
+        // 更新当前测试状态
+        testResults.value[currentIndex].status = 'pending';
+        testResults.value[currentIndex].message = '正在转换...';
+        
+        setMessage(`正在测试 ${format.label} 格式...`);
+
+        const options = {
+          outputFormat: format.value,
+          videoQuality: 'medium',
+          resolution: 'original',
+          framerate: 'original'
+        };
+
+        // 为当前测试创建独立的进度回调，使用闭包捕获当前索引
+        const progressCallback = (msg: string, progressValue?: number) => {
+          const progress = progressValue !== undefined ? progressValue.toFixed(2) : '0.00';
+          const message = `${msg} (${progress}%)`;
+          
+          // 直接更新当前测试项，避免索引混乱
+          nextTick(() => {
+            if (testResults.value[currentIndex] && 
+                testResults.value[currentIndex].format === currentFormat) {
+              testResults.value[currentIndex].message = message;
+            }
+          });
+        };
+
+        const result = await ffmpegConverter.convert(
+          selectedFile.value,
+          options,
+          progressCallback
+        );
+
+        const duration = Date.now() - startTime;
+        
+        // 确保更新正确的项
+        if (testResults.value[currentIndex] && testResults.value[currentIndex].format === currentFormat) {
+          testResults.value[currentIndex].status = 'success';
+          testResults.value[currentIndex].message = `转换成功 (${duration}ms)`;
+          testResults.value[currentIndex].size = result.size;
+          testResults.value[currentIndex].duration = duration;
+        }
+
+        setMessage(`${format.label} 测试完成`);
+
+      } catch (error) {
+        const duration = Date.now() - startTime;
+        
+        // 确保更新正确的项
+        if (testResults.value[currentIndex] && testResults.value[currentIndex].format === currentFormat) {
+          testResults.value[currentIndex].status = 'failed';
+          testResults.value[currentIndex].message = `转换失败: ${error instanceof Error ? error.message : '未知错误'} (${duration}ms)`;
+          testResults.value[currentIndex].duration = duration;
+        }
+
+        setMessage(`${format.label} 测试失败`);
+      }
+
+      // 增加延迟，确保FFmpeg实例完全清理
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    isTesting.value = false;
+    setMessage("批量格式测试完成！");
+  };
 
 
 </script>
