@@ -38,9 +38,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/tools/record-usage', [ToolController::class, 'recordUsage']);
 });
 
-// 无需认证的工具接口
-Route::post('/tools/extract-douyin', [ToolController::class, 'extractDouyin']);
-Route::post('/tools/parse-douyin', [ToolController::class, 'parseDouyin']);
+// 可选认证的工具接口（支持登录和未登录用户）
+Route::middleware('optional.auth')->group(function () {
+    Route::post('/tools/extract-douyin', [ToolController::class, 'extractDouyin']);
+    Route::post('/tools/parse-douyin', [ToolController::class, 'parseDouyin']);
+});
 
 // 无需认证的工具接口
 Route::post('/tools/record-usage-public', [ToolController::class, 'recordUsagePublic']);

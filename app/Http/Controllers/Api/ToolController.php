@@ -35,9 +35,9 @@ class ToolController extends Controller
     #[OA\Post(
         path: '/api/tools/extract-douyin',
         summary: '提取抖音文案',
-        description: '通过分享链接提取抖音视频文案',
+        description: '通过分享链接提取抖音视频文案（支持可选认证）',
         tags: ['工具接口'],
-        security: [['sanctum' => []]],
+        security: [], // 可选认证，支持登录和未登录用户
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(
@@ -220,9 +220,9 @@ class ToolController extends Controller
     #[OA\Post(
         path: '/api/tools/parse-douyin',
         summary: '解析抖音分享链接',
-        description: '从抖音分享文本中提取无水印视频链接和信息',
+        description: '从抖音分享文本中提取无水印视频链接和信息（支持可选认证）',
         tags: ['工具接口'],
-        security: [['sanctum' => []]],
+        security: [], // 可选认证，支持登录和未登录用户
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(
