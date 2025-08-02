@@ -21,6 +21,9 @@ return new class extends Migration
             $table->string('url')->comment('访问的URL路径');
             $table->string('referer')->nullable()->comment('来源页面');
             $table->string('session_id')->nullable()->comment('会话ID');
+            $table->string('browser_fingerprint', 64)->nullable()->comment('浏览器指纹');
+            $table->enum('device_type', ['mobile', 'desktop', 'tablet', 'unknown'])->default('unknown')->comment('设备类型');
+            $table->string('screen_resolution', 20)->nullable()->comment('屏幕分辨率(宽x高)');
             $table->timestamps();
 
             // 索引
@@ -28,6 +31,8 @@ return new class extends Migration
             $table->index('ip_address');
             $table->index('created_at');
             $table->index('url');
+            $table->index('browser_fingerprint');
+            $table->index('device_type');
         });
 
         // 2. 访问统计表

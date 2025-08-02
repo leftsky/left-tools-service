@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ToolController;
+use App\Http\Controllers\Api\AccessLogController;
 use App\Http\Controllers\SeoController;
 
 // 小程序登录接口
@@ -11,6 +12,12 @@ Route::post('/auth/mini-login', [AuthController::class, 'miniLogin']);
 
 // H5登录接口
 Route::post('/auth/h5-login', [AuthController::class, 'h5Login']);
+
+// 访问日志接口（无需认证）
+Route::middleware(['throttle:60,1'])->group(function () {
+    Route::post('/access-log', [AccessLogController::class, 'store']);
+    Route::get('/access-log/stats', [AccessLogController::class, 'stats']);
+});
 
 // 需要认证的接口
 Route::middleware('auth:sanctum')->group(function () {

@@ -2,6 +2,7 @@
 import { Head } from '@inertiajs/vue3';
 import Header from '@/components/Header.vue';
 import Footer from '@/components/Footer.vue';
+import BrowserFingerprint from '@/components/BrowserFingerprint.vue';
 
 interface Props {
     title?: string;
@@ -29,5 +30,8 @@ withDefaults(defineProps<Props>(), {
 
         <!-- 页脚 -->
         <Footer />
+        
+        <!-- 浏览器指纹收集组件 -->
+        <BrowserFingerprint />
     </div>
 </template> 

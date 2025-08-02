@@ -14,6 +14,9 @@ class AccessLog extends Model
         'url',
         'referer',
         'session_id',
+        'browser_fingerprint',
+        'device_type',
+        'screen_resolution',
     ];
 
     protected $casts = [

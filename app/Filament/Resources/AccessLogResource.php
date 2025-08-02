@@ -25,6 +25,10 @@ class AccessLogResource extends Resource
 
     protected static ?string $navigationLabel = '访问记录';
 
+    protected static ?string $modelLabel = '访问记录';
+
+    protected static ?string $pluralModelLabel = '访问记录';
+
     protected static ?int $navigationSort = 1;
 
     public static function form(Form $form): Form
@@ -54,6 +58,23 @@ class AccessLogResource extends Resource
                 Forms\Components\TextInput::make('session_id')
                     ->label('会话ID')
                     ->maxLength(255),
+                Forms\Components\TextInput::make('browser_fingerprint')
+                    ->label('浏览器指纹')
+                    ->maxLength(64)
+                    ->placeholder('未收集'),
+                Forms\Components\Select::make('device_type')
+                    ->label('设备类型')
+                    ->options([
+                        'mobile' => '移动端',
+                        'desktop' => '桌面端',
+                        'tablet' => '平板端',
+                        'unknown' => '未知',
+                    ])
+                    ->default('unknown'),
+                Forms\Components\TextInput::make('screen_resolution')
+                    ->label('屏幕分辨率')
+                    ->maxLength(20)
+                    ->placeholder('未收集'),
                 Forms\Components\DateTimePicker::make('created_at')
                     ->label('访问时间')
                     ->required(),
@@ -77,17 +98,49 @@ class AccessLogResource extends Resource
                     ->searchable()
                     ->copyable(),
                 TextColumn::make('url')
-                    ->label('访问路径')
-                    ->searchable()
-                    ->limit(50),
-                TextColumn::make('url')
                     ->label('页面类型')
                     ->badge()
-                    ->color('primary'),
+                    ->color('primary')
+                    ->formatStateUsing(function ($state) {
+                        $urlMap = [
+                            '/' => '首页',
+                            '/video-converter' => '视频转换',
+                            'video-converter' => '视频转换',
+                            'admin' => '管理后台',
+                        ];
+                        return $urlMap[$state] ?? $state;
+                    }),
                 TextColumn::make('referer')
                     ->label('来源页面')
                     ->limit(30)
                     ->placeholder('直接访问'),
+                TextColumn::make('browser_fingerprint')
+                    ->label('浏览器指纹')
+                    ->limit(16)
+                    ->placeholder('未收集')
+                    ->copyable(),
+                TextColumn::make('device_type')
+                    ->label('设备类型')
+                    ->badge()
+                    ->color(function ($state) {
+                        return match($state) {
+                            'mobile' => 'success',
+                            'desktop' => 'info',
+                            'tablet' => 'warning',
+                            default => 'gray',
+                        };
+                    })
+                    ->formatStateUsing(function ($state) {
+                        return match($state) {
+                            'mobile' => '移动端',
+                            'desktop' => '桌面端',
+                            'tablet' => '平板端',
+                            default => '未知',
+                        };
+                    }),
+                TextColumn::make('screen_resolution')
+                    ->label('屏幕分辨率')
+                    ->placeholder('未收集'),
                 TextColumn::make('created_at')
                     ->label('访问时间')
                     ->dateTime('Y-m-d H:i:s')
@@ -99,6 +152,7 @@ class AccessLogResource extends Resource
                     ->options([
                         '/' => '首页',
                         '/video-converter' => '视频转换',
+                        'video-converter' => '视频转换',
                         'admin' => '管理后台',
                     ])
                     ->query(function (Builder $query, array $data): Builder {
@@ -111,6 +165,14 @@ class AccessLogResource extends Resource
                         }
                         return $query;
                     }),
+                SelectFilter::make('device_type')
+                    ->label('设备类型')
+                    ->options([
+                        'mobile' => '移动端',
+                        'desktop' => '桌面端',
+                        'tablet' => '平板端',
+                        'unknown' => '未知',
+                    ]),
                 Filter::make('created_at')
                     ->form([
                         Forms\Components\DatePicker::make('created_from')
