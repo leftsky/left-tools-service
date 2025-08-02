@@ -38,7 +38,7 @@ const parseVideo = async () => {
       // 记录使用
       try {
         await axios.post("/api/tools/record-usage-public", {
-          tool_name: "抖音视频去水印"
+          tool_name: "抖音视频解析"
         });
       } catch (error) {
         console.log("记录使用失败:", error);

@@ -40,7 +40,7 @@ const extractContent = async () => {
       // 记录使用
       try {
         await axios.post("/api/tools/record-usage-public", {
-          tool_name: "抖音文案提取"
+          tool_name: "抖音提取文案"
         });
       } catch (error) {
         console.log("记录使用失败:", error);
