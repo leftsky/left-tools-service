@@ -1,8 +1,12 @@
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from "vue";
 import Layout from "@/components/Layout.vue";
-import { FFmpeg } from "@ffmpeg/ffmpeg";
-import { fetchFile, toBlobURL } from "@ffmpeg/util";
+import ffmpegConverter, {
+  OUTPUT_FORMATS,
+  VIDEO_QUALITY_OPTIONS,
+  RESOLUTION_OPTIONS,
+  FRAMERATE_OPTIONS
+} from "@/utils/ffmpeg";
 
 // 响应式数据
 const isLoaded = ref(false);
@@ -212,145 +216,10 @@ const supportedFormats = {
   ],
 };
 
-// FFmpeg CDN配置
-const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.10/dist/esm";
 
-// FFmpeg实例
-const ffmpeg = new FFmpeg();
 
 // 初始化FFmpeg
 onMounted(async () => {
-  // 清理之前的事件监听器（如果有的话）
-  ffmpeg.off("log", () => {});
-  ffmpeg.off("progress", () => {});
-
-  // 设置日志监听
-  ffmpeg.on("log", ({ message: msg }) => {
-    // 只在转换过程中输出关键信息
-    if (isConverting.value) {
-      // 过滤掉详细的进度日志
-      if (msg.includes("frame=") && msg.includes("fps=")) return;
-      if (msg.includes("size=") && msg.includes("bitrate=")) return;
-
-      // 只输出重要的转换信息
-      if (
-        msg.includes("Stream mapping:") ||
-        msg.includes("Output #") ||
-        msg.includes("video:") ||
-        msg.includes("audio:") ||
-        msg.includes("muxing overhead:")
-      ) {
-        console.log(`[FFmpeg] ${msg}`);
-      }
-    } else {
-      // 只输出关键视频信息
-      if (msg.includes("Duration:") || msg.includes("Video:") || msg.includes("Audio:")) {
-        console.log(`[FFmpeg] ${msg}`);
-      }
-    }
-
-    // 解析视频信息
-    if (msg.includes("Duration:")) {
-      // 解析时长
-      const durationMatch = msg.match(/Duration: (\d{2}):(\d{2}):(\d{2}\.\d{2})/);
-      if (durationMatch) {
-        const hours = parseInt(durationMatch[1]);
-        const minutes = parseInt(durationMatch[2]);
-        const seconds = parseFloat(durationMatch[3]);
-        const totalSeconds = hours * 3600 + minutes * 60 + seconds;
-
-        if (!tempVideoInfo.value) {
-          tempVideoInfo.value = {
-            duration: 0,
-            fps: 30,
-            resolution: "未知",
-            bitrate: "未知",
-            videoCodec: "未知",
-            audioCodec: "未知",
-          };
-        }
-        tempVideoInfo.value.duration = totalSeconds;
-      }
-    }
-
-    if (msg.includes("Video:")) {
-      const resolutionMatch = msg.match(/(\d{3,4})x(\d{3,4})/);
-      const fpsMatch = msg.match(/(\d+) fps/);
-      const codecMatch = msg.match(/Video: (\w+)/);
-      const bitrateMatch = msg.match(/(\d+) kb\/s/);
-
-      if (!tempVideoInfo.value) {
-        tempVideoInfo.value = {
-          duration: 0,
-          fps: 30,
-          resolution: "未知",
-          bitrate: "未知",
-          videoCodec: "未知",
-          audioCodec: "未知",
-        };
-      }
-
-      if (resolutionMatch) {
-        const width = parseInt(resolutionMatch[1]);
-        const height = parseInt(resolutionMatch[2]);
-        if (width >= 100 && height >= 100) {
-          tempVideoInfo.value.resolution = `${width}x${height}`;
-        }
-      }
-
-      if (fpsMatch) {
-        tempVideoInfo.value.fps = parseInt(fpsMatch[1]);
-      }
-
-      if (codecMatch) {
-        tempVideoInfo.value.videoCodec = codecMatch[1];
-      }
-
-      if (bitrateMatch) {
-        tempVideoInfo.value.bitrate = `${bitrateMatch[1]} kb/s`;
-      }
-    }
-
-    if (msg.includes("Audio:")) {
-      // 解析音频流信息
-      const audioCodecMatch = msg.match(/Audio: (\w+)/);
-
-      if (!tempVideoInfo.value) {
-        tempVideoInfo.value = {
-          duration: 0,
-          fps: 30,
-          resolution: "未知",
-          bitrate: "未知",
-          videoCodec: "未知",
-          audioCodec: "未知",
-        };
-      }
-
-      if (audioCodecMatch) {
-        tempVideoInfo.value.audioCodec = audioCodecMatch[1];
-      }
-    }
-
-    // 更新进度
-    if (msg.includes("frame=")) {
-      const frameMatch = msg.match(/frame=\s*(\d+)/);
-      if (frameMatch && isConverting.value) {
-        const frame = parseInt(frameMatch[1]);
-        const totalFrames = videoInfo.value?.totalFrames || 111;
-        const frameProgress = Math.min((frame / totalFrames) * 0.4, 0.4);
-        progress.value = frameProgress * 100;
-      }
-    }
-  });
-
-  // 设置进度监听
-  ffmpeg.on("progress", ({ progress: p }) => {
-    if (p > 0) {
-      // 主要依赖手动设置的阶段进度
-    }
-  });
-
-  // 自动加载FFmpeg
   try {
     isLoading.value = true;
     setMessage("正在加载资源...");
@@ -363,10 +232,8 @@ onMounted(async () => {
       }
     }, 200);
 
-    await ffmpeg.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-      workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, "text/javascript"),
+    await ffmpegConverter.init((msg: string) => {
+      setMessage(msg);
     });
 
     clearInterval(progressInterval);
@@ -502,7 +369,7 @@ const readVideoInfo = async () => {
 
 // 转换视频
 const convertVideo = async () => {
-  if (!selectedFile.value || !ffmpeg) {
+  if (!selectedFile.value) {
     alert("请先选择视频文件");
     return;
   }
@@ -514,19 +381,7 @@ const convertVideo = async () => {
     return;
   }
 
-  // 在函数开始处定义所有变量，确保在错误处理时可用
-  const inputExt = getFileExtension(selectedFile.value.name);
-  const outputExt = outputFormat.value;
-
-  console.log(
-    "开始转换:",
-    selectedFile.value.name,
-    "→",
-    outputFormat.value,
-    "文件大小:",
-    selectedFile.value.size,
-    "字节"
-  );
+  console.log("开始转换:", selectedFile.value.name, "→", outputFormat.value);
 
   isConverting.value = true;
   progress.value = 0;
@@ -542,103 +397,33 @@ const convertVideo = async () => {
     setMessage("开始转换...");
     progress.value = 0;
 
-    setMessage("正在写入输入文件...");
-    await ffmpeg.writeFile(`input.${inputExt}`, await fetchFile(selectedFile.value));
-    progress.value = 0; // 文件写入完成，准备开始转码
+    const options = {
+      outputFormat: outputFormat.value,
+      videoQuality: videoQuality.value,
+      resolution: resolution.value,
+      framerate: framerate.value
+    };
 
-    // 始终使用分离式转码，参考成功代码的逻辑
-    await performSeparateTranscode(inputExt, outputExt);
-
-    // 读取输出文件
-    setMessage("正在读取输出文件...");
-
-    try {
-      const data = await ffmpeg.readFile(`output.${outputExt}`);
-
-      // 检查输出文件是否有效
-      if (!data || data.length === 0) {
-        throw new Error("输出文件为空或无效");
-      }
-
-      convertedBlob.value = new Blob([data.buffer], {
-        type: `video/${outputExt}`,
-      });
-
-      // 创建下载链接
-      downloadUrl.value = URL.createObjectURL(convertedBlob.value);
-
-      progress.value = 100;
-      setMessage("转换完成！");
-      console.log("转换成功，文件大小:", data.length, "字节");
-
-      // 清理临时文件
-      await cleanupTempFiles(inputExt, outputExt);
-    } catch (readError) {
-      console.error("读取输出文件失败:", readError);
-
-      // 检查是否有视频文件存在
-      try {
-        const videoData = await ffmpeg.readFile(`video_only.${outputExt}`);
-        if (videoData && videoData.length > 0) {
-          convertedBlob.value = new Blob([videoData.buffer], {
-            type: `video/${outputExt}`,
-          });
-          downloadUrl.value = URL.createObjectURL(convertedBlob.value);
-          progress.value = 100;
-          setMessage("转换完成！（仅视频）");
-          console.log("转换成功（仅视频），文件大小:", videoData.length, "字节");
-          await cleanupTempFiles(inputExt, outputExt);
-          return;
+    const result = await ffmpegConverter.convert(
+      selectedFile.value,
+      options,
+      (msg: string, progressValue?: number) => {
+        setMessage(msg);
+        if (progressValue !== undefined) {
+          progress.value = progressValue;
         }
-      } catch (videoError) {
-        console.error("视频文件也不存在:", videoError);
       }
+    );
 
-      throw new Error(`读取输出文件失败: ${readError.message || readError.toString()}`);
-    }
+    convertedBlob.value = result.blob;
+    downloadUrl.value = URL.createObjectURL(result.blob);
+    progress.value = 100;
+    setMessage("转换完成！");
+
   } catch (error) {
-    console.error("转换失败:", error.message || error.toString());
-
-    // 根据错误类型提供不同的建议
-    let errorMessage = "转换失败，请检查文件格式或重试";
-    const errorMsg = error.message || error.toString() || "";
-
-    if (errorMsg.includes("超时")) {
-      errorMessage =
-        "转换超时，建议：1. 尝试更小的文件 2. 降低视频质量设置 3. 检查网络连接";
-    } else if (errorMsg.includes("编码器")) {
-      errorMessage = "编码器错误，建议：1. 尝试不同的输出格式 2. 检查输入文件是否损坏";
-    } else if (
-      errorMsg.includes("内存") ||
-      errorMsg.includes("memory access out of bounds")
-    ) {
-      errorMessage =
-        "内存不足，建议：1. 关闭其他程序 2. 尝试更小的文件 3. 降低视频质量设置";
-    } else if (errorMsg.includes("FS error") || errorMsg.includes("文件")) {
-      errorMessage =
-        "文件系统错误，建议：1. 刷新页面重试 2. 检查文件格式 3. 尝试不同的输出格式";
-    } else if (
-      outputExt === "avi" &&
-      (errorMsg.includes("内存") || errorMsg.includes("memory"))
-    ) {
-      errorMessage =
-        "AVI格式转换失败，建议：1. 尝试其他输出格式（如MP4） 2. 降低视频质量设置 3. 检查输入文件是否损坏";
-    } else if (errorMsg.includes("stream") || errorMsg.includes("map")) {
-      errorMessage =
-        "流映射错误，建议：1. 尝试选择'仅视频'选项 2. 检查音频流是否兼容 3. 尝试不同的输出格式";
-    } else if (errorMsg.includes("音频") || errorMsg.includes("audio")) {
-      errorMessage =
-        "音频处理错误，建议：1. 选择'仅视频'选项 2. 尝试不同的音频处理模式 3. 检查音频编码器兼容性";
-    }
-
-    setMessage(errorMessage);
-    showErrorDialog(errorMessage);
-
-    // 记录错误日志
-    await logConversionError(error, inputExt, outputExt);
-
-    // 清理临时文件
-    await cleanupTempFiles(inputExt, outputExt);
+    console.error("转换失败:", error);
+    setMessage("转换失败，请检查文件格式或重试");
+    showErrorDialog(error instanceof Error ? error.message : "转换失败，请检查文件格式或重试");
   } finally {
     isConverting.value = false;
     isLoading.value = false;
@@ -1396,34 +1181,9 @@ const downloadFile = async () => {
                     v-model="outputFormat"
                     class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                   >
-                    <option value="mp4">MP4 (H.264/H.265)</option>
-                    <option value="avi">AVI (Xvid)</option>
-                    <option value="mov">MOV (QuickTime)</option>
-                    <option value="mkv">MKV (Matroska)</option>
-                    <option value="wmv">WMV (Windows Media)</option>
-                    <option value="flv">FLV (Flash Video)</option>
-                    <option value="webm">WebM (VP8/VP9/AV1)</option>
-                    <option value="m4v">M4V (iTunes)</option>
-                    <option value="3gp">3GP (Mobile)</option>
-                    <option value="ogv">OGV (Ogg Video)</option>
-                    <option value="ts">TS (Transport Stream)</option>
-                    <option value="mts">MTS (AVCHD)</option>
-                    <option value="asf">ASF (Advanced Systems)</option>
-                    <option value="vob">VOB (DVD Video)</option>
-                    <option value="mpg">MPG (MPEG-1/2)</option>
-                    <option value="mpeg">MPEG (MPEG-1/2)</option>
-                    <option value="divx">DIVX (DivX)</option>
-                    <option value="xvid">XVID (Xvid)</option>
-                    <option value="swf">SWF (Flash)</option>
-                    <option value="f4v">F4V (Flash Video)</option>
-                    <option value="m2ts">M2TS (Blu-ray)</option>
-                    <option value="mxf">MXF (Material Exchange)</option>
-                    <option value="gif">GIF (Animated)</option>
-                    <option value="apng">APNG (Animated PNG)</option>
-                    <option value="webp">WebP (Web Picture)</option>
-                    <option value="avif">AVIF (AV1 Image)</option>
-                    <option value="heic">HEIC (HEIF)</option>
-                    <option value="heif">HEIF (High Efficiency)</option>
+                    <option v-for="format in OUTPUT_FORMATS" :key="format.value" :value="format.value">
+                      {{ format.label }}
+                    </option>
                   </select>
                 </div>
 
@@ -1440,9 +1200,9 @@ const downloadFile = async () => {
                     v-model="videoQuality"
                     class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                   >
-                    <option value="high">高质量</option>
-                    <option value="medium">中等质量</option>
-                    <option value="low">低质量</option>
+                    <option v-for="quality in VIDEO_QUALITY_OPTIONS" :key="quality.value" :value="quality.value">
+                      {{ quality.label }}
+                    </option>
                   </select>
                 </div>
 
@@ -1459,11 +1219,9 @@ const downloadFile = async () => {
                     v-model="resolution"
                     class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                   >
-                    <option value="original">保持原分辨率</option>
-                    <option value="4k">4K (3840x2160)</option>
-                    <option value="1080p">1080p (1920x1080)</option>
-                    <option value="720p">720p (1280x720)</option>
-                    <option value="480p">480p (854x480)</option>
+                    <option v-for="res in RESOLUTION_OPTIONS" :key="res.value" :value="res.value">
+                      {{ res.label }}
+                    </option>
                   </select>
                 </div>
 
@@ -1480,11 +1238,9 @@ const downloadFile = async () => {
                     v-model="framerate"
                     class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                   >
-                    <option value="original">保持原帧率</option>
-                    <option value="60">60 FPS</option>
-                    <option value="30">30 FPS</option>
-                    <option value="25">25 FPS</option>
-                    <option value="24">24 FPS</option>
+                    <option v-for="fps in FRAMERATE_OPTIONS" :key="fps.value" :value="fps.value">
+                      {{ fps.label }}
+                    </option>
                   </select>
                 </div>
               </div>
