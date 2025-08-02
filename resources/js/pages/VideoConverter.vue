@@ -668,9 +668,17 @@ const performSeparateTranscode = async (inputExt, outputExt) => {
     progress.value = 0;
 
     const videoCommand = buildVideoCommand(inputExt, outputExt);
+    console.log("视频转码命令:", videoCommand.join(" "));
     const videoStartTime = Date.now();
     await Promise.race([ffmpeg.exec(videoCommand), timeoutPromise]);
     videoTime = Date.now() - videoStartTime;
+
+    // 检查视频文件是否生成成功
+    const videoFileExists = await checkFileExists(`video_only.${outputExt}`);
+    if (!videoFileExists) {
+      throw new Error("视频转码失败：输出文件不存在");
+    }
+    console.log("视频转码成功，文件大小:", (await ffmpeg.readFile(`video_only.${outputExt}`)).length, "字节");
     progress.value = isImageFormat ? 100 : 40;
 
     if (!isImageFormat) {
@@ -680,9 +688,18 @@ const performSeparateTranscode = async (inputExt, outputExt) => {
 
       const audioCommand = buildAudioCommand(inputExt, outputExt);
       if (audioCommand) {
+        console.log("音频转码命令:", audioCommand.join(" "));
         const audioStartTime = Date.now();
         await Promise.race([ffmpeg.exec(audioCommand), timeoutPromise]);
         audioTime = Date.now() - audioStartTime;
+        
+        // 检查音频文件是否生成成功
+        const audioFile = outputExt === "avi" ? "audio.mp3" : "audio.aac";
+        const audioFileExists = await checkFileExists(audioFile);
+        if (!audioFileExists) {
+          throw new Error("音频转码失败：输出文件不存在");
+        }
+        console.log("音频转码成功，文件大小:", (await ffmpeg.readFile(audioFile)).length, "字节");
       }
       progress.value = 80;
 
@@ -692,9 +709,17 @@ const performSeparateTranscode = async (inputExt, outputExt) => {
 
       const mergeCommand = buildMergeCommand(outputExt);
       if (mergeCommand) {
+        console.log("合并命令:", mergeCommand.join(" "));
         const mergeStartTime = Date.now();
         await Promise.race([ffmpeg.exec(mergeCommand), timeoutPromise]);
         mergeTime = Date.now() - mergeStartTime;
+        
+        // 检查合并文件是否生成成功
+        const outputFileExists = await checkFileExists(`output.${outputExt}`);
+        if (!outputFileExists) {
+          throw new Error("合并失败：输出文件不存在");
+        }
+        console.log("合并成功，文件大小:", (await ffmpeg.readFile(`output.${outputExt}`)).length, "字节");
       }
       progress.value = 100;
     }
@@ -702,6 +727,16 @@ const performSeparateTranscode = async (inputExt, outputExt) => {
     console.log("转码完成，总耗时:", videoTime + audioTime + mergeTime, "ms");
   } catch (error) {
     console.error("转码失败:", error);
+    
+    // 根据错误类型提供更具体的建议
+    if (error.message.includes("视频转码失败")) {
+      throw new Error("视频转码失败，可能是编码器不支持或参数错误");
+    } else if (error.message.includes("音频转码失败")) {
+      throw new Error("音频转码失败，可能是音频流不兼容");
+    } else if (error.message.includes("合并失败")) {
+      throw new Error("合并失败，可能是AVI格式兼容性问题，建议尝试其他输出格式");
+    }
+    
     throw error;
   }
 };
@@ -914,7 +949,13 @@ const buildMergeCommand = (outputExt) => {
 
   // AVI格式特殊处理
   if (outputExt === "avi") {
-    command.push("-pix_fmt", "yuv420p", "-avoid_negative_ts", "make_zero");
+    command.push(
+      "-pix_fmt", "yuv420p", 
+      "-avoid_negative_ts", "make_zero",
+      "-ac", "2",  // 确保双声道
+      "-ar", "44100",  // 确保采样率
+      "-fflags", "+genpts"  // 生成时间戳
+    );
   }
 
   command.push("-y", `output.${outputExt}`);
@@ -961,6 +1002,16 @@ const cleanupTempFiles = async (inputExt, outputExt) => {
 // 获取文件扩展名
 const getFileExtension = (filename) => {
   return filename.split(".").pop()?.toLowerCase() || "mp4";
+};
+
+// 检查文件是否存在且有效
+const checkFileExists = async (filename) => {
+  try {
+    const data = await ffmpeg.readFile(filename);
+    return data && data.length > 0;
+  } catch (error) {
+    return false;
+  }
 };
 
 // 记录转换错误日志
