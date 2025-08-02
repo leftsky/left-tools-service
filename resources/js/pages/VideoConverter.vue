@@ -32,7 +32,14 @@ const tempVideoInfo = ref<{
   bitrate: string;
   videoCodec: string;
   audioCodec: string;
-} | null>(null);
+}>({
+  duration: 0,
+  fps: 30,
+  resolution: "未知",
+  bitrate: "未知",
+  videoCodec: "未知",
+  audioCodec: "未知",
+});
 
 // 设置消息的辅助函数，同时打印控制台日志
 const setMessage = (msg: string) => {
@@ -46,6 +53,90 @@ const videoQuality = ref("high");
 const resolution = ref("original");
 const framerate = ref("original");
 
+// 支持的格式配置
+const supportedFormats = {
+  // 输入格式
+  input: [
+    { value: "mp4", label: "MP4 (H.264/H.265)", codecs: ["h264", "h265", "hevc"] },
+    { value: "avi", label: "AVI (Xvid/DivX)", codecs: ["xvid", "divx", "h264"] },
+    { value: "mov", label: "MOV (QuickTime)", codecs: ["h264", "h265", "prores"] },
+    { value: "mkv", label: "MKV (Matroska)", codecs: ["h264", "h265", "vp8", "vp9"] },
+    { value: "wmv", label: "WMV (Windows Media)", codecs: ["wmv1", "wmv2", "wmv3"] },
+    { value: "flv", label: "FLV (Flash Video)", codecs: ["h264", "vp6"] },
+    { value: "webm", label: "WebM (Web Video)", codecs: ["vp8", "vp9", "av1"] },
+    { value: "m4v", label: "M4V (iTunes)", codecs: ["h264", "h265"] },
+    { value: "3gp", label: "3GP (Mobile)", codecs: ["h264", "h263"] },
+    { value: "ogv", label: "OGV (Ogg Video)", codecs: ["theora"] },
+    { value: "ts", label: "TS (Transport Stream)", codecs: ["h264", "h265"] },
+    { value: "mts", label: "MTS (AVCHD)", codecs: ["h264"] },
+    { value: "rm", label: "RM (RealMedia)", codecs: ["rv40", "rv50"] },
+    { value: "rmvb", label: "RMVB (RealMedia)", codecs: ["rv40", "rv50"] },
+    { value: "asf", label: "ASF (Advanced Systems)", codecs: ["wmv1", "wmv2"] },
+    { value: "vob", label: "VOB (DVD Video)", codecs: ["mpeg2", "h264"] },
+    { value: "mpg", label: "MPG (MPEG-1/2)", codecs: ["mpeg1", "mpeg2"] },
+    { value: "mpeg", label: "MPEG (MPEG-1/2)", codecs: ["mpeg1", "mpeg2"] },
+    { value: "divx", label: "DIVX (DivX)", codecs: ["divx", "h264"] },
+    { value: "xvid", label: "XVID (Xvid)", codecs: ["xvid"] },
+    { value: "swf", label: "SWF (Flash)", codecs: ["vp6", "h264"] },
+    { value: "f4v", label: "F4V (Flash Video)", codecs: ["h264"] },
+    { value: "m2ts", label: "M2TS (Blu-ray)", codecs: ["h264", "h265"] },
+    { value: "mxf", label: "MXF (Material Exchange)", codecs: ["h264", "h265", "prores"] },
+    { value: "gif", label: "GIF (Animated)", codecs: ["gif"] },
+    { value: "apng", label: "APNG (Animated PNG)", codecs: ["apng"] },
+    { value: "bmp", label: "BMP (Bitmap)", codecs: ["bmp"] },
+    { value: "png", label: "PNG (Portable Network)", codecs: ["png"] },
+    { value: "jpg", label: "JPEG (Joint Photographic)", codecs: ["mjpeg"] },
+    { value: "jpeg", label: "JPEG (Joint Photographic)", codecs: ["mjpeg"] },
+    { value: "tiff", label: "TIFF (Tagged Image)", codecs: ["tiff"] },
+    { value: "tga", label: "TGA (Targa)", codecs: ["tga"] },
+    { value: "ico", label: "ICO (Icon)", codecs: ["ico"] },
+    { value: "pcx", label: "PCX (PC Paintbrush)", codecs: ["pcx"] },
+    { value: "ppm", label: "PPM (Portable Pixmap)", codecs: ["ppm"] },
+    { value: "pgm", label: "PGM (Portable Graymap)", codecs: ["pgm"] },
+    { value: "pbm", label: "PBM (Portable Bitmap)", codecs: ["pbm"] },
+    { value: "sgi", label: "SGI (Silicon Graphics)", codecs: ["sgi"] },
+    { value: "cin", label: "CIN (Cineon)", codecs: ["cin"] },
+    { value: "dpx", label: "DPX (Digital Picture)", codecs: ["dpx"] },
+    { value: "exr", label: "EXR (OpenEXR)", codecs: ["exr"] },
+    { value: "hdr", label: "HDR (High Dynamic Range)", codecs: ["hdr"] },
+    { value: "webp", label: "WebP (Web Picture)", codecs: ["webp"] },
+    { value: "avif", label: "AVIF (AV1 Image)", codecs: ["av1"] },
+    { value: "heic", label: "HEIC (HEIF)", codecs: ["hevc"] },
+    { value: "heif", label: "HEIF (High Efficiency)", codecs: ["hevc"] },
+  ],
+  // 输出格式
+  output: [
+    { value: "mp4", label: "MP4 (H.264/H.265)", videoCodec: "libx264", audioCodec: "aac" },
+    { value: "avi", label: "AVI (Xvid)", videoCodec: "libxvid", audioCodec: "mp3" },
+    { value: "mov", label: "MOV (QuickTime)", videoCodec: "libx264", audioCodec: "aac" },
+    { value: "mkv", label: "MKV (Matroska)", videoCodec: "libx264", audioCodec: "aac" },
+    { value: "wmv", label: "WMV (Windows Media)", videoCodec: "wmv2", audioCodec: "wmav2" },
+    { value: "flv", label: "FLV (Flash Video)", videoCodec: "libx264", audioCodec: "mp3" },
+    { value: "webm", label: "WebM (Web Video)", videoCodec: "libvpx", audioCodec: "libvorbis" },
+    { value: "m4v", label: "M4V (iTunes)", videoCodec: "libx264", audioCodec: "aac" },
+    { value: "3gp", label: "3GP (Mobile)", videoCodec: "libx264", audioCodec: "aac" },
+    { value: "ogv", label: "OGV (Ogg Video)", videoCodec: "libtheora", audioCodec: "libvorbis" },
+    { value: "ts", label: "TS (Transport Stream)", videoCodec: "libx264", audioCodec: "aac" },
+    { value: "mts", label: "MTS (AVCHD)", videoCodec: "libx264", audioCodec: "aac" },
+    { value: "asf", label: "ASF (Advanced Systems)", videoCodec: "wmv2", audioCodec: "wmav2" },
+    { value: "vob", label: "VOB (DVD Video)", videoCodec: "mpeg2video", audioCodec: "mp2" },
+    { value: "mpg", label: "MPG (MPEG-1/2)", videoCodec: "mpeg2video", audioCodec: "mp2" },
+    { value: "mpeg", label: "MPEG (MPEG-1/2)", videoCodec: "mpeg2video", audioCodec: "mp2" },
+    { value: "divx", label: "DIVX (DivX)", videoCodec: "libxvid", audioCodec: "mp3" },
+    { value: "xvid", label: "XVID (Xvid)", videoCodec: "libxvid", audioCodec: "mp3" },
+    { value: "swf", label: "SWF (Flash)", videoCodec: "flv", audioCodec: "mp3" },
+    { value: "f4v", label: "F4V (Flash Video)", videoCodec: "libx264", audioCodec: "aac" },
+    { value: "m2ts", label: "M2TS (Blu-ray)", videoCodec: "libx264", audioCodec: "aac" },
+    { value: "mxf", label: "MXF (Material Exchange)", videoCodec: "libx264", audioCodec: "aac" },
+    { value: "gif", label: "GIF (Animated)", videoCodec: "gif", audioCodec: null },
+    { value: "apng", label: "APNG (Animated PNG)", videoCodec: "apng", audioCodec: null },
+    { value: "webp", label: "WebP (Web Picture)", videoCodec: "libwebp", audioCodec: null },
+    { value: "avif", label: "AVIF (AV1 Image)", videoCodec: "libaom-av1", audioCodec: null },
+    { value: "heic", label: "HEIC (HEIF)", videoCodec: "libx265", audioCodec: null },
+    { value: "heif", label: "HEIF (High Efficiency)", videoCodec: "libx265", audioCodec: null },
+  ]
+};
+
 // FFmpeg CDN配置
 const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.10/dist/esm";
 
@@ -55,8 +146,8 @@ const ffmpeg = new FFmpeg();
 // 初始化FFmpeg
 onMounted(async () => {
   // 清理之前的事件监听器（如果有的话）
-  ffmpeg.off("log");
-  ffmpeg.off("progress");
+  ffmpeg.off("log", () => {});
+  ffmpeg.off("progress", () => {});
 
   // 设置日志监听
   ffmpeg.on("log", ({ message: msg }: any) => {
@@ -273,7 +364,14 @@ const readVideoInfo = async () => {
     setMessage("正在读取视频信息...");
 
     // 重置临时视频信息
-    tempVideoInfo.value = null;
+    tempVideoInfo.value = {
+      duration: 0,
+      fps: 30,
+      resolution: "未知",
+      bitrate: "未知",
+      videoCodec: "未知",
+      audioCodec: "未知",
+    };
 
     // 获取文件扩展名
     const inputExt = getFileExtension(selectedFile.value.name);
@@ -372,7 +470,7 @@ const convertVideo = async () => {
         throw new Error("输出文件为空或无效");
       }
 
-      convertedBlob.value = new Blob([(data as Uint8Array).buffer], {
+      convertedBlob.value = new Blob([data as any], {
         type: `video/${outputExt}`,
       });
 
@@ -392,9 +490,9 @@ const convertVideo = async () => {
       try {
         const videoData = await ffmpeg.readFile(`video_only.${outputExt}`);
         if (videoData && (videoData as Uint8Array).length > 0) {
-          convertedBlob.value = new Blob([(videoData as Uint8Array).buffer], {
-            type: `video/${outputExt}`,
-          });
+                  convertedBlob.value = new Blob([videoData as any], {
+          type: `video/${outputExt}`,
+        });
           downloadUrl.value = URL.createObjectURL(convertedBlob.value);
           progress.value = 100;
           setMessage("转换完成！（仅视频）");
@@ -410,14 +508,14 @@ const convertVideo = async () => {
         console.error("视频文件也不存在:", videoError);
       }
 
-      throw new Error(`读取输出文件失败: ${readError.message || readError.toString()}`);
+      throw new Error(`读取输出文件失败: ${(readError as any).message || readError.toString()}`);
     }
   } catch (error) {
-    console.error("转换失败:", error.message || error.toString());
+    console.error("转换失败:", (error as any).message || error.toString());
 
     // 根据错误类型提供不同的建议
     let errorMessage = "转换失败，请检查文件格式或重试";
-    const errorMsg = error.message || error.toString() || "";
+    const errorMsg = (error as any).message || error.toString() || "";
 
     if (errorMsg.includes("超时")) {
       errorMessage =
@@ -459,7 +557,11 @@ const performSeparateTranscode = async (inputExt: string, outputExt: string) => 
   });
 
   try {
-    // 第一步：转码视频（无音频）
+    // 检查是否为纯图片格式
+    const outputFormat = supportedFormats.output.find(f => f.value === outputExt);
+    const isImageFormat = !outputFormat?.audioCodec;
+
+    // 第一步：转码视频
     setMessage("正在转码视频...");
     progress.value = 0;
 
@@ -467,27 +569,33 @@ const performSeparateTranscode = async (inputExt: string, outputExt: string) => 
     const videoStartTime = Date.now();
     await Promise.race([ffmpeg.exec(videoCommand), timeoutPromise]);
     videoTime = Date.now() - videoStartTime;
-    progress.value = 40;
+    progress.value = isImageFormat ? 100 : 40;
 
-    // 第二步：提取并转码音频
-    setMessage("正在处理音频...");
-    progress.value = 40;
+    if (!isImageFormat) {
+      // 第二步：提取并转码音频
+      setMessage("正在处理音频...");
+      progress.value = 40;
 
-    const audioCommand = buildAudioCommand(inputExt, outputExt);
-    const audioStartTime = Date.now();
-    await Promise.race([ffmpeg.exec(audioCommand), timeoutPromise]);
-    audioTime = Date.now() - audioStartTime;
-    progress.value = 80;
+      const audioCommand = buildAudioCommand(inputExt, outputExt);
+      if (audioCommand) {
+        const audioStartTime = Date.now();
+        await Promise.race([ffmpeg.exec(audioCommand), timeoutPromise]);
+        audioTime = Date.now() - audioStartTime;
+      }
+      progress.value = 80;
 
-    // 第三步：重新组合视频和音频
-    setMessage("正在合并视频和音频...");
-    progress.value = 80;
+      // 第三步：重新组合视频和音频
+      setMessage("正在合并视频和音频...");
+      progress.value = 80;
 
-    const mergeCommand = buildMergeCommand(outputExt);
-    const mergeStartTime = Date.now();
-    await Promise.race([ffmpeg.exec(mergeCommand), timeoutPromise]);
-    mergeTime = Date.now() - mergeStartTime;
-    progress.value = 100;
+      const mergeCommand = buildMergeCommand(outputExt);
+      if (mergeCommand) {
+        const mergeStartTime = Date.now();
+        await Promise.race([ffmpeg.exec(mergeCommand), timeoutPromise]);
+        mergeTime = Date.now() - mergeStartTime;
+      }
+      progress.value = 100;
+    }
 
     console.log("转码完成，总耗时:", videoTime + audioTime + mergeTime, "ms");
   } catch (error) {
@@ -519,13 +627,56 @@ const buildVideoCommand = (inputExt: string, outputExt: string) => {
     command.push("-r", framerate.value);
   }
 
+  // 根据输出格式选择视频编码器
+  const outputFormat = supportedFormats.output.find(f => f.value === outputExt);
+  const videoCodec = outputFormat?.videoCodec || "libx264";
+  
   // 视频编码设置
   const crf =
     videoQuality.value === "high" ? 18 : videoQuality.value === "medium" ? 23 : 28;
-  command.push("-c:v", "libx264", "-preset", "ultrafast", "-crf", crf.toString());
+  
+  if (videoCodec === "libx264" || videoCodec === "libx265") {
+    command.push("-c:v", videoCodec, "-preset", "ultrafast", "-crf", crf.toString());
+  } else if (videoCodec === "libvpx") {
+    // WebM VP8/VP9 编码
+    const quality = videoQuality.value === "high" ? "good" : videoQuality.value === "medium" ? "realtime" : "realtime";
+    command.push("-c:v", videoCodec, "-quality", quality, "-crf", crf.toString());
+  } else if (videoCodec === "libtheora") {
+    // Ogg Theora 编码
+    const quality = videoQuality.value === "high" ? "8" : videoQuality.value === "medium" ? "6" : "4";
+    command.push("-c:v", videoCodec, "-q:v", quality);
+  } else if (videoCodec === "wmv2") {
+    // WMV 编码
+    const bitrate = videoQuality.value === "high" ? "2000k" : videoQuality.value === "medium" ? "1000k" : "500k";
+    command.push("-c:v", videoCodec, "-b:v", bitrate);
+  } else if (videoCodec === "mpeg2video") {
+    // MPEG-2 编码
+    const bitrate = videoQuality.value === "high" ? "4000k" : videoQuality.value === "medium" ? "2000k" : "1000k";
+    command.push("-c:v", videoCodec, "-b:v", bitrate);
+  } else if (videoCodec === "libxvid") {
+    // Xvid 编码
+    const qscale = videoQuality.value === "high" ? "3" : videoQuality.value === "medium" ? "5" : "7";
+    command.push("-c:v", videoCodec, "-qscale:v", qscale);
+  } else if (videoCodec === "gif" || videoCodec === "apng") {
+    // GIF/APNG 编码
+    command.push("-c:v", videoCodec);
+  } else if (videoCodec === "libwebp") {
+    // WebP 编码
+    const quality = videoQuality.value === "high" ? "90" : videoQuality.value === "medium" ? "70" : "50";
+    command.push("-c:v", videoCodec, "-quality", quality);
+  } else if (videoCodec === "libaom-av1") {
+    // AV1 编码
+    const crf = videoQuality.value === "high" ? "20" : videoQuality.value === "medium" ? "30" : "40";
+    command.push("-c:v", videoCodec, "-crf", crf);
+  } else {
+    // 默认使用 H.264
+    command.push("-c:v", "libx264", "-preset", "ultrafast", "-crf", crf.toString());
+  }
 
-  // 跳过音频
-  command.push("-an");
+  // 跳过音频（除非是纯图片格式）
+  if (videoCodec !== "gif" && videoCodec !== "apng" && videoCodec !== "libwebp" && videoCodec !== "libaom-av1") {
+    command.push("-an");
+  }
 
   // 输出文件名
   command.push("-y", `video_only.${outputExt}`);
@@ -541,12 +692,31 @@ const buildAudioCommand = (inputExt: string, outputExt: string) => {
   command.push("-vn");
 
   // 根据输出格式选择音频编码
-  if (outputExt === "avi") {
-    // AVI 格式使用 MP3 音频编码
+  const outputFormat = supportedFormats.output.find(f => f.value === outputExt);
+  const audioCodec = outputFormat?.audioCodec;
+  
+  if (!audioCodec) {
+    // 纯图片格式不需要音频
+    return null;
+  }
+
+  if (audioCodec === "mp3") {
     command.push("-c:a", "mp3", "-b:a", "128k", "-ar", "44100");
     command.push("-y", "audio.mp3");
+  } else if (audioCodec === "aac") {
+    command.push("-c:a", "aac", "-b:a", "128k", "-ar", "48000");
+    command.push("-y", "audio.aac");
+  } else if (audioCodec === "libvorbis") {
+    command.push("-c:a", "libvorbis", "-b:a", "128k", "-ar", "48000");
+    command.push("-y", "audio.ogg");
+  } else if (audioCodec === "wmav2") {
+    command.push("-c:a", "wmav2", "-b:a", "128k", "-ar", "44100");
+    command.push("-y", "audio.wma");
+  } else if (audioCodec === "mp2") {
+    command.push("-c:a", "mp2", "-b:a", "192k", "-ar", "48000");
+    command.push("-y", "audio.mp2");
   } else {
-    // 其他格式使用 AAC 音频编码
+    // 默认使用 AAC
     command.push("-c:a", "aac", "-b:a", "128k", "-ar", "48000");
     command.push("-y", "audio.aac");
   }
@@ -556,7 +726,24 @@ const buildAudioCommand = (inputExt: string, outputExt: string) => {
 
 // 构建合并命令
 const buildMergeCommand = (outputExt: string) => {
-  const audioFile = outputExt === "avi" ? "audio.mp3" : "audio.aac";
+  const outputFormat = supportedFormats.output.find(f => f.value === outputExt);
+  const audioCodec = outputFormat?.audioCodec;
+  
+  if (!audioCodec) {
+    // 纯图片格式不需要合并
+    return null;
+  }
+
+  let audioFile = "audio.aac";
+  if (audioCodec === "mp3") {
+    audioFile = "audio.mp3";
+  } else if (audioCodec === "libvorbis") {
+    audioFile = "audio.ogg";
+  } else if (audioCodec === "wmav2") {
+    audioFile = "audio.wma";
+  } else if (audioCodec === "mp2") {
+    audioFile = "audio.mp2";
+  }
 
   const command = [
     "-i",
@@ -578,7 +765,20 @@ const buildMergeCommand = (outputExt: string) => {
 // 清理临时文件
 const cleanupTempFiles = async (inputExt: string, outputExt: string) => {
   try {
-    const audioFile = outputExt === "avi" ? "audio.mp3" : "audio.aac";
+    const outputFormat = supportedFormats.output.find(f => f.value === outputExt);
+    const audioCodec = outputFormat?.audioCodec;
+    
+    let audioFile = "audio.aac";
+    if (audioCodec === "mp3") {
+      audioFile = "audio.mp3";
+    } else if (audioCodec === "libvorbis") {
+      audioFile = "audio.ogg";
+    } else if (audioCodec === "wmav2") {
+      audioFile = "audio.wma";
+    } else if (audioCodec === "mp2") {
+      audioFile = "audio.mp2";
+    }
+    
     const filesToDelete = [
       `input.${inputExt}`,
       `video_only.${outputExt}`,
@@ -678,6 +878,22 @@ const downloadFile = async () => {
                   <li>• MKV (Matroska)</li>
                   <li>• WMV (Windows Media)</li>
                   <li>• FLV (Flash Video)</li>
+                  <li>• WebM (VP8, VP9, AV1)</li>
+                  <li>• M4V (iTunes)</li>
+                  <li>• 3GP (Mobile)</li>
+                  <li>• OGV (Ogg Video)</li>
+                  <li>• TS/MTS (Transport Stream)</li>
+                  <li>• RM/RMVB (RealMedia)</li>
+                  <li>• ASF (Advanced Systems)</li>
+                  <li>• VOB (DVD Video)</li>
+                  <li>• MPG/MPEG (MPEG-1/2)</li>
+                  <li>• SWF/F4V (Flash)</li>
+                  <li>• M2TS (Blu-ray)</li>
+                  <li>• MXF (Material Exchange)</li>
+                  <li>• GIF/APNG (Animated)</li>
+                  <li>• WebP/AVIF (Web Images)</li>
+                  <li>• HEIC/HEIF (High Efficiency)</li>
+                  <li>• 以及更多图片格式...</li>
                 </ul>
               </div>
               <div>
@@ -691,11 +907,26 @@ const downloadFile = async () => {
                   <li>• MKV (Matroska)</li>
                   <li>• WMV (Windows Media)</li>
                   <li>• FLV (Flash Video)</li>
+                  <li>• WebM (VP8, VP9, AV1)</li>
+                  <li>• M4V (iTunes)</li>
+                  <li>• 3GP (Mobile)</li>
+                  <li>• OGV (Ogg Video)</li>
+                  <li>• TS/MTS (Transport Stream)</li>
+                  <li>• ASF (Advanced Systems)</li>
+                  <li>• VOB (DVD Video)</li>
+                  <li>• MPG/MPEG (MPEG-1/2)</li>
+                  <li>• SWF/F4V (Flash)</li>
+                  <li>• M2TS (Blu-ray)</li>
+                  <li>• MXF (Material Exchange)</li>
+                  <li>• GIF/APNG (Animated)</li>
+                  <li>• WebP/AVIF (Web Images)</li>
+                  <li>• HEIC/HEIF (High Efficiency)</li>
+                  <li>• 以及更多图片格式...</li>
                 </ul>
               </div>
             </div>
 
-            <div class="mt-6">
+            <div class="mt-6 space-y-4">
               <div
                 class="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md"
               >
@@ -724,6 +955,40 @@ const downloadFile = async () => {
                       <div>• 自动检测音频流并选择最佳处理方式</div>
                       <div>• 视频和音频独立处理，避免相互影响</div>
                       <div>• 支持多种音频编码器，兼容性更好</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md"
+              >
+                <div class="flex items-start">
+                  <svg
+                    class="h-5 w-5 text-blue-400 mr-2 mt-0.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M13 10V3L4 14h7v7l9-11h-7z"
+                    ></path>
+                  </svg>
+                  <div>
+                    <h4 class="text-sm font-medium text-blue-800 dark:text-blue-200">
+                      强大的格式转换支持
+                    </h4>
+                    <p class="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                      基于融茂软件核心，支持超过50种视频格式和编码器，包括最新的AV1、H.265等先进编码技术。
+                    </p>
+                    <div class="mt-2 text-xs text-blue-600 dark:text-blue-400">
+                      <div>• 支持H.264、H.265、VP8、VP9、AV1等现代编码</div>
+                      <div>• 兼容MPEG-1/2、Xvid、DivX等传统格式</div>
+                      <div>• 支持GIF、WebP、AVIF等图片和动画格式</div>
+                      <div>• 专业级MXF、M2TS等广播级格式支持</div>
                     </div>
                   </div>
                 </div>
@@ -799,7 +1064,7 @@ const downloadFile = async () => {
                     @change="handleFileSelect"
                   />
                   <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                    支持 MP4, AVI, MOV, MKV, WMV 等格式
+                    支持 MP4, AVI, MOV, MKV, WMV, WebM, M4V, 3GP, OGV, TS, MTS, RM, RMVB, ASF, VOB, MPG, MPEG, DIVX, XVID, SWF, F4V, M2TS, MXF, GIF, APNG, WebP, AVIF, HEIC, HEIF 等格式
                   </p>
                   <p
                     v-if="selectedFile"
@@ -848,12 +1113,34 @@ const downloadFile = async () => {
                     v-model="outputFormat"
                     class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                   >
-                    <option value="mp4">MP4</option>
-                    <option value="avi">AVI</option>
-                    <option value="mov">MOV</option>
-                    <option value="mkv">MKV</option>
-                    <option value="wmv">WMV</option>
-                    <option value="flv">FLV</option>
+                    <option value="mp4">MP4 (H.264/H.265)</option>
+                    <option value="avi">AVI (Xvid)</option>
+                    <option value="mov">MOV (QuickTime)</option>
+                    <option value="mkv">MKV (Matroska)</option>
+                    <option value="wmv">WMV (Windows Media)</option>
+                    <option value="flv">FLV (Flash Video)</option>
+                    <option value="webm">WebM (VP8/VP9/AV1)</option>
+                    <option value="m4v">M4V (iTunes)</option>
+                    <option value="3gp">3GP (Mobile)</option>
+                    <option value="ogv">OGV (Ogg Video)</option>
+                    <option value="ts">TS (Transport Stream)</option>
+                    <option value="mts">MTS (AVCHD)</option>
+                    <option value="asf">ASF (Advanced Systems)</option>
+                    <option value="vob">VOB (DVD Video)</option>
+                    <option value="mpg">MPG (MPEG-1/2)</option>
+                    <option value="mpeg">MPEG (MPEG-1/2)</option>
+                    <option value="divx">DIVX (DivX)</option>
+                    <option value="xvid">XVID (Xvid)</option>
+                    <option value="swf">SWF (Flash)</option>
+                    <option value="f4v">F4V (Flash Video)</option>
+                    <option value="m2ts">M2TS (Blu-ray)</option>
+                    <option value="mxf">MXF (Material Exchange)</option>
+                    <option value="gif">GIF (Animated)</option>
+                    <option value="apng">APNG (Animated PNG)</option>
+                    <option value="webp">WebP (Web Picture)</option>
+                    <option value="avif">AVIF (AV1 Image)</option>
+                    <option value="heic">HEIC (HEIF)</option>
+                    <option value="heif">HEIF (High Efficiency)</option>
                   </select>
                 </div>
 
