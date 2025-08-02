@@ -16,7 +16,7 @@ Route::post('/auth/h5-login', [AuthController::class, 'h5Login']);
 // 访问日志接口（无需认证）
 Route::middleware(['throttle:60,1'])->group(function () {
     Route::post('/access-log', [AccessLogController::class, 'store']);
-    Route::post('/access-log/error', [AccessLogController::class, 'logError']);
+    Route::any('/access-log/error', [AccessLogController::class, 'logError']);
     Route::get('/access-log/stats', [AccessLogController::class, 'stats']);
 });
 

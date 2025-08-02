@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup>
 import { ref, onMounted } from "vue";
 import Layout from "@/components/Layout.vue";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
@@ -9,30 +9,20 @@ const isLoaded = ref(false);
 const isConverting = ref(false);
 const isLoading = ref(false);
 const progress = ref(0);
-const selectedFile = ref<File | null>(null);
-const convertedBlob = ref<Blob | null>(null);
-const downloadUrl = ref<string>("");
+const selectedFile = ref(null);
+const convertedBlob = ref(null);
+const downloadUrl = ref("");
 const message = ref("请选择视频文件开始转换");
 
+// 错误弹窗
+const showErrorModal = ref(false);
+const errorMessage = ref("");
+
 // 视频信息
-const videoInfo = ref<{
-  duration: number;
-  fps: number;
-  totalFrames: number;
-  resolution: string;
-  bitrate: string;
-  format: string;
-} | null>(null);
+const videoInfo = ref(null);
 
 // 临时存储解析的视频信息
-const tempVideoInfo = ref<{
-  duration: number;
-  fps: number;
-  resolution: string;
-  bitrate: string;
-  videoCodec: string;
-  audioCodec: string;
-}>({
+const tempVideoInfo = ref({
   duration: 0,
   fps: 30,
   resolution: "未知",
@@ -42,9 +32,15 @@ const tempVideoInfo = ref<{
 });
 
 // 设置消息的辅助函数，同时打印控制台日志
-const setMessage = (msg: string) => {
+const setMessage = (msg) => {
   message.value = msg;
   console.log(`[VideoConverter] ${msg}`);
+};
+
+// 显示错误弹窗
+const showErrorDialog = (msg) => {
+  errorMessage.value = msg;
+  showErrorModal.value = true;
 };
 
 // 转换选项
@@ -80,7 +76,11 @@ const supportedFormats = {
     { value: "swf", label: "SWF (Flash)", codecs: ["vp6", "h264"] },
     { value: "f4v", label: "F4V (Flash Video)", codecs: ["h264"] },
     { value: "m2ts", label: "M2TS (Blu-ray)", codecs: ["h264", "h265"] },
-    { value: "mxf", label: "MXF (Material Exchange)", codecs: ["h264", "h265", "prores"] },
+    {
+      value: "mxf",
+      label: "MXF (Material Exchange)",
+      codecs: ["h264", "h265", "prores"],
+    },
     { value: "gif", label: "GIF (Animated)", codecs: ["gif"] },
     { value: "apng", label: "APNG (Animated PNG)", codecs: ["apng"] },
     { value: "bmp", label: "BMP (Bitmap)", codecs: ["bmp"] },
@@ -106,35 +106,110 @@ const supportedFormats = {
   ],
   // 输出格式
   output: [
-    { value: "mp4", label: "MP4 (H.264/H.265)", videoCodec: "libx264", audioCodec: "aac" },
+    {
+      value: "mp4",
+      label: "MP4 (H.264/H.265)",
+      videoCodec: "libx264",
+      audioCodec: "aac",
+    },
     { value: "avi", label: "AVI (Xvid)", videoCodec: "libxvid", audioCodec: "mp3" },
     { value: "mov", label: "MOV (QuickTime)", videoCodec: "libx264", audioCodec: "aac" },
     { value: "mkv", label: "MKV (Matroska)", videoCodec: "libx264", audioCodec: "aac" },
-    { value: "wmv", label: "WMV (Windows Media)", videoCodec: "wmv2", audioCodec: "wmav2" },
-    { value: "flv", label: "FLV (Flash Video)", videoCodec: "libx264", audioCodec: "mp3" },
-    { value: "webm", label: "WebM (Web Video)", videoCodec: "libvpx", audioCodec: "libvorbis" },
+    {
+      value: "wmv",
+      label: "WMV (Windows Media)",
+      videoCodec: "wmv2",
+      audioCodec: "wmav2",
+    },
+    {
+      value: "flv",
+      label: "FLV (Flash Video)",
+      videoCodec: "libx264",
+      audioCodec: "mp3",
+    },
+    {
+      value: "webm",
+      label: "WebM (Web Video)",
+      videoCodec: "libvpx",
+      audioCodec: "libvorbis",
+    },
     { value: "m4v", label: "M4V (iTunes)", videoCodec: "libx264", audioCodec: "aac" },
     { value: "3gp", label: "3GP (Mobile)", videoCodec: "libx264", audioCodec: "aac" },
-    { value: "ogv", label: "OGV (Ogg Video)", videoCodec: "libtheora", audioCodec: "libvorbis" },
-    { value: "ts", label: "TS (Transport Stream)", videoCodec: "libx264", audioCodec: "aac" },
+    {
+      value: "ogv",
+      label: "OGV (Ogg Video)",
+      videoCodec: "libtheora",
+      audioCodec: "libvorbis",
+    },
+    {
+      value: "ts",
+      label: "TS (Transport Stream)",
+      videoCodec: "libx264",
+      audioCodec: "aac",
+    },
     { value: "mts", label: "MTS (AVCHD)", videoCodec: "libx264", audioCodec: "aac" },
-    { value: "asf", label: "ASF (Advanced Systems)", videoCodec: "wmv2", audioCodec: "wmav2" },
-    { value: "vob", label: "VOB (DVD Video)", videoCodec: "mpeg2video", audioCodec: "mp2" },
-    { value: "mpg", label: "MPG (MPEG-1/2)", videoCodec: "mpeg2video", audioCodec: "mp2" },
-    { value: "mpeg", label: "MPEG (MPEG-1/2)", videoCodec: "mpeg2video", audioCodec: "mp2" },
+    {
+      value: "asf",
+      label: "ASF (Advanced Systems)",
+      videoCodec: "wmv2",
+      audioCodec: "wmav2",
+    },
+    {
+      value: "vob",
+      label: "VOB (DVD Video)",
+      videoCodec: "mpeg2video",
+      audioCodec: "mp2",
+    },
+    {
+      value: "mpg",
+      label: "MPG (MPEG-1/2)",
+      videoCodec: "mpeg2video",
+      audioCodec: "mp2",
+    },
+    {
+      value: "mpeg",
+      label: "MPEG (MPEG-1/2)",
+      videoCodec: "mpeg2video",
+      audioCodec: "mp2",
+    },
     { value: "divx", label: "DIVX (DivX)", videoCodec: "libxvid", audioCodec: "mp3" },
     { value: "xvid", label: "XVID (Xvid)", videoCodec: "libxvid", audioCodec: "mp3" },
     { value: "swf", label: "SWF (Flash)", videoCodec: "flv", audioCodec: "mp3" },
-    { value: "f4v", label: "F4V (Flash Video)", videoCodec: "libx264", audioCodec: "aac" },
+    {
+      value: "f4v",
+      label: "F4V (Flash Video)",
+      videoCodec: "libx264",
+      audioCodec: "aac",
+    },
     { value: "m2ts", label: "M2TS (Blu-ray)", videoCodec: "libx264", audioCodec: "aac" },
-    { value: "mxf", label: "MXF (Material Exchange)", videoCodec: "libx264", audioCodec: "aac" },
+    {
+      value: "mxf",
+      label: "MXF (Material Exchange)",
+      videoCodec: "libx264",
+      audioCodec: "aac",
+    },
     { value: "gif", label: "GIF (Animated)", videoCodec: "gif", audioCodec: null },
     { value: "apng", label: "APNG (Animated PNG)", videoCodec: "apng", audioCodec: null },
-    { value: "webp", label: "WebP (Web Picture)", videoCodec: "libwebp", audioCodec: null },
-    { value: "avif", label: "AVIF (AV1 Image)", videoCodec: "libaom-av1", audioCodec: null },
+    {
+      value: "webp",
+      label: "WebP (Web Picture)",
+      videoCodec: "libwebp",
+      audioCodec: null,
+    },
+    {
+      value: "avif",
+      label: "AVIF (AV1 Image)",
+      videoCodec: "libaom-av1",
+      audioCodec: null,
+    },
     { value: "heic", label: "HEIC (HEIF)", videoCodec: "libx265", audioCodec: null },
-    { value: "heif", label: "HEIF (High Efficiency)", videoCodec: "libx265", audioCodec: null },
-  ]
+    {
+      value: "heif",
+      label: "HEIF (High Efficiency)",
+      videoCodec: "libx265",
+      audioCodec: null,
+    },
+  ],
 };
 
 // FFmpeg CDN配置
@@ -150,7 +225,7 @@ onMounted(async () => {
   ffmpeg.off("progress", () => {});
 
   // 设置日志监听
-  ffmpeg.on("log", ({ message: msg }: any) => {
+  ffmpeg.on("log", ({ message: msg }) => {
     // 只在转换过程中输出关键信息
     if (isConverting.value) {
       // 过滤掉详细的进度日志
@@ -269,7 +344,7 @@ onMounted(async () => {
   });
 
   // 设置进度监听
-  ffmpeg.on("progress", ({ progress: p }: any) => {
+  ffmpeg.on("progress", ({ progress: p }) => {
     if (p > 0) {
       // 主要依赖手动设置的阶段进度
     }
@@ -312,8 +387,8 @@ onMounted(async () => {
 });
 
 // 文件选择处理
-const handleFileSelect = async (event: Event) => {
-  const target = event.target as HTMLInputElement;
+const handleFileSelect = async (event) => {
+  const target = event.target;
   if (target.files && target.files[0]) {
     selectedFile.value = target.files[0];
     // 重置之前的结果
@@ -329,7 +404,7 @@ const handleFileSelect = async (event: Event) => {
 };
 
 // 拖拽处理
-const handleDrop = async (event: DragEvent) => {
+const handleDrop = async (event) => {
   console.log(event);
   event.preventDefault();
   if (event.dataTransfer?.files && event.dataTransfer.files[0]) {
@@ -345,7 +420,7 @@ const handleDrop = async (event: DragEvent) => {
   }
 };
 
-const handleDragOver = (event: DragEvent) => {
+const handleDragOver = (event) => {
   event.preventDefault();
 };
 
@@ -443,7 +518,15 @@ const convertVideo = async () => {
   const inputExt = getFileExtension(selectedFile.value.name);
   const outputExt = outputFormat.value;
 
-  console.log("开始转换:", selectedFile.value.name, "→", outputFormat.value, "文件大小:", selectedFile.value.size, "字节");
+  console.log(
+    "开始转换:",
+    selectedFile.value.name,
+    "→",
+    outputFormat.value,
+    "文件大小:",
+    selectedFile.value.size,
+    "字节"
+  );
 
   isConverting.value = true;
   progress.value = 0;
@@ -473,11 +556,11 @@ const convertVideo = async () => {
       const data = await ffmpeg.readFile(`output.${outputExt}`);
 
       // 检查输出文件是否有效
-      if (!data || (data as Uint8Array).length === 0) {
+      if (!data || data.length === 0) {
         throw new Error("输出文件为空或无效");
       }
 
-      convertedBlob.value = new Blob([data as any], {
+      convertedBlob.value = new Blob([data.buffer], {
         type: `video/${outputExt}`,
       });
 
@@ -486,7 +569,7 @@ const convertVideo = async () => {
 
       progress.value = 100;
       setMessage("转换完成！");
-      console.log("转换成功，文件大小:", (data as Uint8Array).length, "字节");
+      console.log("转换成功，文件大小:", data.length, "字节");
 
       // 清理临时文件
       await cleanupTempFiles(inputExt, outputExt);
@@ -496,18 +579,14 @@ const convertVideo = async () => {
       // 检查是否有视频文件存在
       try {
         const videoData = await ffmpeg.readFile(`video_only.${outputExt}`);
-        if (videoData && (videoData as Uint8Array).length > 0) {
-                  convertedBlob.value = new Blob([videoData as any], {
-          type: `video/${outputExt}`,
-        });
+        if (videoData && videoData.length > 0) {
+          convertedBlob.value = new Blob([videoData.buffer], {
+            type: `video/${outputExt}`,
+          });
           downloadUrl.value = URL.createObjectURL(convertedBlob.value);
           progress.value = 100;
           setMessage("转换完成！（仅视频）");
-          console.log(
-            "转换成功（仅视频），文件大小:",
-            (videoData as Uint8Array).length,
-            "字节"
-          );
+          console.log("转换成功（仅视频），文件大小:", videoData.length, "字节");
           await cleanupTempFiles(inputExt, outputExt);
           return;
         }
@@ -515,26 +594,35 @@ const convertVideo = async () => {
         console.error("视频文件也不存在:", videoError);
       }
 
-      throw new Error(`读取输出文件失败: ${(readError as any).message || readError.toString()}`);
+      throw new Error(`读取输出文件失败: ${readError.message || readError.toString()}`);
     }
   } catch (error) {
-    console.error("转换失败:", (error as any).message || error.toString());
+    console.error("转换失败:", error.message || error.toString());
 
     // 根据错误类型提供不同的建议
     let errorMessage = "转换失败，请检查文件格式或重试";
-    const errorMsg = (error as any).message || error.toString() || "";
+    const errorMsg = error.message || error.toString() || "";
 
     if (errorMsg.includes("超时")) {
       errorMessage =
         "转换超时，建议：1. 尝试更小的文件 2. 降低视频质量设置 3. 检查网络连接";
     } else if (errorMsg.includes("编码器")) {
       errorMessage = "编码器错误，建议：1. 尝试不同的输出格式 2. 检查输入文件是否损坏";
-    } else if (errorMsg.includes("内存") || errorMsg.includes("memory access out of bounds")) {
-      errorMessage = "内存不足，建议：1. 关闭其他程序 2. 尝试更小的文件 3. 降低视频质量设置";
+    } else if (
+      errorMsg.includes("内存") ||
+      errorMsg.includes("memory access out of bounds")
+    ) {
+      errorMessage =
+        "内存不足，建议：1. 关闭其他程序 2. 尝试更小的文件 3. 降低视频质量设置";
     } else if (errorMsg.includes("FS error") || errorMsg.includes("文件")) {
-      errorMessage = "文件系统错误，建议：1. 刷新页面重试 2. 检查文件格式 3. 尝试不同的输出格式";
-    } else if (outputExt === "avi" && (errorMsg.includes("内存") || errorMsg.includes("memory"))) {
-      errorMessage = "AVI格式转换失败，建议：1. 尝试其他输出格式（如MP4） 2. 降低视频质量设置 3. 检查输入文件是否损坏";
+      errorMessage =
+        "文件系统错误，建议：1. 刷新页面重试 2. 检查文件格式 3. 尝试不同的输出格式";
+    } else if (
+      outputExt === "avi" &&
+      (errorMsg.includes("内存") || errorMsg.includes("memory"))
+    ) {
+      errorMessage =
+        "AVI格式转换失败，建议：1. 尝试其他输出格式（如MP4） 2. 降低视频质量设置 3. 检查输入文件是否损坏";
     } else if (errorMsg.includes("stream") || errorMsg.includes("map")) {
       errorMessage =
         "流映射错误，建议：1. 尝试选择'仅视频'选项 2. 检查音频流是否兼容 3. 尝试不同的输出格式";
@@ -544,7 +632,7 @@ const convertVideo = async () => {
     }
 
     setMessage(errorMessage);
-    alert(errorMessage);
+    showErrorDialog(errorMessage);
 
     // 记录错误日志
     await logConversionError(error, inputExt, outputExt);
@@ -558,7 +646,7 @@ const convertVideo = async () => {
 };
 
 // 分离式转码：分别处理视频和音频
-const performSeparateTranscode = async (inputExt: string, outputExt: string) => {
+const performSeparateTranscode = async (inputExt, outputExt) => {
   let videoTime = 0;
   let audioTime = 0;
   let mergeTime = 0;
@@ -572,7 +660,7 @@ const performSeparateTranscode = async (inputExt: string, outputExt: string) => 
 
   try {
     // 检查是否为纯图片格式
-    const outputFormat = supportedFormats.output.find(f => f.value === outputExt);
+    const outputFormat = supportedFormats.output.find((f) => f.value === outputExt);
     const isImageFormat = !outputFormat?.audioCodec;
 
     // 第一步：转码视频
@@ -619,7 +707,7 @@ const performSeparateTranscode = async (inputExt: string, outputExt: string) => 
 };
 
 // 构建视频转码命令
-const buildVideoCommand = (inputExt: string, outputExt: string) => {
+const buildVideoCommand = (inputExt, outputExt) => {
   const command = ["-i", `input.${inputExt}`];
 
   // 分辨率设置
@@ -630,10 +718,7 @@ const buildVideoCommand = (inputExt: string, outputExt: string) => {
       "720p": "1280:720",
       "480p": "854:480",
     };
-    command.push(
-      "-vf",
-      `scale=${resolutions[resolution.value as keyof typeof resolutions]}`
-    );
+    command.push("-vf", `scale=${resolutions[resolution.value]}`);
   }
 
   // 帧率设置
@@ -642,46 +727,95 @@ const buildVideoCommand = (inputExt: string, outputExt: string) => {
   }
 
   // 根据输出格式选择视频编码器
-  const outputFormat = supportedFormats.output.find(f => f.value === outputExt);
+  const outputFormat = supportedFormats.output.find((f) => f.value === outputExt);
   const videoCodec = outputFormat?.videoCodec || "libx264";
-  
+
   // 视频编码设置
   const crf =
     videoQuality.value === "high" ? 18 : videoQuality.value === "medium" ? 23 : 28;
-  
+
   if (videoCodec === "libx264" || videoCodec === "libx265") {
     // 添加内存限制和线程数限制
-    command.push("-c:v", videoCodec, "-preset", "ultrafast", "-crf", crf.toString(), "-threads", "2", "-max_muxing_queue_size", "1024");
+    command.push(
+      "-c:v",
+      videoCodec,
+      "-preset",
+      "ultrafast",
+      "-crf",
+      crf.toString(),
+      "-threads",
+      "2",
+      "-max_muxing_queue_size",
+      "1024"
+    );
   } else if (videoCodec === "libvpx") {
     // WebM VP8/VP9 编码
-    const quality = videoQuality.value === "high" ? "good" : videoQuality.value === "medium" ? "realtime" : "realtime";
+    const quality =
+      videoQuality.value === "high"
+        ? "good"
+        : videoQuality.value === "medium"
+        ? "realtime"
+        : "realtime";
     command.push("-c:v", videoCodec, "-quality", quality, "-crf", crf.toString());
   } else if (videoCodec === "libtheora") {
     // Ogg Theora 编码
-    const quality = videoQuality.value === "high" ? "8" : videoQuality.value === "medium" ? "6" : "4";
+    const quality =
+      videoQuality.value === "high" ? "8" : videoQuality.value === "medium" ? "6" : "4";
     command.push("-c:v", videoCodec, "-q:v", quality);
   } else if (videoCodec === "wmv2") {
     // WMV 编码
-    const bitrate = videoQuality.value === "high" ? "2000k" : videoQuality.value === "medium" ? "1000k" : "500k";
+    const bitrate =
+      videoQuality.value === "high"
+        ? "2000k"
+        : videoQuality.value === "medium"
+        ? "1000k"
+        : "500k";
     command.push("-c:v", videoCodec, "-b:v", bitrate);
   } else if (videoCodec === "mpeg2video") {
     // MPEG-2 编码
-    const bitrate = videoQuality.value === "high" ? "4000k" : videoQuality.value === "medium" ? "2000k" : "1000k";
+    const bitrate =
+      videoQuality.value === "high"
+        ? "4000k"
+        : videoQuality.value === "medium"
+        ? "2000k"
+        : "1000k";
     command.push("-c:v", videoCodec, "-b:v", bitrate);
   } else if (videoCodec === "libxvid") {
     // Xvid 编码 - AVI格式特殊处理
-    const qscale = videoQuality.value === "high" ? "3" : videoQuality.value === "medium" ? "5" : "7";
-    command.push("-c:v", videoCodec, "-qscale:v", qscale, "-pix_fmt", "yuv420p");
+    const qscale =
+      videoQuality.value === "high" ? "3" : videoQuality.value === "medium" ? "5" : "7";
+    command.push(
+      "-c:v",
+      videoCodec,
+      "-qscale:v",
+      qscale,
+      "-pix_fmt",
+      "yuv420p",
+      "-g",
+      "30",
+      "-bf",
+      "2"
+    );
   } else if (videoCodec === "gif" || videoCodec === "apng") {
     // GIF/APNG 编码
     command.push("-c:v", videoCodec);
   } else if (videoCodec === "libwebp") {
     // WebP 编码
-    const quality = videoQuality.value === "high" ? "90" : videoQuality.value === "medium" ? "70" : "50";
+    const quality =
+      videoQuality.value === "high"
+        ? "90"
+        : videoQuality.value === "medium"
+        ? "70"
+        : "50";
     command.push("-c:v", videoCodec, "-quality", quality);
   } else if (videoCodec === "libaom-av1") {
     // AV1 编码
-    const crf = videoQuality.value === "high" ? "20" : videoQuality.value === "medium" ? "30" : "40";
+    const crf =
+      videoQuality.value === "high"
+        ? "20"
+        : videoQuality.value === "medium"
+        ? "30"
+        : "40";
     command.push("-c:v", videoCodec, "-crf", crf);
   } else {
     // 默认使用 H.264
@@ -689,7 +823,12 @@ const buildVideoCommand = (inputExt: string, outputExt: string) => {
   }
 
   // 跳过音频（除非是纯图片格式）
-  if (videoCodec !== "gif" && videoCodec !== "apng" && videoCodec !== "libwebp" && videoCodec !== "libaom-av1") {
+  if (
+    videoCodec !== "gif" &&
+    videoCodec !== "apng" &&
+    videoCodec !== "libwebp" &&
+    videoCodec !== "libaom-av1"
+  ) {
     command.push("-an");
   }
 
@@ -699,19 +838,17 @@ const buildVideoCommand = (inputExt: string, outputExt: string) => {
   return command;
 };
 
-
-
 // 构建音频转码命令
-const buildAudioCommand = (inputExt: string, outputExt: string) => {
+const buildAudioCommand = (inputExt, outputExt) => {
   const command = ["-i", `input.${inputExt}`];
 
   // 跳过视频
   command.push("-vn");
 
   // 根据输出格式选择音频编码
-  const outputFormat = supportedFormats.output.find(f => f.value === outputExt);
+  const outputFormat = supportedFormats.output.find((f) => f.value === outputExt);
   const audioCodec = outputFormat?.audioCodec;
-  
+
   if (!audioCodec) {
     // 纯图片格式不需要音频
     return null;
@@ -743,10 +880,10 @@ const buildAudioCommand = (inputExt: string, outputExt: string) => {
 };
 
 // 构建合并命令
-const buildMergeCommand = (outputExt: string) => {
-  const outputFormat = supportedFormats.output.find(f => f.value === outputExt);
+const buildMergeCommand = (outputExt) => {
+  const outputFormat = supportedFormats.output.find((f) => f.value === outputExt);
   const audioCodec = outputFormat?.audioCodec;
-  
+
   if (!audioCodec) {
     // 纯图片格式不需要合并
     return null;
@@ -777,7 +914,7 @@ const buildMergeCommand = (outputExt: string) => {
 
   // AVI格式特殊处理
   if (outputExt === "avi") {
-    command.push("-pix_fmt", "yuv420p");
+    command.push("-pix_fmt", "yuv420p", "-avoid_negative_ts", "make_zero");
   }
 
   command.push("-y", `output.${outputExt}`);
@@ -786,11 +923,11 @@ const buildMergeCommand = (outputExt: string) => {
 };
 
 // 清理临时文件
-const cleanupTempFiles = async (inputExt: string, outputExt: string) => {
+const cleanupTempFiles = async (inputExt, outputExt) => {
   try {
-    const outputFormat = supportedFormats.output.find(f => f.value === outputExt);
+    const outputFormat = supportedFormats.output.find((f) => f.value === outputExt);
     const audioCodec = outputFormat?.audioCodec;
-    
+
     let audioFile = "audio.aac";
     if (audioCodec === "mp3") {
       audioFile = "audio.mp3";
@@ -801,7 +938,7 @@ const cleanupTempFiles = async (inputExt: string, outputExt: string) => {
     } else if (audioCodec === "mp2") {
       audioFile = "audio.mp2";
     }
-    
+
     const filesToDelete = [
       `input.${inputExt}`,
       `video_only.${outputExt}`,
@@ -822,90 +959,94 @@ const cleanupTempFiles = async (inputExt: string, outputExt: string) => {
 };
 
 // 获取文件扩展名
-const getFileExtension = (filename: string) => {
+const getFileExtension = (filename) => {
   return filename.split(".").pop()?.toLowerCase() || "mp4";
 };
 
 // 记录转换错误日志
-const logConversionError = async (error: any, inputExt: string, outputExt: string) => {
+const logConversionError = async (error, inputExt, outputExt) => {
   try {
     // 检测设备类型
     const detectDeviceType = () => {
       const userAgent = navigator.userAgent.toLowerCase();
       const screenWidth = window.screen.width;
-      
-      const isMobile = /mobile|android|iphone|ipad|phone|blackberry|opera mini|iemobile/i.test(userAgent);
-      const isTablet = /tablet|ipad|android(?=.*\b(?!mobile\b)(?:tablet|sdk))/i.test(userAgent);
-      
+
+      const isMobile = /mobile|android|iphone|ipad|phone|blackberry|opera mini|iemobile/i.test(
+        userAgent
+      );
+      const isTablet = /tablet|ipad|android(?=.*\b(?!mobile\b)(?:tablet|sdk))/i.test(
+        userAgent
+      );
+
       const isSmallScreen = screenWidth <= 768;
       const isMediumScreen = screenWidth > 768 && screenWidth <= 1024;
-      
+
       if (isMobile || isSmallScreen) {
-        return 'mobile';
+        return "mobile";
       } else if (isTablet || isMediumScreen) {
-        return 'tablet';
+        return "tablet";
       } else {
-        return 'desktop';
+        return "desktop";
       }
     };
 
     const errorData = {
-      error_type: 'video_conversion_failed',
-      error_message: (error as any).message || error.toString(),
+      error_type: "video_conversion_failed",
+      error_message: error.message || error.toString(),
       input_format: inputExt,
       output_format: outputExt,
       file_size: selectedFile.value?.size || 0,
       user_agent: navigator.userAgent,
-      browser_fingerprint: '', // 暂时为空，后续可以从BrowserFingerprint组件获取
+      browser_fingerprint: "", // 暂时为空，后续可以从BrowserFingerprint组件获取
       device_type: detectDeviceType(),
       screen_resolution: `${window.screen.width}x${window.screen.height}`,
     };
 
-    const response = await fetch('/api/access-log/error', {
-      method: 'POST',
+    const response = await fetch("/api/access-log/error", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
+        "Content-Type": "application/json",
+        "X-Requested-With": "XMLHttpRequest",
       },
-      body: JSON.stringify(errorData)
+      body: JSON.stringify(errorData),
     });
 
     if (response.ok) {
       const result = await response.json();
       if (result.code === 1) {
-        console.log('转换错误日志已记录');
+        console.log("转换错误日志已记录");
       } else {
-        console.warn('记录转换错误失败:', result.message);
+        console.warn("记录转换错误失败:", result.message);
       }
     } else {
-      console.warn('记录转换错误失败:', response.status);
+      console.warn("记录转换错误失败:", response.status);
     }
   } catch (logError) {
-    console.warn('记录转换错误时出错:', logError);
+    console.warn("记录转换错误时出错:", logError);
   }
 };
 
 // 记录工具使用
 const recordToolUsage = async () => {
   try {
-    const response = await fetch('/api/tools/record-usage-public', {
-      method: 'POST',
+    const response = await fetch("/api/tools/record-usage-public", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
+        "Content-Type": "application/json",
+        "X-Requested-With": "XMLHttpRequest",
       },
       body: JSON.stringify({
-        tool_name: '视频转码'
-      })
+        tool_name: "视频转码",
+      }),
     });
 
     if (response.ok) {
-      console.log('工具使用记录已保存');
+      console.log("工具使用记录已保存");
     } else {
-      console.warn('工具使用记录失败:', response.status);
+      console.warn("工具使用记录失败:", response.status);
     }
   } catch (error) {
-    console.warn('记录工具使用时出错:', error);
+    console.warn("记录工具使用时出错:", error);
   }
 };
 
@@ -914,14 +1055,14 @@ const downloadFile = async () => {
   if (convertedBlob.value && downloadUrl.value && selectedFile.value) {
     const a = document.createElement("a");
     a.href = downloadUrl.value;
-    
+
     // 获取原始文件名（不含扩展名）
     const originalName = selectedFile.value.name;
     const nameWithoutExt = originalName.substring(0, originalName.lastIndexOf("."));
-    
+
     // 使用原始文件名 + 新的输出格式
     a.download = `${nameWithoutExt}.${outputFormat.value}`;
-    
+
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -1146,7 +1287,9 @@ const downloadFile = async () => {
                     @change="handleFileSelect"
                   />
                   <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                    支持 MP4, AVI, MOV, MKV, WMV, WebM, M4V, 3GP, OGV, TS, MTS, RM, RMVB, ASF, VOB, MPG, MPEG, DIVX, XVID, SWF, F4V, M2TS, MXF, GIF, APNG, WebP, AVIF, HEIC, HEIF 等格式
+                    支持 MP4, AVI, MOV, MKV, WMV, WebM, M4V, 3GP, OGV, TS, MTS, RM, RMVB,
+                    ASF, VOB, MPG, MPEG, DIVX, XVID, SWF, F4V, M2TS, MXF, GIF, APNG, WebP,
+                    AVIF, HEIC, HEIF 等格式
                   </p>
                   <p
                     v-if="selectedFile"
@@ -1414,6 +1557,50 @@ const downloadFile = async () => {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 错误弹窗 -->
+    <div
+      v-if="showErrorModal"
+      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+    >
+      <div
+        class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 shadow-xl"
+      >
+        <div class="flex items-center mb-4">
+          <div class="flex-shrink-0">
+            <svg
+              class="h-6 w-6 text-red-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
+              ></path>
+            </svg>
+          </div>
+          <div class="ml-3">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white">转换失败</h3>
+          </div>
+        </div>
+        <div class="mt-2">
+          <p class="text-sm text-gray-500 dark:text-gray-400 whitespace-pre-line">
+            {{ errorMessage }}
+          </p>
+        </div>
+        <div class="mt-4 flex justify-end">
+          <button
+            @click="showErrorModal = false"
+            class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
+          >
+            确定
+          </button>
         </div>
       </div>
     </div>
