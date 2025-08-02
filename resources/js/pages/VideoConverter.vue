@@ -816,7 +816,7 @@ const buildVideoCommand = (inputExt, outputExt) => {
         : "1000k";
     command.push("-c:v", videoCodec, "-b:v", bitrate);
   } else if (videoCodec === "libxvid") {
-    // Xvid 编码 - AVI格式特殊处理
+    // Xvid 编码 - AVI格式特殊处理，使用更兼容的参数
     const qscale =
       videoQuality.value === "high" ? "3" : videoQuality.value === "medium" ? "5" : "7";
     command.push(
@@ -829,7 +829,13 @@ const buildVideoCommand = (inputExt, outputExt) => {
       "-g",
       "30",
       "-bf",
-      "2"
+      "2",
+      "-threads",
+      "1",
+      "-max_muxing_queue_size",
+      "1024",
+      "-avoid_negative_ts",
+      "make_zero"
     );
   } else if (videoCodec === "gif" || videoCodec === "apng") {
     // GIF/APNG 编码
@@ -891,7 +897,7 @@ const buildAudioCommand = (inputExt, outputExt) => {
 
   if (audioCodec === "mp3") {
     // AVI格式的MP3音频特殊处理
-    command.push("-c:a", "mp3", "-b:a", "128k", "-ar", "44100", "-ac", "2");
+    command.push("-c:a", "mp3", "-b:a", "128k", "-ar", "44100", "-ac", "2", "-avoid_negative_ts", "make_zero");
     command.push("-y", "audio.mp3");
   } else if (audioCodec === "aac") {
     command.push("-c:a", "aac", "-b:a", "128k", "-ar", "48000");
@@ -954,7 +960,8 @@ const buildMergeCommand = (outputExt) => {
       "-avoid_negative_ts", "make_zero",
       "-ac", "2",  // 确保双声道
       "-ar", "44100",  // 确保采样率
-      "-fflags", "+genpts"  // 生成时间戳
+      "-fflags", "+genpts",  // 生成时间戳
+      "-max_muxing_queue_size", "1024"
     );
   }
 
