@@ -288,7 +288,7 @@ class FFmpegConverter {
         }
     }
 
-        // 分离式转码：分别处理视频和音频
+    // 分离式转码：分别处理视频和音频
     async performSeparateTranscode(inputExt, outputExt, options, onProgress) {
         let videoTime = 0;
         let audioTime = 0;
@@ -304,7 +304,7 @@ class FFmpegConverter {
         try {
             // 清理之前的事件监听器，避免进度串扰
             this.ffmpeg.off('log');
-            
+
             // 设置FFmpeg进度监听
             if (onProgress) {
                 const logHandler = ({ message }) => {
@@ -319,7 +319,7 @@ class FFmpegConverter {
                         }
                     }
                 };
-                
+
                 // 存储监听器引用，以便后续清理
                 this.ffmpeg.on('log', logHandler);
             }
@@ -359,14 +359,14 @@ class FFmpegConverter {
             }
 
             console.log("转码完成，总耗时:", videoTime + audioTime + mergeTime, "ms");
-            
+
             // 转换完成后立即清理监听器
             if (onProgress) {
                 this.ffmpeg.off('log');
             }
         } catch (error) {
             console.error("转码失败:", error);
-            
+
             // 出错时也要清理监听器
             if (onProgress) {
                 this.ffmpeg.off('log');
@@ -445,13 +445,18 @@ class FFmpegConverter {
     // 清理临时文件
     async cleanupFiles(inputExt, outputExt) {
         try {
-            const audioFile = outputExt === "avi" ? "audio.mp3" : "audio.aac";
-            const filesToDelete = [
-                `input.${inputExt}`,
-                `video_only.${outputExt}`,
-                audioFile,
-                `output.${outputExt}`,
-            ];
+            let filesToDelete = [`input.${inputExt}`];
+
+            // 如果是转码操作，清理所有临时文件
+            if (outputExt) {
+                const audioFile = outputExt === "avi" ? "audio.mp3" : "audio.aac";
+                filesToDelete = [
+                    `input.${inputExt}`,
+                    `video_only.${outputExt}`,
+                    audioFile,
+                    `output.${outputExt}`,
+                ];
+            }
 
             for (const file of filesToDelete) {
                 try {
@@ -476,6 +481,224 @@ class FFmpegConverter {
             isLoaded: this.isLoaded,
             isLoading: this.isLoading
         };
+    }
+
+    /**
+     * 获取文件信息
+     * @param {File|string} input 输入源（File对象或URL字符串）
+     * @param {Function} onProgress 进度回调函数
+     * @returns {Promise<Object>} 文件信息对象
+     */
+    async getFileInfo(input, onProgress) {
+        if (!this.isLoaded) {
+            throw new Error("FFmpeg尚未初始化，请先调用init()方法");
+        }
+
+        let inputFile;
+        let inputExt;
+        let originalFilename;
+
+        // 处理输入源
+        if (typeof input === 'string') {
+            // URL输入
+            try {
+                if (onProgress) {
+                    onProgress("正在获取在线文件信息...");
+                }
+
+                const response = await fetch(input);
+                if (!response.ok) {
+                    throw new Error(`无法获取文件: ${response.statusText}`);
+                }
+
+                const blob = await response.blob();
+                inputFile = new File([blob], 'input_video', { type: blob.type });
+                inputExt = this.getFileExtensionFromUrl(input) || 'mp4';
+                originalFilename = `input_video.${inputExt}`;
+
+                if (onProgress) {
+                    onProgress("在线文件获取完成");
+                }
+            } catch (error) {
+                throw new Error(`获取在线文件失败: ${error instanceof Error ? error.message : '未知错误'}`);
+            }
+        } else {
+            // File对象输入
+            inputFile = input;
+            inputExt = this.getFileExtension(input.name);
+            originalFilename = input.name;
+        }
+
+        // 检查文件大小
+        if (inputFile.size > MAX_FILE_SIZE) {
+            throw new Error("文件过大，请选择小于100MB的文件");
+        }
+
+        try {
+            if (onProgress) {
+                onProgress("正在分析文件信息...");
+            }
+
+            // 写入临时文件
+            await this.ffmpeg.writeFile(`input.${inputExt}`, await fetchFile(inputFile));
+
+            // 解析视频信息的临时变量
+            let parsedInfo = {
+                duration: null,
+                resolution: null,
+                fps: null,
+                videoCodec: null,
+                audioCodec: null,
+                bitrate: null
+            };
+
+            // 设置日志监听器来解析视频信息
+            const logHandler = ({ message }) => {
+                // 解析时长
+                if (message.includes('Duration:')) {
+                    const durationMatch = message.match(/Duration: (\d{2}):(\d{2}):(\d{2}\.\d{2})/);
+                    if (durationMatch) {
+                        const hours = parseInt(durationMatch[1]);
+                        const minutes = parseInt(durationMatch[2]);
+                        const seconds = parseFloat(durationMatch[3]);
+                        parsedInfo.duration = hours * 3600 + minutes * 60 + seconds;
+                    }
+                }
+
+                // 解析视频信息
+                if (message.includes('Video:')) {
+                    const resolutionMatch = message.match(/(\d{3,4})x(\d{3,4})/);
+                    const fpsMatch = message.match(/(\d+) fps/);
+                    const codecMatch = message.match(/Video: (\w+)/);
+                    const bitrateMatch = message.match(/(\d+) kb\/s/);
+
+                    if (resolutionMatch) {
+                        const width = parseInt(resolutionMatch[1]);
+                        const height = parseInt(resolutionMatch[2]);
+                        if (width >= 100 && height >= 100) {
+                            parsedInfo.resolution = `${width}x${height}`;
+                        }
+                    }
+
+                    if (fpsMatch) {
+                        parsedInfo.fps = parseInt(fpsMatch[1]);
+                    }
+
+                    if (codecMatch) {
+                        parsedInfo.videoCodec = codecMatch[1];
+                    }
+
+                    if (bitrateMatch) {
+                        parsedInfo.bitrate = `${bitrateMatch[1]} kb/s`;
+                    }
+                }
+
+                // 解析音频信息
+                if (message.includes('Audio:')) {
+                    const audioCodecMatch = message.match(/Audio: (\w+)/);
+                    if (audioCodecMatch) {
+                        parsedInfo.audioCodec = audioCodecMatch[1];
+                    }
+                }
+            };
+
+            // 添加日志监听器
+            this.ffmpeg.on('log', logHandler);
+
+            try {
+                // 执行FFmpeg命令获取文件信息
+                await this.ffmpeg.exec(['-i', `input.${inputExt}`]);
+            } finally {
+                // 移除日志监听器
+                this.ffmpeg.off('log', logHandler);
+            }
+
+            // 清理临时文件
+            await this.cleanupFiles(inputExt, null);
+
+            // 构建结果对象
+            const result = {
+                filename: originalFilename,
+                size: inputFile.size,
+                sizeFormatted: this.formatFileSize(inputFile.size),
+                duration: parsedInfo.duration,
+                durationFormatted: parsedInfo.duration ? this.formatDuration(parsedInfo.duration) : null,
+                format: inputExt,
+                bitrate: parsedInfo.bitrate ? parsedInfo.bitrate.replace(' kb/s', '') : null,
+                bitrateFormatted: parsedInfo.bitrate,
+                video: parsedInfo.resolution ? {
+                    codec: parsedInfo.videoCodec || '未知',
+                    width: parsedInfo.resolution ? parseInt(parsedInfo.resolution.split('x')[0]) : null,
+                    height: parsedInfo.resolution ? parseInt(parsedInfo.resolution.split('x')[1]) : null,
+                    resolution: parsedInfo.resolution,
+                    framerate: parsedInfo.fps,
+                    bitrate: parsedInfo.bitrate ? parsedInfo.bitrate.replace(' kb/s', '') : null,
+                    bitrateFormatted: parsedInfo.bitrate
+                } : null,
+                audio: parsedInfo.audioCodec ? {
+                    codec: parsedInfo.audioCodec,
+                    channels: null, // 无法从日志中获取
+                    sampleRate: null, // 无法从日志中获取
+                    bitrate: null,
+                    bitrateFormatted: null
+                } : null,
+                streams: (parsedInfo.resolution ? 1 : 0) + (parsedInfo.audioCodec ? 1 : 0)
+            };
+
+            if (onProgress) {
+                onProgress("文件信息分析完成");
+            }
+
+            return result;
+
+        } catch (error) {
+            console.error("获取文件信息失败:", error);
+            await this.cleanupFiles(inputExt, null);
+            throw new Error(`获取文件信息失败: ${error instanceof Error ? error.message : '未知错误'}`);
+        }
+    }
+
+    // 格式化文件大小
+    formatFileSize(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // 格式化时长
+    formatDuration(seconds) {
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        const secs = Math.floor(seconds % 60);
+
+        if (hours > 0) {
+            return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        } else {
+            return `${minutes}:${secs.toString().padStart(2, '0')}`;
+        }
+    }
+
+    // 格式化比特率
+    formatBitrate(bps) {
+        if (bps === 0) return '0 bps';
+        const k = 1000;
+        const sizes = ['bps', 'Kbps', 'Mbps', 'Gbps'];
+        const i = Math.floor(Math.log(bps) / Math.log(k));
+        return parseFloat((bps / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // 解析帧率
+    parseFrameRate(frameRate) {
+        if (!frameRate) return null;
+        const parts = frameRate.split('/');
+        if (parts.length === 2) {
+            const num = parseInt(parts[0]);
+            const den = parseInt(parts[1]);
+            return den !== 0 ? (num / den).toFixed(2) : null;
+        }
+        return parseFloat(frameRate).toFixed(2);
     }
 }
 

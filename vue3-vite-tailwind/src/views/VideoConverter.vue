@@ -18,6 +18,10 @@ const convertedBlob = ref<Blob | null>(null);
 const downloadUrl = ref("");
 const message = ref("请选择视频文件开始转换");
 
+// 文件信息相关
+const fileInfo = ref<any>(null);
+const isAnalyzing = ref(false);
+
 // 测试相关数据
 const isTesting = ref(false);
 const testResults = ref<Array<{
@@ -86,6 +90,27 @@ onMounted(async () => {
   }
 });
 
+// 获取文件信息
+const getFileInfo = async (file: File) => {
+  try {
+    isAnalyzing.value = true;
+    setMessage("正在分析文件信息...");
+    
+    const info = await ffmpegConverter.getFileInfo(file, (msg: string) => {
+      setMessage(msg);
+    });
+    
+    fileInfo.value = info;
+    setMessage(`文件信息分析完成: ${file.name}`);
+  } catch (error) {
+    console.error("获取文件信息失败:", error);
+    setMessage("文件信息分析失败，但可以继续转换");
+    fileInfo.value = null;
+  } finally {
+    isAnalyzing.value = false;
+  }
+};
+
 // 文件选择处理
 const handleFileSelect = async (event: Event) => {
   const target = event.target as HTMLInputElement;
@@ -98,7 +123,11 @@ const handleFileSelect = async (event: Event) => {
       convertedBlob.value = null;
       downloadUrl.value = "";
       progress.value = 0;
+      fileInfo.value = null; // 重置文件信息
       setMessage(`已选择文件: ${selectedFile.value.name}`);
+      
+      // 获取文件信息
+      await getFileInfo(file);
     } catch (error) {
       showErrorDialog(error instanceof Error ? error.message : "文件选择失败");
     }
@@ -117,7 +146,11 @@ const handleDrop = async (event: DragEvent) => {
       convertedBlob.value = null;
       downloadUrl.value = "";
       progress.value = 0;
+      fileInfo.value = null; // 重置文件信息
       setMessage(`已选择文件: ${selectedFile.value.name}`);
+      
+      // 获取文件信息
+      await getFileInfo(file);
     } catch (error) {
       showErrorDialog(error instanceof Error ? error.message : "文件选择失败");
     }
@@ -380,6 +413,109 @@ const handleDownload = () => {
             </div>
           </div>
 
+          <!-- 文件信息显示区域 -->
+          <div v-if="fileInfo" class="mb-8">
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+              文件信息
+            </h2>
+            <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- 基本信息 -->
+                <div>
+                  <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-3">基本信息</h3>
+                  <div class="space-y-2 text-sm">
+                    <div class="flex justify-between">
+                      <span class="text-gray-600 dark:text-gray-400">文件名:</span>
+                      <span class="text-gray-900 dark:text-white font-medium">{{ fileInfo.filename }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-gray-600 dark:text-gray-400">文件大小:</span>
+                      <span class="text-gray-900 dark:text-white font-medium">{{ fileInfo.sizeFormatted }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-gray-600 dark:text-gray-400">格式:</span>
+                      <span class="text-gray-900 dark:text-white font-medium">{{ fileInfo.format }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-gray-600 dark:text-gray-400">时长:</span>
+                      <span class="text-gray-900 dark:text-white font-medium">{{ fileInfo.durationFormatted || '未知' }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-gray-600 dark:text-gray-400">总比特率:</span>
+                      <span class="text-gray-900 dark:text-white font-medium">{{ fileInfo.bitrateFormatted || '未知' }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-gray-600 dark:text-gray-400">流数量:</span>
+                      <span class="text-gray-900 dark:text-white font-medium">{{ fileInfo.streams }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 视频信息 -->
+                <div v-if="fileInfo.video">
+                  <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-3">视频信息</h3>
+                  <div class="space-y-2 text-sm">
+                    <div class="flex justify-between">
+                      <span class="text-gray-600 dark:text-gray-400">编码:</span>
+                      <span class="text-gray-900 dark:text-white font-medium">{{ fileInfo.video.codec }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-gray-600 dark:text-gray-400">分辨率:</span>
+                      <span class="text-gray-900 dark:text-white font-medium">{{ fileInfo.video.resolution }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-gray-600 dark:text-gray-400">帧率:</span>
+                      <span class="text-gray-900 dark:text-white font-medium">{{ fileInfo.video.framerate }} FPS</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-gray-600 dark:text-gray-400">视频比特率:</span>
+                      <span class="text-gray-900 dark:text-white font-medium">{{ fileInfo.video.bitrateFormatted || '未知' }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 音频信息 -->
+                <div v-if="fileInfo.audio" class="md:col-span-2">
+                  <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-3">音频信息</h3>
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="space-y-2 text-sm">
+                      <div class="flex justify-between">
+                        <span class="text-gray-600 dark:text-gray-400">编码:</span>
+                        <span class="text-gray-900 dark:text-white font-medium">{{ fileInfo.audio.codec }}</span>
+                      </div>
+                      <div class="flex justify-between">
+                        <span class="text-gray-600 dark:text-gray-400">声道数:</span>
+                        <span class="text-gray-900 dark:text-white font-medium">{{ fileInfo.audio.channels }}</span>
+                      </div>
+                    </div>
+                    <div class="space-y-2 text-sm">
+                      <div class="flex justify-between">
+                        <span class="text-gray-600 dark:text-gray-400">采样率:</span>
+                        <span class="text-gray-900 dark:text-white font-medium">{{ fileInfo.audio.sampleRate }} Hz</span>
+                      </div>
+                      <div class="flex justify-between">
+                        <span class="text-gray-600 dark:text-gray-400">音频比特率:</span>
+                        <span class="text-gray-900 dark:text-white font-medium">{{ fileInfo.audio.bitrateFormatted || '未知' }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 文件分析中状态 -->
+          <div v-if="isAnalyzing" class="mb-8">
+            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-4">
+              <div class="flex items-center">
+                <svg class="h-5 w-5 text-blue-400 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                <span class="text-blue-800 dark:text-blue-200">正在分析文件信息...</span>
+              </div>
+            </div>
+          </div>
+
           <!-- 转换选项 -->
           <div class="mb-8">
             <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
@@ -456,7 +592,7 @@ const handleDownload = () => {
           <div class="text-center space-y-4">
             <button
               @click="convertVideo"
-              :disabled="!selectedFile || isConverting || isTesting || !isLoaded"
+              :disabled="!selectedFile || isConverting || isTesting || isAnalyzing || !isLoaded"
               class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-3 px-8 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               <svg v-if="!isConverting" class="inline-block h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -472,7 +608,7 @@ const handleDownload = () => {
             <div class="border-t pt-4">
               <button
                 @click="runFormatTest"
-                :disabled="!selectedFile || isConverting || isTesting || !isLoaded"
+                :disabled="!selectedFile || isConverting || isTesting || isAnalyzing || !isLoaded"
                 class="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-2 px-6 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 text-sm"
               >
                 <svg v-if="!isTesting" class="inline-block h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
