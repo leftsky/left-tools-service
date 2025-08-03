@@ -3,9 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\AccessLog;
+use App\Models\AccessStats;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class AccessLogController extends Controller
@@ -39,8 +40,8 @@ class AccessLogController extends Controller
             // 生成一个简单的会话标识符（基于IP和时间）
             $sessionId = md5($ipAddress . date('Y-m-d-H'));
 
-            // 准备访问日志数据
-            $accessLogData = [
+            // 创建访问日志记录
+            $accessLog = AccessLog::create([
                 'user_id' => $userId,
                 'ip_address' => $ipAddress,
                 'user_agent' => $validated['user_agent'] ?? $request->userAgent(),
@@ -50,12 +51,7 @@ class AccessLogController extends Controller
                 'browser_fingerprint' => $validated['browser_fingerprint'],
                 'device_type' => $validated['device_type'] ?? 'unknown',
                 'screen_resolution' => $validated['screen_resolution'],
-                'created_at' => now(),
-                'updated_at' => now(),
-            ];
-
-            // 插入访问日志
-            DB::table('access_logs')->insert($accessLogData);
+            ]);
 
             // 更新访问统计（异步处理，避免影响响应速度）
             $this->updateAccessStats($validated['url'], $validated['device_type'] ?? 'unknown');
@@ -80,35 +76,17 @@ class AccessLogController extends Controller
         try {
             $date = now()->toDateString();
             
-            // 使用事务确保数据一致性
-            DB::transaction(function () use ($date, $url, $deviceType) {
-                // 查找或创建统计记录
-                $stats = DB::table('access_stats')
-                    ->where('date', $date)
-                    ->where('url', $url)
-                    ->lockForUpdate()
-                    ->first();
-
-                if ($stats) {
-                    // 更新现有记录
-                    DB::table('access_stats')
-                        ->where('id', $stats->id)
-                        ->update([
-                            'visit_count' => $stats->visit_count + 1,
-                            'updated_at' => now()
-                        ]);
-                } else {
-                    // 创建新记录
-                    DB::table('access_stats')->insert([
-                        'date' => $date,
-                        'url' => $url,
-                        'visit_count' => 1,
-                        'unique_visitors' => 0, // 需要根据指纹计算
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
-                }
-            });
+            // 计算当天的访问统计
+            $stats = AccessLog::getStats($date, $url);
+            
+            // 使用模型的 updateOrCreate 方法更新统计
+            AccessStats::updateOrCreate(
+                ['date' => $date, 'url' => $url],
+                [
+                    'visit_count' => $stats['visit_count'],
+                    'unique_visitors' => $stats['unique_visitors'],
+                ]
+            );
 
         } catch (\Exception $e) {
             Log::error('更新访问统计失败', [
@@ -176,14 +154,13 @@ class AccessLogController extends Controller
             $date = $request->get('date', now()->toDateString());
             $url = $request->get('url');
 
-            $query = DB::table('access_stats')
-                ->where('date', $date);
-
             if ($url) {
-                $query->where('url', $url);
+                $stats = AccessStats::where('date', $date)
+                    ->where('url', $url)
+                    ->get();
+            } else {
+                $stats = AccessStats::getStatsByDate($date);
             }
-
-            $stats = $query->get();
 
             return $this->success($stats, '获取访问统计成功');
 

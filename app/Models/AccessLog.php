@@ -35,20 +35,20 @@ class AccessLog extends Model
     /**
      * 获取访问统计
      */
-    public static function getStats(string $date, string $url = null): array
+    public static function getStats(string $date, string $url = ""): array
     {
         $query = static::whereDate('created_at', $date);
-        
+
         if ($url) {
             $query->where('url', $url);
         }
 
         $totalVisits = $query->count();
-        $uniqueVisitors = $query->distinct('ip_address')->count();
+        $uniqueVisitors = $query->distinct()->count('ip_address');
 
         return [
             'visit_count' => $totalVisits,
             'unique_visitors' => $uniqueVisitors,
         ];
     }
-} 
+}
