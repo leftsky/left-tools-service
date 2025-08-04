@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::create('users', function (Blueprint $table) {
             $table->id()->comment('用户ID');
             $table->string('name')->comment('用户姓名');
+            $table->string('avatar')->nullable()->comment('头像');
             $table->string('email')->unique()->nullable()->comment('邮箱地址');
             $table->timestamp('email_verified_at')->nullable()->comment('邮箱验证时间');
             $table->string('password')->nullable()->comment('密码');

@@ -7,11 +7,6 @@ use App\Http\Controllers\Api\ToolController;
 use App\Http\Controllers\Api\AccessLogController;
 use App\Http\Controllers\SeoController;
 
-// 小程序登录接口
-Route::post('/auth/mini-login', [AuthController::class, 'miniLogin']);
-
-// H5登录接口
-Route::post('/auth/h5-login', [AuthController::class, 'h5Login']);
 
 // 访问日志接口（无需认证）
 Route::middleware(['throttle:60,1'])->group(function () {
@@ -21,25 +16,19 @@ Route::middleware(['throttle:60,1'])->group(function () {
 });
 
 // 需要认证的接口
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth.api')->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
-
-    // 获取当前用户信息
-    Route::get('/auth/me', [AuthController::class, 'me']);
-
-    // 退出登录
-    Route::post('/auth/logout', [AuthController::class, 'logout']);
 });
 
 // 工具相关接口
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth.api')->group(function () {
     Route::post('/tools/record-usage', [ToolController::class, 'recordUsage']);
 });
 
 // 可选认证的工具接口（支持登录和未登录用户）
-Route::middleware('optional.auth')->group(function () {
+Route::middleware('auth.api-optional')->group(function () {
     Route::post('/tools/extract-douyin', [ToolController::class, 'extractDouyin']);
     Route::post('/tools/parse-douyin', [ToolController::class, 'parseDouyin']);
 });

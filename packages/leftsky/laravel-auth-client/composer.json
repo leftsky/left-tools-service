@@ -1,0 +1,45 @@
+{
+    "name": "leftsky/laravel-auth-client",
+    "description": "Laravel认证中心客户端集成包",
+    "type": "library",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Leftsky\\AuthClient\\": "src/"
+        },
+        "files": [
+            "src/Helpers/functions.php"
+        ]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Leftsky\\AuthClient\\Tests\\": "tests/"
+        }
+    },
+    "require": {
+        "php": "^8.2",
+        "laravel/framework": "^12.0",
+        "guzzlehttp/guzzle": "^7.8",
+        "league/oauth2-client": "^2.7",
+        "firebase/php-jwt": "^6.11"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^10.0",
+        "phpunit/phpunit": "^11.5"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Leftsky\\AuthClient\\AuthClientServiceProvider"
+            ],
+            "aliases": {
+                "AuthClient": "Leftsky\\AuthClient\\Facades\\AuthClient",
+                "Token": "Leftsky\\AuthClient\\Facades\\Token",
+                "SSO": "Leftsky\\AuthClient\\Facades\\SSO",
+                "CacheMonitor": "Leftsky\\AuthClient\\Facades\\CacheMonitor"
+            }
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

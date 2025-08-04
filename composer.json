@@ -17,8 +17,15 @@
         "livewire/flux": "^2.0",
         "livewire/volt": "^1.6.7",
         "w7corp/easywechat": "^6.17",
-        "tightenco/ziggy": "^2.4"
+        "tightenco/ziggy": "^2.4",
+        "leftsky/laravel-auth-client": "dev-master"
     },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "./packages/leftsky/laravel-auth-client"
+        }
+    ],
     "require-dev": {
         "fakerphp/faker": "^1.23",
         "laravel/pail": "^1.2.2",
@@ -77,6 +84,6 @@
             "php-http/discovery": true
         }
     },
-    "minimum-stability": "stable",
+    "minimum-stability": "dev",
     "prefer-stable": true
 }
