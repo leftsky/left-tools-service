@@ -39,6 +39,7 @@ class ToolController extends Controller
         'https://v1-dy.douyinvod.com',
         'https://v11-x.douyinvod.com',
         'https://v11.douyinvod.com',
+        'https://v11-cold.douyinvod.com',
         'https://v24.douyinvod.com',
         'https://v26-cold.douyinvod.com',
         'https://v26.douyinvod.com',
