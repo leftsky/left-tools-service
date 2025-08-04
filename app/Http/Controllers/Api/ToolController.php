@@ -27,6 +27,103 @@ class ToolController extends Controller
     private static string $cozeWorkflowId = '7530571901480648767';
     private static string $cozeVideoWorkflowId = '7531615863444701219';
 
+    // 抖音视频域名列表
+    private static array $douyinVideoDomains = [
+        'https://v1-cold.douyinvod.com',
+        'https://v1-y.douyinvod.com',
+        'https://v1.douyinvod.com',
+        'https://v1-x.douyinvod.com',
+        'https://v1-2p.douyinvod.com',
+        'https://v1-p.douyinvod.com',
+        'https://v1-ipv6.douyinvod.com',
+        'https://v1-dy.douyinvod.com',
+        'https://v11-x.douyinvod.com',
+        'https://v11.douyinvod.com',
+        'https://v24.douyinvod.com',
+        'https://v26-cold.douyinvod.com',
+        'https://v26.douyinvod.com',
+        'https://v26-che.douyinvod.com',
+        'https://v26-0015c002.douyinvod.com',
+        'https://v26-x.douyinvod.com',
+        'https://v26-ipv6.douyinvod.com',
+        'https://v26-coldf.douyinvod.com',
+        'https://v26-qos-daily.douyinvod.com',
+        'https://v27.douyinvod.com',
+        'https://v27-ipv6.douyinvod.com',
+        'https://v29-cold.douyinvod.com',
+        'https://v29.douyinvod.com',
+        'https://v29-ipv6.douyinvod.com',
+        'https://v29-qos-control.douyinvod.com',
+        'https://v3-a.douyinvod.com',
+        'https://v3-b.douyinvod.com',
+        'https://v3-c.douyinvod.com',
+        'https://v3-cold.douyinvod.com',
+        'https://v3-d.douyinvod.com',
+        'https://v3-e.douyinvod.com',
+        'https://v3-x.douyinvod.com',
+        'https://v3-y.douyinvod.com',
+        'https://v3-z.douyinvod.com',
+        'https://v3-che.douyinvod.com',
+        'https://v3-p.douyinvod.com',
+        'https://v3-ipv6.douyinvod.com',
+        'https://v3.douyinvod.com',
+        'https://v5-cold.douyinvod.com',
+        'https://v5-coldb.douyinvod.com',
+        'https://v5-coldc.douyinvod.com',
+        'https://v5-coldy.douyinvod.com',
+        'https://v5-e.douyinvod.com',
+        'https://v5-f.douyinvod.com',
+        'https://v5-g.douyinvod.com',
+        'https://v5-h.douyinvod.com',
+        'https://v5-i.douyinvod.com',
+        'https://v5-j.douyinvod.com',
+        'https://v5-che.douyinvod.com',
+        'https://v5-litea.douyinvod.com',
+        'https://v5-lite.douyinvod.com',
+        'https://v5-lite-a.douyinvod.com',
+        'https://v5-gdgz.douyinvod.com',
+        'https://v5-ttcp-a.douyinvod.com',
+        'https://v5-ttcp-b.douyinvod.com',
+        'https://v5-dlyd.douyinvod.com',
+        'https://v5-jbwl.douyinvod.com',
+        'https://v5-gdwy.douyinvod.com',
+        'https://v5-gdhy.douyinvod.com',
+        'https://v5-dash.douyinvod.com',
+        'https://v5-yacu.douyinvod.com',
+        'https://v5.douyinvod.com',
+        'https://v6-cold.douyinvod.com',
+        'https://v6-x.douyinvod.com',
+        'https://v6-y.douyinvod.com',
+        'https://v6-z.douyinvod.com',
+        'https://v6.douyinvod.com',
+        'https://v6-qos-hourly.douyinvod.com',
+        'https://v6-ab-e1.douyinvod.com',
+        'https://v6-z-qos-control.douyinvod.com',
+        'https://v6-ipv6.douyinvod.com',
+        'https://v6-p.douyinvod.com',
+        'https://v83-c.douyinvod.com',
+        'https://v83-d.douyinvod.com',
+        'https://v83-x.douyinvod.com',
+        'https://v83-y.douyinvod.com',
+        'https://v83-z.douyinvod.com',
+        'https://v83.douyinvod.com',
+        'https://v9-cold.douyinvod.com',
+        'https://v9-x.douyinvod.com',
+        'https://v9-z.douyinvod.com',
+        'https://v9.douyinvod.com',
+        'https://v9-che.douyinvod.com',
+        'https://v9-z-qos-control.douyinvod.com',
+        'https://v9-x-qos-hourly.douyinvod.com',
+        'https://v9-chc.douyinvod.com',
+        'https://v9-qos-hourly.douyinvod.com',
+        'https://v9-y.douyinvod.com',
+        'https://v9-ipv6.douyinvod.com',
+        'https://v92.douyinvod.com',
+        'https://v93.douyinvod.com',
+        'https://v95.douyinvod.com',
+        'https://douyinvod.com',
+    ];
+
 
 
     /**
@@ -319,84 +416,155 @@ class ToolController extends Controller
             $cacheKey = 'douyin_parse_' . md5($shareText);
             $cachedResult = Cache::get($cacheKey);
             if ($cachedResult) {
-                            // 记录工具使用
-            ToolUsageLog::recordUsage(
-                toolName: '抖音视频解析',
-                userId: $request->user()?->id
-            );
+                // 记录工具使用
+                ToolUsageLog::recordUsage(
+                    toolName: '抖音视频解析',
+                    userId: $request->user()?->id
+                );
                 return $this->success($cachedResult, '解析成功（缓存）');
             }
 
-            // 调用Coze API解析视频
-            $response = Http::timeout(1200) // 20分钟超时
-                ->withHeaders([
-                    'Authorization' => 'Bearer ' . self::$cozeApiKey,
-                    'Content-Type' => 'application/json',
-                ])
-                ->post(self::$cozeBaseUrl . '/v1/workflow/run', [
-                    'workflow_id' => self::$cozeVideoWorkflowId,
-                    'parameters' => [
-                        'input' => $shareText,
-                    ],
-                ]);
+            // 使用do while循环处理API调用和域名验证
+            $maxRetries = 3;
+            $retryCount = 0;
+            $isValidDomain = false;
+            $result = null;
 
-            // 检查响应状态
-            if (!$response->successful()) {
-                Log::error('Coze API调用失败', [
-                    'status' => $response->status(),
-                    'body' => $response->body(),
+            do {
+                $retryCount++;
+
+                // 记录请求信息
+                if ($retryCount > 1) {
+                    Log::info('开始重试解析抖音视频', [
+                        'retry_count' => $retryCount,
+                        'max_retries' => $maxRetries,
+                        'share_text' => $shareText,
+                    ]);
+                }
+
+                // 调用Coze API解析视频
+                $response = Http::timeout(1200) // 20分钟超时
+                    ->withHeaders([
+                        'Authorization' => 'Bearer ' . self::$cozeApiKey,
+                        'Content-Type' => 'application/json',
+                    ])
+                    ->post(self::$cozeBaseUrl . '/v1/workflow/run', [
+                        'workflow_id' => self::$cozeVideoWorkflowId,
+                        'parameters' => [
+                            'input' => $shareText,
+                        ],
+                    ]);
+
+                // 检查响应状态
+                if (!$response->successful()) {
+                    Log::error('Coze API调用失败', [
+                        'retry_count' => $retryCount,
+                        'status' => $response->status(),
+                        'body' => $response->body(),
+                        'share_text' => $shareText,
+                    ]);
+
+                    if ($retryCount >= $maxRetries) {
+                        return $this->error('视频解析失败，请稍后重试', 500);
+                    }
+                    continue;
+                }
+
+                $data = $response->json();
+
+                if (!isset($data['data'])) {
+                    Log::error('Coze API返回数据格式异常', [
+                        'retry_count' => $retryCount,
+                        'response' => $data,
+                        'share_text' => $shareText,
+                    ]);
+
+                    if ($retryCount >= $maxRetries) {
+                        return $this->error('解析结果格式异常', 500);
+                    }
+                    continue;
+                }
+
+                $data = $data['data'];
+                $apiResult = json_decode($data, true);
+
+                // 检查API返回的数据结构
+                if (!isset($apiResult['output'])) {
+                    Log::error('Coze API返回数据格式异常', [
+                        'retry_count' => $retryCount,
+                        'response' => $apiResult,
+                        'share_text' => $shareText,
+                    ]);
+
+                    if ($retryCount >= $maxRetries) {
+                        return $this->error('解析结果格式异常', 500);
+                    }
+                    continue;
+                }
+
+                $output = $apiResult['output'];
+
+                // 检查必要字段
+                if (!isset($output['video_url']) || !isset($output['title'])) {
+                    Log::error('Coze API返回数据缺少必要字段', [
+                        'retry_count' => $retryCount,
+                        'output' => $output,
+                        'share_text' => $shareText,
+                    ]);
+
+                    if ($retryCount >= $maxRetries) {
+                        return $this->error('解析结果格式异常', 500);
+                    }
+                    continue;
+                }
+
+                // 构建返回结果
+                $result = [
+                    'url' => $output['video_url'],
+                    'title' => $output['title'],
+                    'author' => $output['author'] ?? '',
+                    'cover' => $output['cover'] ?? '',
+                    'music_url' => $output['music_url'] ?? '',
+                    'video_duration' => $output['video_duration'] ?? 0,
+                    'video_id' => 'unknown', // Coze API 可能不提供 video_id
+                ];
+
+                // 验证视频URL域名是否在允许列表中
+                $videoUrl = $result['url'];
+                $isValidDomain = false;
+
+                foreach (self::$douyinVideoDomains as $domain) {
+                    if (str_starts_with($videoUrl, $domain)) {
+                        $isValidDomain = true;
+                        break;
+                    }
+                }
+
+                // 如果域名无效且不是第一次请求，记录错误
+                if (!$isValidDomain && $retryCount > 1) {
+                    Log::error('发现新的抖音视频域名', [
+                        'retry_count' => $retryCount,
+                        'new_domain' => parse_url($videoUrl, PHP_URL_HOST),
+                        'full_url' => $videoUrl,
+                        'share_text' => $shareText,
+                        'user_id' => $request->user()?->id,
+                    ]);
+                }
+
+                // 如果域名有效或已达到最大重试次数，跳出循环
+                if ($isValidDomain || $retryCount >= $maxRetries) {
+                    break;
+                }
+            } while ($retryCount < $maxRetries);
+
+            // 如果所有重试都失败且域名无效，记录最终错误
+            if (!$isValidDomain) {
+                Log::error('所有重试都失败，使用原始结果', [
+                    'original_url' => $videoUrl,
+                    'retry_count' => $retryCount,
                     'share_text' => $shareText,
                 ]);
-
-                return $this->error('视频解析失败，请稍后重试', 500);
             }
-
-            $data = $response->json();
-
-            if (!isset($data['data'])) {
-                Log::error('Coze API返回数据格式异常', [
-                    'response' => $data,
-                    'share_text' => $shareText,
-                ]);
-
-                return $this->error('解析结果格式异常', 500);
-            }
-
-            $data = $data['data'];
-            $result = json_decode($data, true);
-
-            // 检查API返回的数据结构
-            if (!isset($result['output'])) {
-                Log::error('Coze API返回数据格式异常', [
-                    'response' => $result,
-                    'share_text' => $shareText,
-                ]);
-
-                return $this->error('解析结果格式异常', 500);
-            }
-
-            $output = $result['output'];
-
-            // 检查必要字段
-            if (!isset($output['video_url']) || !isset($output['title'])) {
-                Log::error('Coze API返回数据缺少必要字段', [
-                    'output' => $output,
-                    'share_text' => $shareText,
-                ]);
-
-                return $this->error('解析结果格式异常', 500);
-            }
-
-            // 构建返回结果
-            $result = [
-                'url' => $output['video_url'],
-                'title' => $output['title'],
-                'author' => $output['author'] ?? '',
-                'cover' => $output['cover'] ?? '',
-                'music_url' => $output['music_url'] ?? '',
-                'video_duration' => $output['video_duration'] ?? 0,
-                'video_id' => 'unknown', // Coze API 可能不提供 video_id
-            ];
 
             // 缓存结果（1小时）
             Cache::put($cacheKey, $result, 3600);
