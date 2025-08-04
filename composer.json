@@ -18,7 +18,7 @@
         "livewire/volt": "^1.6.7",
         "w7corp/easywechat": "^6.17",
         "tightenco/ziggy": "^2.4",
-        "leftsky/laravel-auth-client": "dev-master"
+        "leftsky/laravel-auth-client": "*"
     },
     "repositories": [
         {

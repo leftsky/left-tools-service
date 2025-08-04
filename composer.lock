@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "e8e086826bd635b7a6ef35ce2ef8fd74",
+    "content-hash": "58765bb11f4bbbac1d40a17f8bbbd1fc",
     "packages": [
         {
             "name": "anourvalar/eloquent-serialize",
@@ -1323,7 +1323,7 @@
             "version": "v6.11.1",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.tencent.com/repository/composer/firebase/php-jwt/v6.11.1/firebase-php-jwt-v6.11.1.zip",
+                "url": "https://mirrors.cloud.tencent.com/repository/composer/firebase/php-jwt/v6.11.1/firebase-php-jwt-v6.11.1.zip",
                 "reference": "d1e91ecf8c598d073d0995afa8cd5c75c6e19e66",
                 "shasum": ""
             },
@@ -10243,9 +10243,7 @@
     ],
     "aliases": [],
     "minimum-stability": "dev",
-    "stability-flags": {
-        "leftsky/laravel-auth-client": 20
-    },
+    "stability-flags": [],
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
