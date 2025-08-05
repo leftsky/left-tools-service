@@ -26,6 +26,7 @@ class User extends Authenticatable implements FilamentUser
         'email',
         'password',
         'phone',
+        'phone_number',
         'weixin_mini_openid',
         'weixin_unionid',
     ];

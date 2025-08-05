@@ -33,11 +33,6 @@ class VerifyApiToken
      */
     public function handle($request, Closure $next, ...$scopes)
     {
-        // 如果本地开发模式启用了模拟认证，跳过认证逻辑
-        if ($this->shouldUseMockAuth()) {
-            return $this->handleWithMockUser($request, $next);
-        }
-
         // 获取令牌
         $token = $this->getTokenFromRequest($request);
 
@@ -60,10 +55,8 @@ class VerifyApiToken
 
             // 使用模型层查询用户
             $userData = $result['user'] ?? [];
-            $userId = $userData['id'] ?? null;
-            $mobile = $userData['mobile'] ?? $userData['phone_number'] ?? null;
 
-            if (!$userId || !$mobile) {
+            if (!($userData['id'] ?? null) || !($userData['phone_number'] ?? null)) {
                 return $this->unauthenticated('无效的用户信息');
             }
 

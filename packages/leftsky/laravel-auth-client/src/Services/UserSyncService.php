@@ -19,7 +19,7 @@ class UserSyncService
         $userModel = config('auth-client.sso.user_model', \App\Models\User::class);
 
         // 获取配置的用户查找字段
-        $findBy = config('auth-client.sso.user_find_by', 'email');
+        $findBy = config('auth-client.sso.user_find_by', 'phone_number');
 
         // 尝试查找用户
         $user = $userModel::where($findBy, $ssoUser[$findBy] ?? null)->first();
