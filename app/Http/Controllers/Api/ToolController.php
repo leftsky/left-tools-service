@@ -123,6 +123,7 @@ class ToolController extends Controller
         'https://v93.douyinvod.com',
         'https://v95.douyinvod.com',
         'https://douyinvod.com',
+        'https://sns-video-hs.xhscdn.com'
     ];
 
 
@@ -317,8 +318,8 @@ class ToolController extends Controller
      */
     #[OA\Post(
         path: '/api/tools/parse-douyin',
-        summary: '解析抖音分享链接',
-        description: '从抖音分享文本中提取无水印视频链接和信息（支持可选认证）',
+        summary: '解析视频分享链接',
+        description: '从抖音或小红书分享文本中提取无水印视频链接和信息（支持可选认证）',
         tags: ['工具接口'],
         security: [], // 可选认证，支持登录和未登录用户
         requestBody: new OA\RequestBody(
@@ -329,7 +330,7 @@ class ToolController extends Controller
                     new OA\Property(
                         property: 'share_text',
                         type: 'string',
-                        description: '抖音分享文本或链接',
+                        description: '抖音或小红书分享文本或链接',
                         example: 'https://v.douyin.com/xxxxx/'
                     )
                 ]
@@ -413,13 +414,34 @@ class ToolController extends Controller
 
             $shareText = $request->input('share_text');
 
+            // 使用正则表达式提取第一个链接
+            $urlPattern = '/https?:\/\/[^\s<>"{}|\\^`\[\]]+/i';
+            if (preg_match($urlPattern, $shareText, $matches)) {
+                $shareText = $matches[0]; // 使用第一个匹配的链接
+
+                // 检测链接类型
+                $linkType = 'unknown';
+                if (preg_match('/^https?:\/\/v\.douyin\.com/i', $shareText)) {
+                    $linkType = '抖音';
+                } elseif (preg_match('/^https?:\/\/xhslink\.com/i', $shareText)) {
+                    $linkType = '小红书';
+                }
+
+                Log::info('从分享文本中提取到链接', [
+                    'original_text' => $request->input('share_text'),
+                    'extracted_url' => $shareText,
+                    'link_type' => $linkType
+                ]);
+            } else {
+                return $this->error('未找到有效的分享链接', 400);
+            }
+
             // 检查缓存
             $cacheKey = 'douyin_parse_' . md5($shareText);
             $cachedResult = Cache::get($cacheKey);
             if ($cachedResult) {
-                // 记录工具使用
                 ToolUsageLog::recordUsage(
-                    toolName: '抖音视频解析',
+                    toolName: "视频解析",
                     userId: $request->user()?->id
                 );
                 return $this->success($cachedResult, '解析成功（缓存）');
@@ -452,7 +474,8 @@ class ToolController extends Controller
                     ->post(self::$cozeBaseUrl . '/v1/workflow/run', [
                         'workflow_id' => self::$cozeVideoWorkflowId,
                         'parameters' => [
-                            'input' => $shareText,
+                            'url' => $shareText,
+                            'type' => $linkType, // 传递链接类型
                         ],
                     ]);
 
@@ -525,9 +548,8 @@ class ToolController extends Controller
                     'title' => $output['title'],
                     'author' => $output['author'] ?? '',
                     'cover' => $output['cover'] ?? '',
-                    'music_url' => $output['music_url'] ?? '',
-                    'video_duration' => $output['video_duration'] ?? 0,
-                    'video_id' => 'unknown', // Coze API 可能不提供 video_id
+                    // 'music_url' => $output['music_url'] ?? '',
+                    // 'video_duration' => $output['video_duration'] ?? 0,
                 ];
 
                 // 验证视频URL域名是否在允许列表中
@@ -570,15 +592,22 @@ class ToolController extends Controller
             // 缓存结果（1小时）
             Cache::put($cacheKey, $result, 3600);
 
-            // 记录工具使用
+            // 根据链接类型记录工具使用
+            $toolName = match ($linkType) {
+                'douyin' => '抖音视频解析',
+                'xiaohongshu' => '小红书视频解析',
+                default => '视频解析'
+            };
+
             ToolUsageLog::recordUsage(
-                toolName: '抖音视频解析',
+                toolName: $toolName,
                 userId: $request->user()?->id
             );
 
             // 记录使用日志
-            Log::info('抖音视频解析成功', [
+            Log::info('视频解析成功', [
                 'user_id' => $request->user()?->id,
+                'link_type' => $linkType,
                 'share_text' => $shareText,
                 'title' => $result['title'],
                 'author' => $result['author'],
