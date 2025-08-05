@@ -56,7 +56,7 @@ class AdminPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
             ])
-            ->brandName('融茂软件-xx服务')
+            ->brandName('融茂软件-小左子的工具箱')
             ->maxContentWidth('full');
     }
 }

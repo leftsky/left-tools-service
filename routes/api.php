@@ -30,7 +30,7 @@ Route::middleware('auth.api')->group(function () {
 // 可选认证的工具接口（支持登录和未登录用户）
 Route::middleware('auth.api-optional')->group(function () {
     Route::post('/tools/extract-douyin', [ToolController::class, 'extractDouyin']);
-    Route::post('/tools/parse-douyin', [ToolController::class, 'parseDouyin']);
+    Route::post('/tools/parse-douyin', [ToolController::class, 'parseVideo']);
 });
 
 // 无需认证的工具接口

@@ -404,7 +404,7 @@ class ToolController extends Controller
             )
         ]
     )]
-    public function parseDouyin(Request $request): JsonResponse
+    public function parseVideo(Request $request): JsonResponse
     {
         try {
             // 验证请求参数
@@ -592,15 +592,8 @@ class ToolController extends Controller
             // 缓存结果（1小时）
             Cache::put($cacheKey, $result, 3600);
 
-            // 根据链接类型记录工具使用
-            $toolName = match ($linkType) {
-                'douyin' => '抖音视频解析',
-                'xiaohongshu' => '小红书视频解析',
-                default => '视频解析'
-            };
-
             ToolUsageLog::recordUsage(
-                toolName: $toolName,
+                toolName: "视频解析",
                 userId: $request->user()?->id
             );
 

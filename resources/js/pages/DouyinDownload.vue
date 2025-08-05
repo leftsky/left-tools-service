@@ -34,15 +34,6 @@ const parseVideo = async () => {
     if (response.data.code === 1) {
       parsedVideo.value = response.data.data;
       successMessage.value = "视频解析成功！";
-      
-      // 记录使用
-      try {
-        await axios.post("/api/tools/record-usage-public", {
-          tool_name: "抖音视频解析"
-        });
-      } catch (error) {
-        console.log("记录使用失败:", error);
-      }
     } else {
       errorMessage.value = response.data.message || "解析失败";
     }
