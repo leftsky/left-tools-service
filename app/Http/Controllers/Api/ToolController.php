@@ -548,8 +548,7 @@ class ToolController extends Controller
                     'title' => $output['title'],
                     'author' => $output['author'] ?? '',
                     'cover' => $output['cover'] ?? '',
-                    // 'music_url' => $output['music_url'] ?? '',
-                    // 'video_duration' => $output['video_duration'] ?? 0,
+                    'video_duration' => $output['video_duration'] ?? 0,
                 ];
 
                 // 验证视频URL域名是否在允许列表中
