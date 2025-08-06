@@ -3,13 +3,10 @@
 namespace Leftsky\AuthClient\Middleware;
 
 use Closure;
-use Illuminate\Auth\AuthenticationException;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Str;
 use Leftsky\AuthClient\Facades\Token;
 use League\OAuth2\Client\Provider\Exception\IdentityProviderException;
-use Leftsky\AuthClient\Services\UserSyncService;
+use Illuminate\Support\Facades\Log;
 
 class OptionalApiToken extends VerifyApiToken
 {
@@ -67,14 +64,14 @@ class OptionalApiToken extends VerifyApiToken
             return $next($request);
         } catch (IdentityProviderException $e) {
             // 捕获异常但不终止请求
-            logger()->error('OAuth2 令牌验证失败', [
+            Log::error('OAuth2 令牌验证失败', [
                 'message' => $e->getMessage(),
                 'code' => $e->getCode(),
             ]);
             return $next($request);
         } catch (\Exception $e) {
             // 捕获其他异常但不终止请求
-            logger()->error('令牌验证异常', [
+            Log::error('令牌验证异常', [
                 'exception' => get_class($e),
                 'message' => $e->getMessage(),
                 'code' => $e->getCode(),
