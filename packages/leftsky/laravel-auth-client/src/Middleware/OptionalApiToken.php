@@ -39,19 +39,19 @@ class OptionalApiToken extends VerifyApiToken
             $result = Token::verify($token, $scopes);
 
             if (!$result || !($result['valid'] ?? false)) {
-                return $this->unauthenticated('无效的认证令牌');
+                throw new \Exception('无效的认证令牌');
             }
 
             // 检查作用域
             if (!empty($scopes) && !$this->hasAllScopes($result['scopes'] ?? [], $scopes)) {
-                return $this->unauthorized('权限不足：需要 ' . implode(',', $scopes) . ' 作用域');
+                throw new \Exception('权限不足：需要 ' . implode(',', $scopes) . ' 作用域');
             }
 
             // 使用模型层查询用户
             $userData = $result['user'] ?? [];
 
             if (!($userData['id'] ?? null) || !($userData['phone_number'] ?? null)) {
-                return $this->unauthenticated('无效的用户信息');
+                throw new \Exception('无效的用户信息');
             }
 
             $user = $this->userSyncService->findOrCreateUser($userData);
