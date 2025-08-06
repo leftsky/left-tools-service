@@ -39,3 +39,11 @@ Route::post('/tools/record-usage-public', [ToolController::class, 'recordUsagePu
 // SEO相关接口
 Route::get('/seo/page-info', [SeoController::class, 'getPageSeo']);
 Route::get('/seo/structured-data', [SeoController::class, 'getStructuredData']);
+
+// 文件转换相关接口
+Route::middleware('auth.api-optional')->group(function () {
+    Route::post('/file-conversion/convert', [FileConversionController::class, 'convert']);
+    Route::get('/file-conversion/status', [FileConversionController::class, 'status']);
+    Route::get('/file-conversion/formats', [FileConversionController::class, 'supportedFormats']);
+    Route::get('/file-conversion/examples', [FileConversionController::class, 'conversionExamples']);
+});
