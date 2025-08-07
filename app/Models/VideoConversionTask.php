@@ -13,35 +13,47 @@ class VideoConversionTask extends Model
     /**
      * 任务状态常量
      */
-    const STATUS_PENDING = 0;      // 等待中
-    const STATUS_PROCESSING = 1;   // 处理中
-    const STATUS_COMPLETED = 2;    // 已完成
+    const STATUS_WAIT = 0;         // 等待中
+    const STATUS_CONVERT = 1;      // 转换中
+    const STATUS_FINISH = 2;       // 已完成
     const STATUS_FAILED = 3;       // 失败
-    const STATUS_CANCELLED = 4;    // 已取消
 
     /**
      * 状态映射
      */
     const STATUS_MAP = [
-        self::STATUS_PENDING => '等待中',
-        self::STATUS_PROCESSING => '处理中',
-        self::STATUS_COMPLETED => '已完成',
+        self::STATUS_WAIT => '等待中',
+        self::STATUS_CONVERT => '转换中',
+        self::STATUS_FINISH => '已完成',
         self::STATUS_FAILED => '失败',
-        self::STATUS_CANCELLED => '已取消',
     ];
+
+    /**
+     * 输入方式常量
+     */
+    const INPUT_METHOD_URL = 'url';
+    const INPUT_METHOD_RAW = 'raw';
+    const INPUT_METHOD_BASE64 = 'base64';
+    const INPUT_METHOD_UPLOAD = 'upload';
 
     /**
      * 可批量赋值的属性
      */
     protected $fillable = [
         'user_id',
-        'input_file_path',
-        'output_file_path',
-        'input_file_info',
-        'output_file_info',
-        'conversion_params',
+        'convertio_id',
+        'input_method',
+        'input_file',
+        'filename',
+        'file_size',
+        'output_format',
+        'conversion_options',
         'status',
-        'job_id',
+        'step_percent',
+        'minutes_used',
+        'output_url',
+        'output_size',
+        'callback_url',
         'error_message',
         'started_at',
         'completed_at',
@@ -51,9 +63,11 @@ class VideoConversionTask extends Model
      * 属性转换
      */
     protected $casts = [
-        'input_file_info' => 'array',
-        'output_file_info' => 'array',
-        'conversion_params' => 'array',
+        'conversion_options' => 'array',
+        'file_size' => 'integer',
+        'output_size' => 'integer',
+        'step_percent' => 'integer',
+        'minutes_used' => 'integer',
         'started_at' => 'datetime',
         'completed_at' => 'datetime',
         'status' => 'integer',
@@ -68,116 +82,6 @@ class VideoConversionTask extends Model
     }
 
     /**
-     * 保存前的处理
-     */
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::saving(function ($model) {
-            $model->processFileInfo();
-        });
-    }
-
-    /**
-     * 处理文件信息，确保不超过512字符限制
-     */
-    protected function processFileInfo(): void
-    {
-        // 处理输入文件信息
-        if ($this->input_file_info && is_array($this->input_file_info)) {
-            $this->input_file_info = $this->truncateFileInfo($this->input_file_info, 'input');
-        }
-
-        // 处理输出文件信息
-        if ($this->output_file_info && is_array($this->output_file_info)) {
-            $this->output_file_info = $this->truncateFileInfo($this->output_file_info, 'output');
-        }
-
-        // 处理转换参数
-        if ($this->conversion_params && is_array($this->conversion_params)) {
-            $this->conversion_params = $this->truncateConversionParams($this->conversion_params);
-        }
-    }
-
-    /**
-     * 截断文件信息，确保不超过512字符
-     */
-    protected function truncateFileInfo(array $fileInfo, string $type): array
-    {
-        $jsonString = json_encode($fileInfo, JSON_UNESCAPED_UNICODE);
-        
-        if (strlen($jsonString) <= 512) {
-            return $fileInfo;
-        }
-
-        // 如果超过512字符，简化文件名
-        if (isset($fileInfo['filename'])) {
-            $originalFilename = $fileInfo['filename'];
-            $extension = pathinfo($originalFilename, PATHINFO_EXTENSION);
-            $randomName = $this->generateRandomFilename($extension);
-            
-            $fileInfo['filename'] = $randomName;
-            $fileInfo['original_filename'] = $originalFilename; // 保存原始文件名
-            
-            // 重新检查长度
-            $newJsonString = json_encode($fileInfo, JSON_UNESCAPED_UNICODE);
-            if (strlen($newJsonString) <= 512) {
-                return $fileInfo;
-            }
-        }
-
-        // 如果还是超过，保留核心信息
-        $coreInfo = [
-            'filename' => $fileInfo['filename'] ?? $this->generateRandomFilename('mp4'),
-            'file_size' => $fileInfo['file_size'] ?? 0,
-            'format' => $fileInfo['format'] ?? 'unknown',
-            'duration' => $fileInfo['duration'] ?? null,
-            'resolution' => $fileInfo['resolution'] ?? null,
-        ];
-
-        // 如果原始文件名被修改，保存它
-        if (isset($fileInfo['original_filename'])) {
-            $coreInfo['original_filename'] = $fileInfo['original_filename'];
-        }
-
-        return $coreInfo;
-    }
-
-    /**
-     * 截断转换参数，确保不超过512字符
-     */
-    protected function truncateConversionParams(array $params): array
-    {
-        $jsonString = json_encode($params, JSON_UNESCAPED_UNICODE);
-        
-        if (strlen($jsonString) <= 512) {
-            return $params;
-        }
-
-        // 如果超过512字符，保留核心参数
-        $coreParams = [
-            'target_format' => $params['target_format'] ?? 'mp4',
-            'target_resolution' => $params['target_resolution'] ?? null,
-            'target_framerate' => $params['target_framerate'] ?? null,
-            'target_video_bitrate' => $params['target_video_bitrate'] ?? null,
-            'target_audio_bitrate' => $params['target_audio_bitrate'] ?? null,
-        ];
-
-        return $coreParams;
-    }
-
-    /**
-     * 生成随机文件名
-     */
-    protected function generateRandomFilename(string $extension): string
-    {
-        $timestamp = date('YmdHis');
-        $random = substr(md5(uniqid()), 0, 8);
-        return "file_{$timestamp}_{$random}.{$extension}";
-    }
-
-    /**
      * 获取状态文本
      */
     public function getStatusTextAttribute(): string
@@ -186,87 +90,19 @@ class VideoConversionTask extends Model
     }
 
     /**
-     * 获取输入文件大小
+     * 获取格式化的文件大小
      */
-    public function getInputFileSizeAttribute(): ?int
+    public function getFormattedFileSizeAttribute(): string
     {
-        return $this->input_file_info['file_size'] ?? null;
+        return $this->file_size ? $this->formatFileSize($this->file_size) : '未知';
     }
 
     /**
-     * 获取输出文件大小
+     * 获取格式化的输出文件大小
      */
-    public function getOutputFileSizeAttribute(): ?int
+    public function getFormattedOutputSizeAttribute(): string
     {
-        return $this->output_file_info['file_size'] ?? null;
-    }
-
-    /**
-     * 获取输入文件格式化的文件大小
-     */
-    public function getFormattedInputFileSizeAttribute(): string
-    {
-        $fileSize = $this->input_file_size;
-        return $fileSize ? $this->formatFileSize($fileSize) : '未知';
-    }
-
-    /**
-     * 获取输出文件格式化的文件大小
-     */
-    public function getFormattedOutputFileSizeAttribute(): string
-    {
-        $fileSize = $this->output_file_size;
-        return $fileSize ? $this->formatFileSize($fileSize) : '未知';
-    }
-
-    /**
-     * 获取输入文件时长
-     */
-    public function getInputDurationAttribute(): ?int
-    {
-        return $this->input_file_info['duration'] ?? null;
-    }
-
-    /**
-     * 获取输出文件时长
-     */
-    public function getOutputDurationAttribute(): ?int
-    {
-        return $this->output_file_info['duration'] ?? null;
-    }
-
-    /**
-     * 获取输入文件格式化的时长
-     */
-    public function getFormattedInputDurationAttribute(): string
-    {
-        $duration = $this->input_duration;
-        return $duration ? $this->formatDuration($duration) : '未知';
-    }
-
-    /**
-     * 获取输出文件格式化的时长
-     */
-    public function getFormattedOutputDurationAttribute(): string
-    {
-        $duration = $this->output_duration;
-        return $duration ? $this->formatDuration($duration) : '未知';
-    }
-
-    /**
-     * 获取输入文件原始文件名
-     */
-    public function getInputOriginalFilenameAttribute(): ?string
-    {
-        return $this->input_file_info['original_filename'] ?? $this->input_file_info['filename'] ?? null;
-    }
-
-    /**
-     * 获取输出文件原始文件名
-     */
-    public function getOutputOriginalFilenameAttribute(): ?string
-    {
-        return $this->output_file_info['original_filename'] ?? $this->output_file_info['filename'] ?? null;
+        return $this->output_size ? $this->formatFileSize($this->output_size) : '未知';
     }
 
     /**
@@ -274,7 +110,7 @@ class VideoConversionTask extends Model
      */
     public function isCompleted(): bool
     {
-        return $this->status === self::STATUS_COMPLETED;
+        return $this->status === self::STATUS_FINISH;
     }
 
     /**
@@ -286,11 +122,27 @@ class VideoConversionTask extends Model
     }
 
     /**
+     * 检查任务是否正在处理
+     */
+    public function isProcessing(): bool
+    {
+        return $this->status === self::STATUS_CONVERT;
+    }
+
+    /**
+     * 检查任务是否等待中
+     */
+    public function isWaiting(): bool
+    {
+        return $this->status === self::STATUS_WAIT;
+    }
+
+    /**
      * 检查任务是否可取消
      */
     public function canBeCancelled(): bool
     {
-        return in_array($this->status, [self::STATUS_PENDING, self::STATUS_PROCESSING]);
+        return in_array($this->status, [self::STATUS_WAIT, self::STATUS_CONVERT]);
     }
 
     /**
@@ -299,18 +151,33 @@ class VideoConversionTask extends Model
     public function startProcessing(): void
     {
         $this->update([
-            'status' => self::STATUS_PROCESSING,
+            'status' => self::STATUS_CONVERT,
             'started_at' => now(),
+            'step_percent' => 0,
+        ]);
+    }
+
+    /**
+     * 更新转换进度
+     */
+    public function updateProgress(int $stepPercent): void
+    {
+        $this->update([
+            'step_percent' => $stepPercent,
         ]);
     }
 
     /**
      * 完成任务
      */
-    public function complete(): void
+    public function complete(string $outputUrl, int $outputSize, int $minutesUsed): void
     {
         $this->update([
-            'status' => self::STATUS_COMPLETED,
+            'status' => self::STATUS_FINISH,
+            'output_url' => $outputUrl,
+            'output_size' => $outputSize,
+            'minutes_used' => $minutesUsed,
+            'step_percent' => 100,
             'completed_at' => now(),
         ]);
     }
@@ -328,30 +195,35 @@ class VideoConversionTask extends Model
     }
 
     /**
-     * 取消任务
+     * 设置Convertio ID
      */
-    public function cancel(): void
+    public function setConvertioId(string $convertioId): void
     {
-        $this->update([
-            'status' => self::STATUS_CANCELLED,
-            'completed_at' => now(),
-        ]);
+        $this->update(['convertio_id' => $convertioId]);
     }
 
     /**
-     * 格式化时长
+     * 获取OCR设置
      */
-    protected function formatDuration(int $seconds): string
+    public function getOcrSettings(): ?array
     {
-        $hours = floor($seconds / 3600);
-        $minutes = floor(($seconds % 3600) / 60);
-        $secs = $seconds % 60;
-        
-        if ($hours > 0) {
-            return sprintf('%02d:%02d:%02d', $hours, $minutes, $secs);
-        }
-        
-        return sprintf('%02d:%02d', $minutes, $secs);
+        return $this->conversion_options['ocr_settings'] ?? null;
+    }
+
+    /**
+     * 检查是否启用OCR
+     */
+    public function isOcrEnabled(): bool
+    {
+        return $this->conversion_options['ocr_enabled'] ?? false;
+    }
+
+    /**
+     * 获取回调URL
+     */
+    public function getCallbackUrl(): ?string
+    {
+        return $this->callback_url;
     }
 
     /**
@@ -386,6 +258,30 @@ class VideoConversionTask extends Model
     }
 
     /**
+     * 作用域：按Convertio ID筛选
+     */
+    public function scopeByConvertioId($query, string $convertioId)
+    {
+        return $query->where('convertio_id', $convertioId);
+    }
+
+    /**
+     * 作用域：按输入方式筛选
+     */
+    public function scopeByInputMethod($query, string $inputMethod)
+    {
+        return $query->where('input_method', $inputMethod);
+    }
+
+    /**
+     * 作用域：按输出格式筛选
+     */
+    public function scopeByOutputFormat($query, string $outputFormat)
+    {
+        return $query->where('output_format', $outputFormat);
+    }
+
+    /**
      * 作用域：最近的任务
      */
     public function scopeRecent($query, int $days = 7)
@@ -396,25 +292,25 @@ class VideoConversionTask extends Model
     /**
      * 作用域：等待中的任务
      */
-    public function scopePending($query)
+    public function scopeWaiting($query)
     {
-        return $query->where('status', self::STATUS_PENDING);
+        return $query->where('status', self::STATUS_WAIT);
     }
 
     /**
-     * 作用域：处理中的任务
+     * 作用域：转换中的任务
      */
-    public function scopeProcessing($query)
+    public function scopeConverting($query)
     {
-        return $query->where('status', self::STATUS_PROCESSING);
+        return $query->where('status', self::STATUS_CONVERT);
     }
 
     /**
      * 作用域：已完成的任务
      */
-    public function scopeCompleted($query)
+    public function scopeFinished($query)
     {
-        return $query->where('status', self::STATUS_COMPLETED);
+        return $query->where('status', self::STATUS_FINISH);
     }
 
     /**
@@ -423,5 +319,37 @@ class VideoConversionTask extends Model
     public function scopeFailed($query)
     {
         return $query->where('status', self::STATUS_FAILED);
+    }
+
+    /**
+     * 作用域：有Convertio ID的任务
+     */
+    public function scopeWithConvertioId($query)
+    {
+        return $query->whereNotNull('convertio_id');
+    }
+
+    /**
+     * 作用域：没有Convertio ID的任务
+     */
+    public function scopeWithoutConvertioId($query)
+    {
+        return $query->whereNull('convertio_id');
+    }
+
+    /**
+     * 作用域：启用OCR的任务
+     */
+    public function scopeWithOcr($query)
+    {
+        return $query->whereJsonContains('conversion_options->ocr_enabled', true);
+    }
+
+    /**
+     * 作用域：有回调URL的任务
+     */
+    public function scopeWithCallback($query)
+    {
+        return $query->whereNotNull('callback_url');
     }
 }

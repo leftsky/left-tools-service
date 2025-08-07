@@ -35,6 +35,11 @@ return [
         ],
     ],
 
-
+    'convertio' => [
+        'api_key' => env('CONVERTIO_API_KEY'),
+        'api_url' => env('CONVERTIO_API_URL', 'https://api.convertio.co'),
+        'timeout' => env('CONVERTIO_TIMEOUT', 30),
+        'max_retries' => env('CONVERTIO_MAX_RETRIES', 3),
+    ],
 
 ];
