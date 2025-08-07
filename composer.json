@@ -7,18 +7,20 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
-        "inertiajs/inertia-laravel": "^2.0",
+        "cloudconvert/cloudconvert-php": "^3.4",
         "darkaonline/l5-swagger": "^9.0",
         "filament/filament": "^3.3",
+        "guzzlehttp/guzzle": "^7.9",
+        "inertiajs/inertia-laravel": "^2.0",
         "laravel/framework": "^12.0",
         "laravel/sanctum": "^4.0",
         "laravel/telescope": "^5.5",
         "laravel/tinker": "^2.10.1",
+        "leftsky/laravel-auth-client": "*",
         "livewire/flux": "^2.0",
         "livewire/volt": "^1.6.7",
-        "w7corp/easywechat": "^6.17",
         "tightenco/ziggy": "^2.4",
-        "leftsky/laravel-auth-client": "*"
+        "w7corp/easywechat": "^6.17"
     },
     "repositories": [
         {
