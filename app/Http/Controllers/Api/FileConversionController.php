@@ -13,16 +13,113 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use OpenApi\Attributes as OA;
 
+#[OA\Tag(
+    name: '文件转换接口',
+    description: '文件格式转换相关接口'
+)]
 class FileConversionController extends Controller
 {
     use ApiResponseTrait;
     /**
      * 提交视频转换任务
-     *
-     * @param Request $request
-     * @return JsonResponse
      */
+    #[OA\Post(
+        path: '/api/file-conversion/convert',
+        summary: '提交视频转换任务',
+        description: '通过URL提交视频转换任务（支持可选认证）',
+        tags: ['文件转换接口'],
+        security: [], // 可选认证，支持登录和未登录用户
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['file_url'],
+                properties: [
+                    new OA\Property(
+                        property: 'file_url',
+                        type: 'string',
+                        description: '视频文件URL',
+                        example: 'https://example.com/video.mp4'
+                    ),
+                    new OA\Property(
+                        property: 'conversion_params',
+                        type: 'object',
+                        description: '转换参数',
+                        properties: [
+                            new OA\Property(property: 'target_format', type: 'string', example: 'mp4'),
+                            new OA\Property(property: 'video_bitrate', type: 'integer', example: 2000),
+                            new OA\Property(property: 'video_resolution', type: 'string', example: '1920x1080')
+                        ]
+                    ),
+                    new OA\Property(
+                        property: 'user_id',
+                        type: 'integer',
+                        description: '用户ID（可选）',
+                        example: 1
+                    )
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: '任务提交成功',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 1),
+                        new OA\Property(property: 'status', type: 'string', example: 'success'),
+                        new OA\Property(property: 'message', type: 'string', example: '视频转换任务已提交'),
+                        new OA\Property(
+                            property: 'data',
+                            type: 'object',
+                            properties: [
+                                new OA\Property(property: 'task_id', type: 'integer', example: 123),
+                                new OA\Property(property: 'status', type: 'string', example: 'wait'),
+                                new OA\Property(property: 'filename', type: 'string', example: 'video.mp4'),
+                                new OA\Property(property: 'file_size', type: 'string', example: '10.5 MB'),
+                                new OA\Property(property: 'output_format', type: 'string', example: 'mp4')
+                            ]
+                        )
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 422,
+                description: '验证失败',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '参数验证失败'),
+                        new OA\Property(
+                            property: 'errors',
+                            type: 'object',
+                            properties: [
+                                new OA\Property(
+                                    property: 'file_url',
+                                    type: 'array',
+                                    items: new OA\Items(type: 'string'),
+                                    example: ['file_url字段是必需的']
+                                )
+                            ]
+                        )
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 500,
+                description: '服务器错误',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '服务器内部错误'),
+                    ]
+                )
+            )
+        ]
+    )]
     public function convert(Request $request): JsonResponse
     {
         try {
@@ -82,10 +179,90 @@ class FileConversionController extends Controller
 
     /**
      * 获取任务状态
-     *
-     * @param Request $request
-     * @return JsonResponse
      */
+    #[OA\Get(
+        path: '/api/file-conversion/status',
+        summary: '获取任务状态',
+        description: '获取文件转换任务的状态信息（支持可选认证）',
+        tags: ['文件转换接口'],
+        security: [], // 可选认证，支持登录和未登录用户
+        parameters: [
+            new OA\Parameter(
+                name: 'task_id',
+                description: '任务ID',
+                in: 'query',
+                required: true,
+                schema: new OA\Schema(type: 'integer', example: 123)
+            )
+        ],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: '获取状态成功',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 1),
+                        new OA\Property(property: 'status', type: 'string', example: 'success'),
+                        new OA\Property(property: 'message', type: 'string', example: '获取任务状态成功'),
+                        new OA\Property(
+                            property: 'data',
+                            type: 'object',
+                            properties: [
+                                new OA\Property(property: 'task_id', type: 'integer', example: 123),
+                                new OA\Property(property: 'convertio_id', type: 'string', nullable: true, example: 'conv_123456'),
+                                new OA\Property(property: 'cloudconvert_id', type: 'string', nullable: true, example: 'job_123456'),
+                                new OA\Property(property: 'status', type: 'integer', example: 1),
+                                new OA\Property(property: 'status_text', type: 'string', example: '转换中'),
+                                new OA\Property(property: 'filename', type: 'string', example: 'video.mp4'),
+                                new OA\Property(property: 'file_size', type: 'string', example: '10.5 MB'),
+                                new OA\Property(property: 'output_format', type: 'string', example: 'mp4'),
+                                new OA\Property(property: 'step_percent', type: 'integer', example: 50),
+                                new OA\Property(property: 'output_url', type: 'string', nullable: true, example: 'https://example.com/output.mp4'),
+                                new OA\Property(property: 'output_size', type: 'string', nullable: true, example: '8.2 MB'),
+                                new OA\Property(property: 'error_message', type: 'string', nullable: true),
+                                new OA\Property(property: 'started_at', type: 'string', format: 'date-time', nullable: true),
+                                new OA\Property(property: 'completed_at', type: 'string', format: 'date-time', nullable: true),
+                                new OA\Property(property: 'created_at', type: 'string', format: 'date-time')
+                            ]
+                        )
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 404,
+                description: '任务不存在',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '任务不存在'),
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 422,
+                description: '验证失败',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '参数验证失败'),
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 500,
+                description: '服务器错误',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '获取任务状态失败'),
+                    ]
+                )
+            )
+        ]
+    )]
     public function status(Request $request): JsonResponse
     {
         try {
@@ -136,10 +313,116 @@ class FileConversionController extends Controller
 
     /**
      * 文件上传并转换
-     *
-     * @param Request $request
-     * @return JsonResponse
      */
+    #[OA\Post(
+        path: '/api/file-conversion/upload-and-convert',
+        summary: '文件上传并转换',
+        description: '上传文件并进行格式转换（支持可选认证）',
+        tags: ['文件转换接口'],
+        security: [], // 可选认证，支持登录和未登录用户
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\MediaType(
+                mediaType: 'multipart/form-data',
+                schema: new OA\Schema(
+                    required: ['file', 'output_format'],
+                    properties: [
+                        new OA\Property(
+                            property: 'file',
+                            type: 'string',
+                            format: 'binary',
+                            description: '要转换的文件（最大1GB）'
+                        ),
+                        new OA\Property(
+                            property: 'output_format',
+                            type: 'string',
+                            description: '输出格式',
+                            example: 'mp4'
+                        ),
+                        new OA\Property(
+                            property: 'options',
+                            type: 'array',
+                            description: '转换选项',
+                            items: new OA\Items(
+                                type: 'object',
+                                properties: [
+                                    new OA\Property(property: 'key', type: 'string', example: 'video_bitrate'),
+                                    new OA\Property(property: 'value', type: 'string', example: '2000')
+                                ]
+                            )
+                        ),
+                        new OA\Property(
+                            property: 'engine',
+                            type: 'string',
+                            description: '转换引擎',
+                            enum: ['convertio', 'cloudconvert'],
+                            example: 'cloudconvert'
+                        )
+                    ]
+                )
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: '任务创建成功',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 1),
+                        new OA\Property(property: 'status', type: 'string', example: 'success'),
+                        new OA\Property(property: 'message', type: 'string', example: '文件转换任务已提交'),
+                        new OA\Property(
+                            property: 'data',
+                            type: 'object',
+                            properties: [
+                                new OA\Property(property: 'task_id', type: 'integer', example: 123),
+                                new OA\Property(property: 'status', type: 'string', example: 'processing'),
+                                new OA\Property(property: 'filename', type: 'string', example: 'video.mp4'),
+                                new OA\Property(property: 'file_size', type: 'string', example: '10.5 MB'),
+                                new OA\Property(property: 'input_format', type: 'string', example: 'avi'),
+                                new OA\Property(property: 'output_format', type: 'string', example: 'mp4'),
+                                new OA\Property(property: 'engine', type: 'string', example: 'cloudconvert'),
+                                new OA\Property(property: 'estimated_time', type: 'integer', example: 120)
+                            ]
+                        )
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 400,
+                description: '格式不支持',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '不支持从 avi 转换到 mp4'),
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 422,
+                description: '验证失败',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '参数验证失败'),
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 500,
+                description: '服务器错误',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '文件上传转换失败'),
+                    ]
+                )
+            )
+        ]
+    )]
     public function uploadAndConvert(Request $request): JsonResponse
     {
         try {
@@ -243,10 +526,93 @@ class FileConversionController extends Controller
 
     /**
      * 取消转换任务
-     *
-     * @param Request $request
-     * @return JsonResponse
      */
+    #[OA\Post(
+        path: '/api/file-conversion/cancel',
+        summary: '取消转换任务',
+        description: '取消正在进行的文件转换任务（支持可选认证）',
+        tags: ['文件转换接口'],
+        security: [], // 可选认证，支持登录和未登录用户
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['task_id'],
+                properties: [
+                    new OA\Property(
+                        property: 'task_id',
+                        type: 'integer',
+                        description: '任务ID',
+                        example: 123
+                    )
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: '取消成功',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 1),
+                        new OA\Property(property: 'status', type: 'string', example: 'success'),
+                        new OA\Property(property: 'message', type: 'string', example: '任务已取消'),
+                        new OA\Property(
+                            property: 'data',
+                            type: 'object',
+                            properties: [
+                                new OA\Property(property: 'task_id', type: 'integer', example: 123),
+                                new OA\Property(property: 'status', type: 'string', example: 'cancelled')
+                            ]
+                        )
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 400,
+                description: '无法取消',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '只有等待中或转换中的任务可以取消'),
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 404,
+                description: '任务不存在',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '任务不存在'),
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 422,
+                description: '验证失败',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '参数验证失败'),
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 500,
+                description: '服务器错误',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '取消任务失败'),
+                    ]
+                )
+            )
+        ]
+    )]
     public function cancel(Request $request): JsonResponse
     {
         try {
@@ -312,9 +678,65 @@ class FileConversionController extends Controller
 
     /**
      * 获取支持的格式
-     *
-     * @return JsonResponse
      */
+    #[OA\Get(
+        path: '/api/file-conversion/formats',
+        summary: '获取支持的格式',
+        description: '获取系统支持的文件转换格式列表（支持可选认证）',
+        tags: ['文件转换接口'],
+        security: [], // 可选认证，支持登录和未登录用户
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: '获取成功',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 1),
+                        new OA\Property(property: 'status', type: 'string', example: 'success'),
+                        new OA\Property(property: 'message', type: 'string', example: '获取支持的格式成功'),
+                        new OA\Property(
+                            property: 'data',
+                            type: 'object',
+                            properties: [
+                                new OA\Property(
+                                    property: 'video_formats',
+                                    type: 'array',
+                                    description: '支持的视频格式',
+                                    items: new OA\Items(type: 'string'),
+                                    example: ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv']
+                                ),
+                                new OA\Property(
+                                    property: 'audio_formats',
+                                    type: 'array',
+                                    description: '支持的音频格式',
+                                    items: new OA\Items(type: 'string'),
+                                    example: ['mp3', 'wav', 'aac', 'ogg', 'flac', 'm4a']
+                                ),
+                                new OA\Property(
+                                    property: 'image_formats',
+                                    type: 'array',
+                                    description: '支持的图片格式',
+                                    items: new OA\Items(type: 'string'),
+                                    example: ['jpg', 'png', 'gif', 'bmp', 'webp', 'svg']
+                                )
+                            ]
+                        )
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 500,
+                description: '服务器错误',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '获取支持的格式失败'),
+                    ]
+                )
+            )
+        ]
+    )]
     public function getSupportedFormats(): JsonResponse
     {
         try {
@@ -333,10 +755,111 @@ class FileConversionController extends Controller
 
     /**
      * 创建客户端直传任务
-     *
-     * @param Request $request
-     * @return JsonResponse
      */
+    #[OA\Post(
+        path: '/api/file-conversion/create-direct-upload',
+        summary: '创建客户端直传任务',
+        description: '创建客户端直传任务，获取上传URL和表单数据（支持可选认证）',
+        tags: ['文件转换接口'],
+        security: [], // 可选认证，支持登录和未登录用户
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['filename', 'output_format'],
+                properties: [
+                    new OA\Property(
+                        property: 'filename',
+                        type: 'string',
+                        description: '文件名（包含扩展名）',
+                        example: 'video.mp4'
+                    ),
+                    new OA\Property(
+                        property: 'output_format',
+                        type: 'string',
+                        description: '输出格式',
+                        example: 'mp4'
+                    ),
+                    new OA\Property(
+                        property: 'options',
+                        type: 'array',
+                        description: '转换选项',
+                        items: new OA\Items(
+                            type: 'object',
+                            properties: [
+                                new OA\Property(property: 'key', type: 'string', example: 'video_bitrate'),
+                                new OA\Property(property: 'value', type: 'string', example: '2000')
+                            ]
+                        )
+                    ),
+                    new OA\Property(
+                        property: 'engine',
+                        type: 'string',
+                        description: '转换引擎',
+                        enum: ['convertio', 'cloudconvert'],
+                        example: 'cloudconvert'
+                    )
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: '创建成功',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 1),
+                        new OA\Property(property: 'status', type: 'string', example: 'success'),
+                        new OA\Property(property: 'message', type: 'string', example: '客户端直传任务已创建'),
+                        new OA\Property(
+                            property: 'data',
+                            type: 'object',
+                            properties: [
+                                new OA\Property(property: 'task_id', type: 'integer', example: 123),
+                                new OA\Property(property: 'upload_url', type: 'string', example: 'https://upload.cloudconvert.com/...'),
+                                new OA\Property(property: 'form_data', type: 'object', example: ['key' => 'value']),
+                                new OA\Property(property: 'filename', type: 'string', example: 'video.mp4'),
+                                new OA\Property(property: 'output_format', type: 'string', example: 'mp4'),
+                                new OA\Property(property: 'engine', type: 'string', example: 'cloudconvert')
+                            ]
+                        )
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 400,
+                description: '格式不支持或引擎不支持',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: 'Convertio 暂不支持客户端直传，请使用 CloudConvert 引擎'),
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 422,
+                description: '验证失败',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '参数验证失败'),
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 500,
+                description: '服务器错误',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '创建客户端直传任务失败'),
+                    ]
+                )
+            )
+        ]
+    )]
     public function createDirectUpload(Request $request): JsonResponse
     {
         try {
@@ -437,10 +960,93 @@ class FileConversionController extends Controller
 
     /**
      * 确认客户端直传完成
-     *
-     * @param Request $request
-     * @return JsonResponse
      */
+    #[OA\Post(
+        path: '/api/file-conversion/confirm-direct-upload',
+        summary: '确认客户端直传完成',
+        description: '确认客户端直传完成，开始转换任务（支持可选认证）',
+        tags: ['文件转换接口'],
+        security: [], // 可选认证，支持登录和未登录用户
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['task_id'],
+                properties: [
+                    new OA\Property(
+                        property: 'task_id',
+                        type: 'integer',
+                        description: '任务ID',
+                        example: 123
+                    )
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: '确认成功',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 1),
+                        new OA\Property(property: 'status', type: 'string', example: 'success'),
+                        new OA\Property(property: 'message', type: 'string', example: '客户端直传确认成功，开始转换'),
+                        new OA\Property(
+                            property: 'data',
+                            type: 'object',
+                            properties: [
+                                new OA\Property(property: 'task_id', type: 'integer', example: 123),
+                                new OA\Property(property: 'status', type: 'string', example: 'processing')
+                            ]
+                        )
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 400,
+                description: '任务类型错误或确认失败',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '该任务不是客户端直传任务'),
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 404,
+                description: '任务不存在',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '任务不存在'),
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 422,
+                description: '验证失败',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '参数验证失败'),
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 500,
+                description: '服务器错误',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '确认客户端直传失败'),
+                    ]
+                )
+            )
+        ]
+    )]
     public function confirmDirectUpload(Request $request): JsonResponse
     {
         try {
@@ -494,10 +1100,90 @@ class FileConversionController extends Controller
 
     /**
      * 获取转换历史
-     *
-     * @param Request $request
-     * @return JsonResponse
      */
+    #[OA\Get(
+        path: '/api/file-conversion/history',
+        summary: '获取转换历史',
+        description: '获取用户的文件转换历史记录（支持可选认证）',
+        tags: ['文件转换接口'],
+        security: [], // 可选认证，支持登录和未登录用户
+        parameters: [
+            new OA\Parameter(
+                name: 'limit',
+                description: '每页记录数',
+                in: 'query',
+                required: false,
+                schema: new OA\Schema(type: 'integer', default: 20, example: 20)
+            ),
+            new OA\Parameter(
+                name: 'page',
+                description: '页码',
+                in: 'query',
+                required: false,
+                schema: new OA\Schema(type: 'integer', default: 1, example: 1)
+            )
+        ],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: '获取成功',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 1),
+                        new OA\Property(property: 'status', type: 'string', example: 'success'),
+                        new OA\Property(property: 'message', type: 'string', example: '获取转换历史成功'),
+                        new OA\Property(
+                            property: 'data',
+                            type: 'object',
+                            properties: [
+                                new OA\Property(
+                                    property: 'tasks',
+                                    type: 'array',
+                                    description: '任务列表',
+                                    items: new OA\Items(
+                                        type: 'object',
+                                        properties: [
+                                            new OA\Property(property: 'id', type: 'integer', example: 123),
+                                            new OA\Property(property: 'filename', type: 'string', example: 'video.mp4'),
+                                            new OA\Property(property: 'status', type: 'integer', example: 2),
+                                            new OA\Property(property: 'status_text', type: 'string', example: '已完成'),
+                                            new OA\Property(property: 'input_format', type: 'string', example: 'avi'),
+                                            new OA\Property(property: 'output_format', type: 'string', example: 'mp4'),
+                                            new OA\Property(property: 'step_percent', type: 'integer', example: 100),
+                                            new OA\Property(property: 'output_url', type: 'string', nullable: true),
+                                            new OA\Property(property: 'created_at', type: 'string', format: 'date-time'),
+                                            new OA\Property(property: 'completed_at', type: 'string', format: 'date-time', nullable: true)
+                                        ]
+                                    )
+                                ),
+                                new OA\Property(
+                                    property: 'pagination',
+                                    type: 'object',
+                                    properties: [
+                                        new OA\Property(property: 'current_page', type: 'integer', example: 1),
+                                        new OA\Property(property: 'last_page', type: 'integer', example: 5),
+                                        new OA\Property(property: 'per_page', type: 'integer', example: 20),
+                                        new OA\Property(property: 'total', type: 'integer', example: 100)
+                                    ]
+                                )
+                            ]
+                        )
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 500,
+                description: '服务器错误',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer', example: 0),
+                        new OA\Property(property: 'status', type: 'string', example: 'error'),
+                        new OA\Property(property: 'message', type: 'string', example: '获取转换历史失败'),
+                    ]
+                )
+            )
+        ]
+    )]
     public function getConversionHistory(Request $request): JsonResponse
     {
         try {

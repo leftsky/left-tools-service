@@ -86,7 +86,7 @@ class CloudConvertService
             $createdJob = CloudConvert::jobs()->create($job);
 
             Log::info('CloudConvert转换任务已创建', [
-                'job_id' => $createdJob->getId(),
+                'job_id' => method_exists($createdJob, 'getId') ? $createdJob->getId() : 'unknown',
                 'tag' => $tag,
                 'input_url' => $inputUrl,
                 'output_format' => $outputFormat
@@ -95,14 +95,13 @@ class CloudConvertService
             return [
                 'success' => true,
                 'data' => [
-                    'job_id' => $createdJob->getId(),
+                    'job_id' => method_exists($createdJob, 'getId') ? $createdJob->getId() : 'unknown',
                     'tag' => $tag,
                     'status' => 'created',
-                    'tasks' => $createdJob->getTasks()->toArray()
+                    'tasks' => method_exists($createdJob, 'getTasks') ? $createdJob->getTasks()->toArray() : []
                 ],
                 'code' => 200
             ];
-
         } catch (Exception $e) {
             Log::error('CloudConvert转换任务创建失败', [
                 'error' => $e->getMessage(),
@@ -127,15 +126,16 @@ class CloudConvertService
     {
         try {
             $job = CloudConvert::jobs()->get($jobId);
-            $tasks = $job->getTasks();
+            $tasks = method_exists($job, 'getTasks') ? $job->getTasks() : collect();
 
             // 获取各个任务状态
             $importTask = null;
             $convertTask = null;
             $exportTask = null;
-            
+
             foreach ($tasks as $task) {
-                switch ($task->getName()) {
+                $taskName = method_exists($task, 'getName') ? $task->getName() : '';
+                switch ($taskName) {
                     case 'import-file':
                         $importTask = $task;
                         break;
@@ -153,21 +153,21 @@ class CloudConvertService
             $error = null;
 
             // 检查任务状态
-            if ($importTask && $importTask->getStatus() === 'error') {
+            if ($importTask && method_exists($importTask, 'getStatus') && $importTask->getStatus() === 'error') {
                 $status = 'error';
-                $error = $importTask->getMessage();
-            } elseif ($convertTask && $convertTask->getStatus() === 'error') {
+                $error = method_exists($importTask, 'getMessage') ? $importTask->getMessage() : '导入任务失败';
+            } elseif ($convertTask && method_exists($convertTask, 'getStatus') && $convertTask->getStatus() === 'error') {
                 $status = 'error';
-                $error = $convertTask->getMessage();
-            } elseif ($exportTask && $exportTask->getStatus() === 'error') {
+                $error = method_exists($convertTask, 'getMessage') ? $convertTask->getMessage() : '转换任务失败';
+            } elseif ($exportTask && method_exists($exportTask, 'getStatus') && $exportTask->getStatus() === 'error') {
                 $status = 'error';
-                $error = $exportTask->getMessage();
-            } elseif ($exportTask && $exportTask->getStatus() === 'finished') {
+                $error = method_exists($exportTask, 'getMessage') ? $exportTask->getMessage() : '导出任务失败';
+            } elseif ($exportTask && method_exists($exportTask, 'getStatus') && $exportTask->getStatus() === 'finished') {
                 $status = 'finished';
                 $progress = 100;
-            } elseif ($convertTask && $convertTask->getStatus() === 'finished') {
+            } elseif ($convertTask && method_exists($convertTask, 'getStatus') && $convertTask->getStatus() === 'finished') {
                 $progress = 66;
-            } elseif ($importTask && $importTask->getStatus() === 'finished') {
+            } elseif ($importTask && method_exists($importTask, 'getStatus') && $importTask->getStatus() === 'finished') {
                 $progress = 33;
             }
 
@@ -177,23 +177,23 @@ class CloudConvertService
                     'job_id' => $jobId,
                     'status' => $status,
                     'progress' => $progress,
-                    'tag' => $job->getTag(),
-                    'created_at' => $job->getCreatedAt(),
-                    'started_at' => $job->getStartedAt(),
-                    'finished_at' => $job->getFinishedAt(),
+                    'tag' => method_exists($job, 'getTag') ? $job->getTag() : null,
+                    'created_at' => method_exists($job, 'getCreatedAt') ? $job->getCreatedAt() : null,
+                    'started_at' => method_exists($job, 'getStartedAt') ? $job->getStartedAt() : null,
+                    'finished_at' => method_exists($job, 'getEndedAt') ? $job->getEndedAt() : null,
                     'tasks' => [
                         'import' => $importTask ? [
-                            'status' => $importTask->getStatus(),
-                            'message' => $importTask->getMessage()
+                            'status' => method_exists($importTask, 'getStatus') ? $importTask->getStatus() : null,
+                            'message' => method_exists($importTask, 'getMessage') ? $importTask->getMessage() : null
                         ] : null,
                         'convert' => $convertTask ? [
-                            'status' => $convertTask->getStatus(),
-                            'message' => $convertTask->getMessage()
+                            'status' => method_exists($convertTask, 'getStatus') ? $convertTask->getStatus() : null,
+                            'message' => method_exists($convertTask, 'getMessage') ? $convertTask->getMessage() : null
                         ] : null,
                         'export' => $exportTask ? [
-                            'status' => $exportTask->getStatus(),
-                            'message' => $exportTask->getMessage(),
-                            'result' => $exportTask->getResult()
+                            'status' => method_exists($exportTask, 'getStatus') ? $exportTask->getStatus() : null,
+                            'message' => method_exists($exportTask, 'getMessage') ? $exportTask->getMessage() : null,
+                            'result' => method_exists($exportTask, 'getResult') ? $exportTask->getResult() : null
                         ] : null
                     ]
                 ],
@@ -205,7 +205,6 @@ class CloudConvertService
             }
 
             return $result;
-
         } catch (Exception $e) {
             Log::error('CloudConvert状态查询失败', [
                 'job_id' => $jobId,
@@ -232,7 +231,6 @@ class CloudConvertService
         try {
             $job = CloudConvert::jobs()->wait($jobId, $timeout);
             return $this->getStatus($jobId);
-
         } catch (Exception $e) {
             Log::error('CloudConvert任务等待失败', [
                 'job_id' => $jobId,
@@ -270,7 +268,6 @@ class CloudConvertService
                 ],
                 'code' => 200
             ];
-
         } catch (Exception $e) {
             Log::error('CloudConvert任务取消失败', [
                 'job_id' => $jobId,
@@ -322,14 +319,16 @@ class CloudConvertService
     public function validateFormat(string $inputFormat, string $outputFormat): bool
     {
         $formats = $this->getSupportedFormats();
-        
+
         foreach ($formats as $category) {
-            if (in_array(strtolower($inputFormat), $category['input']) && 
-                in_array(strtolower($outputFormat), $category['output'])) {
+            if (
+                in_array(strtolower($inputFormat), $category['input']) &&
+                in_array(strtolower($outputFormat), $category['output'])
+            ) {
                 return true;
             }
         }
-        
+
         return false;
     }
 
@@ -344,18 +343,19 @@ class CloudConvertService
     {
         try {
             $job = CloudConvert::jobs()->get($jobId);
-            $tasks = $job->getTasks();
+            $tasks = method_exists($job, 'getTasks') ? $job->getTasks() : collect();
             $exportTask = null;
-            
+
             // 遍历任务找到导出任务
             foreach ($tasks as $task) {
-                if ($task->getName() === 'export-file') {
+                $taskName = method_exists($task, 'getName') ? $task->getName() : '';
+                if ($taskName === 'export-file') {
                     $exportTask = $task;
                     break;
                 }
             }
 
-            if (!$exportTask || $exportTask->getStatus() !== 'finished') {
+            if (!$exportTask || (method_exists($exportTask, 'getStatus') && $exportTask->getStatus() !== 'finished')) {
                 return [
                     'success' => false,
                     'error' => '任务未完成或导出失败',
@@ -363,9 +363,9 @@ class CloudConvertService
                 ];
             }
 
-            $result = $exportTask->getResult();
+            $result = method_exists($exportTask, 'getResult') ? $exportTask->getResult() : null;
             $files = [];
-            
+
             if ($result && is_object($result)) {
                 $files = $result->files ?? [];
                 if (is_array($files)) {
@@ -399,12 +399,12 @@ class CloudConvertService
                 // 下载文件
                 $source = CloudConvert::getHttpTransport()->download($url)->detach();
                 $dest = fopen($filePath, 'w');
-                
+
                 if ($source && $dest) {
                     stream_copy_to_stream($source, $dest);
                     fclose($dest);
                     fclose($source);
-                    
+
                     $downloadedFiles[] = [
                         'filename' => $filename,
                         'path' => $filePath,
@@ -427,7 +427,6 @@ class CloudConvertService
                 ],
                 'code' => 200
             ];
-
         } catch (Exception $e) {
             Log::error('CloudConvert文件下载失败', [
                 'job_id' => $jobId,
@@ -478,19 +477,20 @@ class CloudConvertService
                 );
 
             $createdJob = CloudConvert::jobs()->create($job);
-            $tasks = $createdJob->getTasks();
+            $tasks = method_exists($createdJob, 'getTasks') ? $createdJob->getTasks() : collect();
             $uploadTask = null;
-            
+
             // 遍历任务找到上传任务
             foreach ($tasks as $task) {
-                if ($task->getName() === 'upload-file') {
+                $taskName = method_exists($task, 'getName') ? $task->getName() : '';
+                if ($taskName === 'upload-file') {
                     $uploadTask = $task;
                     break;
                 }
             }
 
             Log::info('CloudConvert上传任务已创建', [
-                'job_id' => $createdJob->getId(),
+                'job_id' => method_exists($createdJob, 'getId') ? $createdJob->getId() : 'unknown',
                 'filename' => $filename,
                 'output_format' => $outputFormat
             ]);
@@ -498,13 +498,12 @@ class CloudConvertService
             return [
                 'success' => true,
                 'data' => [
-                    'job_id' => $createdJob->getId(),
+                    'job_id' => method_exists($createdJob, 'getId') ? $createdJob->getId() : 'unknown',
                     'upload_task' => $uploadTask,
                     'tag' => $tag
                 ],
                 'code' => 200
             ];
-
         } catch (Exception $e) {
             Log::error('CloudConvert上传任务创建失败', [
                 'error' => $e->getMessage(),
@@ -541,19 +540,18 @@ class CloudConvertService
             CloudConvert::tasks()->upload($uploadTask, $inputStream);
 
             Log::info('CloudConvert文件上传完成', [
-                'task_id' => $uploadTask->getId(),
+                'task_id' => method_exists($uploadTask, 'getId') ? $uploadTask->getId() : 'unknown',
                 'file_path' => $filePath
             ]);
 
             return [
                 'success' => true,
                 'data' => [
-                    'task_id' => $uploadTask->getId(),
+                    'task_id' => method_exists($uploadTask, 'getId') ? $uploadTask->getId() : 'unknown',
                     'file_path' => $filePath
                 ],
                 'code' => 200
             ];
-
         } catch (Exception $e) {
             Log::error('CloudConvert文件上传失败', [
                 'error' => $e->getMessage(),
@@ -599,12 +597,13 @@ class CloudConvertService
                 );
 
             $createdJob = CloudConvert::jobs()->create($job);
-            $tasks = $createdJob->getTasks();
+            $tasks = method_exists($createdJob, 'getTasks') ? $createdJob->getTasks() : collect();
             $uploadTask = null;
-            
+
             // 遍历任务找到上传任务
             foreach ($tasks as $task) {
-                if ($task->getName() === 'upload-file') {
+                $taskName = method_exists($task, 'getName') ? $task->getName() : '';
+                if ($taskName === 'upload-file') {
                     $uploadTask = $task;
                     break;
                 }
@@ -615,10 +614,10 @@ class CloudConvertService
             }
 
             // 获取直传 URL
-            $result = $uploadTask->getResult();
+            $result = method_exists($uploadTask, 'getResult') ? $uploadTask->getResult() : null;
             $uploadUrl = null;
             $formData = [];
-            
+
             if ($result && is_object($result)) {
                 $formDataObj = $result->form_data ?? null;
                 if ($formDataObj && is_object($formDataObj)) {
@@ -629,7 +628,7 @@ class CloudConvertService
             }
 
             Log::info('CloudConvert直传任务已创建', [
-                'job_id' => $createdJob->getId(),
+                'job_id' => method_exists($createdJob, 'getId') ? $createdJob->getId() : 'unknown',
                 'filename' => $filename,
                 'output_format' => $outputFormat,
                 'upload_url' => $uploadUrl
@@ -638,14 +637,13 @@ class CloudConvertService
             return [
                 'success' => true,
                 'data' => [
-                    'job_id' => $createdJob->getId(),
+                    'job_id' => method_exists($createdJob, 'getId') ? $createdJob->getId() : 'unknown',
                     'upload_url' => $uploadUrl,
                     'form_data' => $formData,
                     'tag' => $tag
                 ],
                 'code' => 200
             ];
-
         } catch (Exception $e) {
             Log::error('CloudConvert直传任务创建失败', [
                 'error' => $e->getMessage(),
@@ -670,13 +668,14 @@ class CloudConvertService
     {
         try {
             $job = CloudConvert::jobs()->get($jobId);
-            
+
             // 检查上传任务状态
-            $tasks = $job->getTasks();
+            $tasks = method_exists($job, 'getTasks') ? $job->getTasks() : collect();
             $uploadTask = null;
-            
+
             foreach ($tasks as $task) {
-                if ($task->getName() === 'upload-file') {
+                $taskName = method_exists($task, 'getName') ? $task->getName() : '';
+                if ($taskName === 'upload-file') {
                     $uploadTask = $task;
                     break;
                 }
@@ -690,15 +689,15 @@ class CloudConvertService
                 ];
             }
 
-            if ($uploadTask->getStatus() === 'error') {
+            if (method_exists($uploadTask, 'getStatus') && $uploadTask->getStatus() === 'error') {
                 return [
                     'success' => false,
-                    'error' => '文件上传失败: ' . ($uploadTask->getMessage() ?? '未知错误'),
+                    'error' => '文件上传失败: ' . (method_exists($uploadTask, 'getMessage') ? $uploadTask->getMessage() : '未知错误'),
                     'code' => 400
                 ];
             }
 
-            if ($uploadTask->getStatus() !== 'finished') {
+            if (method_exists($uploadTask, 'getStatus') && $uploadTask->getStatus() !== 'finished') {
                 return [
                     'success' => false,
                     'error' => '文件上传尚未完成',
@@ -718,7 +717,6 @@ class CloudConvertService
                 ],
                 'code' => 200
             ];
-
         } catch (Exception $e) {
             Log::error('CloudConvert直传确认失败', [
                 'job_id' => $jobId,
@@ -745,10 +743,10 @@ class CloudConvertService
     {
         // 基础转换时间（秒）
         $baseTime = 30;
-        
+
         // 根据文件大小调整
         $sizeFactor = $fileSize / (10 * 1024 * 1024); // 10MB 基准
-        
+
         // 根据格式复杂度调整
         $formatComplexity = 1.0;
         if (in_array($inputFormat, ['avi', 'mov', 'mkv'])) {
@@ -757,7 +755,7 @@ class CloudConvertService
         if (in_array($outputFormat, ['gif', 'webm'])) {
             $formatComplexity = 1.3;
         }
-        
+
         return (int) ($baseTime * $sizeFactor * $formatComplexity);
     }
 }
