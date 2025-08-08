@@ -10,7 +10,7 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
                             </svg>
                         </div>
-                        <span class="text-xl font-bold text-white">小左子的工具箱</span>
+                        <span class="text-xl font-bold text-white">格式转换大王</span>
                     </div>
                     <p class="mt-4 text-gray-300">
                         专业工具服务平台，为您提供高效便捷的在线工具服务。
@@ -33,7 +33,7 @@
             </div>
             <div class="mt-8 border-t border-gray-700 pt-8">
                 <p class="text-base text-gray-400 text-center">
-                    © 2024 小左子的工具箱. 保留所有权利。
+                    © 2024 格式转换大王. 保留所有权利。
                 </p>
             </div>
         </div>

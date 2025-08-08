@@ -1,7 +1,7 @@
 {
     "openapi": "3.0.0",
     "info": {
-        "title": "小左子的工具箱 API",
+        "title": "格式转换大王 API",
         "description": "工具服务API文档",
         "contact": {
             "name": "LeftSky",

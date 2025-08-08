@@ -362,7 +362,7 @@ const downloadFile = async () => {
 </script>
 
 <template>
-  <Layout title="视频格式转换工具 - 在线MP4、AVI、MOV、MKV转换器 | 小左子的工具箱">
+  <Layout title="视频格式转换工具 - 在线MP4、AVI、MOV、MKV转换器 | 格式转换大王">
     <!-- 主要内容区域 -->
     <div class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
       <div class="grid grid-cols-1 lg:grid-cols-10 gap-8">

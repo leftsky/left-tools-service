@@ -4,7 +4,7 @@ import Layout from '@/components/Layout.vue';
 </script>
 
 <template>
-    <Layout title="小左子的工具箱 - 专业工具服务平台">
+    <Layout title="格式转换大王 - 专业工具服务平台">
             <!-- Hero 区域 -->
             <div class="relative overflow-hidden">
                 <div class="max-w-7xl mx-auto">
@@ -181,7 +181,7 @@ import Layout from '@/components/Layout.vue';
                     <div class="lg:text-center">
                         <h2 class="text-base text-blue-600 dark:text-blue-400 font-semibold tracking-wide uppercase">关于我们</h2>
                         <p class="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-4xl">
-                            小左子的工具箱
+                            格式转换大王
                         </p>
                         <p class="mt-4 max-w-2xl text-xl text-gray-500 dark:text-gray-400 lg:mx-auto">
                             致力于为用户提供高质量、高效率的在线工具服务，让技术更好地服务于生活。

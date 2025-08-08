@@ -86,7 +86,7 @@ const clearContent = () => {
 </script>
 
 <template>
-  <Layout title="抖音文案提取 - 小左子的工具箱">
+  <Layout title="抖音文案提取 - 格式转换大王">
     <div class="min-h-screen bg-gray-50 dark:bg-gray-900 py-12">
       <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <!-- 页面标题 -->

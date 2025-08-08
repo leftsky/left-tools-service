@@ -9,7 +9,7 @@ interface Props {
 }
 
 withDefaults(defineProps<Props>(), {
-    title: '小左子的工具箱'
+    title: '格式转换大王'
 });
 </script>
 
