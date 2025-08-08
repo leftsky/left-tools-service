@@ -29,7 +29,7 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 
 // 可选认证的工具接口（支持登录和未登录用户）
-Route::middleware('auth.api-optional')->group(function () {
+Route::middleware('optional.auth')->group(function () {
     Route::post('/tools/extract-douyin', [ToolController::class, 'extractDouyin']);
     Route::post('/tools/parse-douyin', [ToolController::class, 'parseVideo']);
 });
@@ -42,7 +42,7 @@ Route::get('/seo/page-info', [SeoController::class, 'getPageSeo']);
 Route::get('/seo/structured-data', [SeoController::class, 'getStructuredData']);
 
 // 文件转换相关接口
-Route::middleware('auth.api-optional')->group(function () {
+Route::middleware('auth:sanctum')->group(function () {
     Route::post('/file-conversion/convert', [VideoConversionController::class, 'convert']);
     Route::get('/file-conversion/status', [VideoConversionController::class, 'status']);
     Route::get('/file-conversion/formats', [VideoConversionController::class, 'supportedFormats']);
