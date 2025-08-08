@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "3a526616ab4dc6b01033c9c8c892ce2a",
+    "content-hash": "15147b356f5f634ebfebe3616cc659d1",
     "packages": [
         {
             "name": "anourvalar/eloquent-serialize",
@@ -280,6 +280,63 @@
                 "source": "https://github.com/CarbonPHP/carbon-doctrine-types/tree/3.2.0"
             },
             "time": "2024-02-09T16:56:22+00:00"
+        },
+        {
+            "name": "cloudconvert/cloudconvert-laravel",
+            "version": "1.1.5",
+            "dist": {
+                "type": "zip",
+                "url": "https://mirrors.cloud.tencent.com/repository/composer/cloudconvert/cloudconvert-laravel/1.1.5/cloudconvert-cloudconvert-laravel-1.1.5.zip",
+                "reference": "0b8c56b1a40e8db14a78b8a4bb68c00a8ea4648b",
+                "shasum": ""
+            },
+            "require": {
+                "cloudconvert/cloudconvert-php": "^3.1.0",
+                "illuminate/container": "~5.8.0|^6.0|^7.0|^8.0|^9.0|^10.0 || ^11.0 || ^12.0",
+                "illuminate/http": "~5.8.0|^6.0|^7.0|^8.0|^9.0|^10.0 || ^11.0 || ^12.0",
+                "illuminate/routing": "~5.8.0|^6.0|^7.0|^8.0|^9.0|^10.0 || ^11.0 || ^12.0",
+                "illuminate/support": "~5.8.0|^6.0|^7.0|^8.0|^9.0|^10.0 || ^11.0 || ^12.0",
+                "nyholm/psr7": "^1.2",
+                "php": "^7.1 || ^8.0",
+                "symfony/psr-http-message-bridge": "^1.2|^2.0 || ^7.0"
+            },
+            "require-dev": {
+                "orchestra/testbench": "~3.8.0|^4.0|^5.0|^6.0|^7.0|^8.0 || ^9.0 || ^10.0",
+                "php-http/guzzle7-adapter": "^1.0",
+                "phpunit/phpunit": "^7.0|^8.0|^9.5.10 || ^10.5 || ^11.5.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "aliases": {
+                        "CloudConvert": "CloudConvert\\Laravel\\Facades\\CloudConvert"
+                    },
+                    "providers": [
+                        "CloudConvert\\Laravel\\Providers\\CloudConvertServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "CloudConvert\\Laravel\\": "src"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Josias Montag",
+                    "email": "josias@montag.info"
+                }
+            ],
+            "description": "Laravel PHP SDK for CloudConvert APIs",
+            "homepage": "https://github.com/cloudconvert/cloudconvert-php",
+            "support": {
+                "issues": "https://github.com/cloudconvert/cloudconvert-laravel/issues",
+                "source": "https://github.com/cloudconvert/cloudconvert-laravel/tree/1.1.5"
+            },
+            "time": "2025-02-17T10:06:01+00:00"
         },
         {
             "name": "cloudconvert/cloudconvert-php",
