@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "15147b356f5f634ebfebe3616cc659d1",
+    "content-hash": "b30eda2eef5e1776be34a7d7c4a24e29",
     "packages": [
         {
             "name": "anourvalar/eloquent-serialize",
@@ -1473,63 +1473,6 @@
             "time": "2025-06-12T15:11:14+00:00"
         },
         {
-            "name": "firebase/php-jwt",
-            "version": "v6.11.1",
-            "dist": {
-                "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/firebase/php-jwt/v6.11.1/firebase-php-jwt-v6.11.1.zip",
-                "reference": "d1e91ecf8c598d073d0995afa8cd5c75c6e19e66",
-                "shasum": ""
-            },
-            "require": {
-                "php": "^8.0"
-            },
-            "require-dev": {
-                "guzzlehttp/guzzle": "^7.4",
-                "phpspec/prophecy-phpunit": "^2.0",
-                "phpunit/phpunit": "^9.5",
-                "psr/cache": "^2.0||^3.0",
-                "psr/http-client": "^1.0",
-                "psr/http-factory": "^1.0"
-            },
-            "suggest": {
-                "ext-sodium": "Support EdDSA (Ed25519) signatures",
-                "paragonie/sodium_compat": "Support EdDSA (Ed25519) signatures when libsodium is not present"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "Firebase\\JWT\\": "src"
-                }
-            },
-            "license": [
-                "BSD-3-Clause"
-            ],
-            "authors": [
-                {
-                    "name": "Neuman Vong",
-                    "email": "neuman+pear@twilio.com",
-                    "role": "Developer"
-                },
-                {
-                    "name": "Anant Narayanan",
-                    "email": "anant@php.net",
-                    "role": "Developer"
-                }
-            ],
-            "description": "A simple library to encode and decode JSON Web Tokens (JWT) in PHP. Should conform to the current spec.",
-            "homepage": "https://github.com/firebase/php-jwt",
-            "keywords": [
-                "jwt",
-                "php"
-            ],
-            "support": {
-                "issues": "https://github.com/firebase/php-jwt/issues",
-                "source": "https://github.com/firebase/php-jwt/tree/v6.11.1"
-            },
-            "time": "2025-04-09T20:32:01+00:00"
-        },
-        {
             "name": "fruitcake/php-cors",
             "version": "v1.3.0",
             "dist": {
@@ -1741,7 +1684,7 @@
             "version": "2.2.0",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/guzzlehttp/promises/2.2.0/guzzlehttp-promises-2.2.0.zip",
+                "url": "https://mirrors.tencent.com/repository/composer/guzzlehttp/promises/2.2.0/guzzlehttp-promises-2.2.0.zip",
                 "reference": "7c69f28996b0a6920945dd20b3857e499d9ca96c",
                 "shasum": ""
             },
@@ -2083,11 +2026,11 @@
         },
         {
             "name": "laravel/framework",
-            "version": "v12.19.3",
+            "version": "v12.21.0",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/laravel/framework/v12.19.3/laravel-framework-v12.19.3.zip",
-                "reference": "4e6ec689ef704bb4bd282f29d9dd658dfb4fb262",
+                "url": "https://mirrors.cloud.tencent.com/repository/composer/laravel/framework/v12.21.0/laravel-framework-v12.21.0.zip",
+                "reference": "ac8c4e73bf1b5387b709f7736d41427e6af1c93b",
                 "shasum": ""
             },
             "require": {
@@ -2288,7 +2231,7 @@
                 "issues": "https://github.com/laravel/framework/issues",
                 "source": "https://github.com/laravel/framework"
             },
-            "time": "2025-06-18T12:56:23+00:00"
+            "time": "2025-07-22T15:41:55+00:00"
         },
         {
             "name": "laravel/prompts",
@@ -2348,7 +2291,7 @@
             "version": "v4.1.2",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/laravel/sanctum/v4.1.2/laravel-sanctum-v4.1.2.zip",
+                "url": "https://mirrors.tencent.com/repository/composer/laravel/sanctum/v4.1.2/laravel-sanctum-v4.1.2.zip",
                 "reference": "e4c09e69aecd5a383e0c1b85a6bb501c997d7491",
                 "shasum": ""
             },
@@ -2808,7 +2751,7 @@
             "version": "3.30.0",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.tencent.com/repository/composer/league/flysystem/3.30.0/league-flysystem-3.30.0.zip",
+                "url": "https://mirrors.cloud.tencent.com/repository/composer/league/flysystem/3.30.0/league-flysystem-3.30.0.zip",
                 "reference": "2203e3151755d874bb2943649dae1eb8533ac93e",
                 "shasum": ""
             },
@@ -2928,7 +2871,7 @@
             "version": "1.16.0",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.tencent.com/repository/composer/league/mime-type-detection/1.16.0/league-mime-type-detection-1.16.0.zip",
+                "url": "https://mirrors.cloud.tencent.com/repository/composer/league/mime-type-detection/1.16.0/league-mime-type-detection-1.16.0.zip",
                 "reference": "2d6702ff215bf922936ccc1ad31007edc76451b9",
                 "shasum": ""
             },
@@ -2964,70 +2907,11 @@
             "time": "2024-09-21T08:32:55+00:00"
         },
         {
-            "name": "league/oauth2-client",
-            "version": "2.8.1",
-            "dist": {
-                "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/league/oauth2-client/2.8.1/league-oauth2-client-2.8.1.zip",
-                "reference": "9df2924ca644736c835fc60466a3a60390d334f9",
-                "shasum": ""
-            },
-            "require": {
-                "ext-json": "*",
-                "guzzlehttp/guzzle": "^6.5.8 || ^7.4.5",
-                "php": "^7.1 || >=8.0.0 <8.5.0"
-            },
-            "require-dev": {
-                "mockery/mockery": "^1.3.5",
-                "php-parallel-lint/php-parallel-lint": "^1.4",
-                "phpunit/phpunit": "^7 || ^8 || ^9 || ^10 || ^11",
-                "squizlabs/php_codesniffer": "^3.11"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "League\\OAuth2\\Client\\": "src/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Alex Bilbie",
-                    "email": "hello@alexbilbie.com",
-                    "homepage": "http://www.alexbilbie.com",
-                    "role": "Developer"
-                },
-                {
-                    "name": "Woody Gilk",
-                    "homepage": "https://github.com/shadowhand",
-                    "role": "Contributor"
-                }
-            ],
-            "description": "OAuth 2.0 Client Library",
-            "keywords": [
-                "Authentication",
-                "SSO",
-                "authorization",
-                "identity",
-                "idp",
-                "oauth",
-                "oauth2",
-                "single sign on"
-            ],
-            "support": {
-                "issues": "https://github.com/thephpleague/oauth2-client/issues",
-                "source": "https://github.com/thephpleague/oauth2-client/tree/2.8.1"
-            },
-            "time": "2025-02-26T04:37:30+00:00"
-        },
-        {
             "name": "league/uri",
             "version": "7.5.1",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/league/uri/7.5.1/league-uri-7.5.1.zip",
+                "url": "https://mirrors.tencent.com/repository/composer/league/uri/7.5.1/league-uri-7.5.1.zip",
                 "reference": "81fb5145d2644324614cc532b28efd0215bda430",
                 "shasum": ""
             },
@@ -3105,7 +2989,7 @@
             "version": "7.5.0",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/league/uri-interfaces/7.5.0/league-uri-interfaces-7.5.0.zip",
+                "url": "https://mirrors.tencent.com/repository/composer/league/uri-interfaces/7.5.0/league-uri-interfaces-7.5.0.zip",
                 "reference": "08cfc6c4f3d811584fb09c37e2849e6a7f9b0742",
                 "shasum": ""
             },
@@ -3171,60 +3055,6 @@
                 "source": "https://github.com/thephpleague/uri-interfaces/tree/7.5.0"
             },
             "time": "2024-12-08T08:18:47+00:00"
-        },
-        {
-            "name": "leftsky/laravel-auth-client",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "./packages/leftsky/laravel-auth-client",
-                "reference": "20a0b363ccdd68c9ff4ced9d0bc459e0ad172b41"
-            },
-            "require": {
-                "firebase/php-jwt": "^6.11",
-                "guzzlehttp/guzzle": "^7.8",
-                "laravel/framework": "^12.0",
-                "league/oauth2-client": "^2.7",
-                "php": "^8.2"
-            },
-            "require-dev": {
-                "orchestra/testbench": "^10.0",
-                "phpunit/phpunit": "^11.5"
-            },
-            "type": "library",
-            "extra": {
-                "laravel": {
-                    "providers": [
-                        "Leftsky\\AuthClient\\AuthClientServiceProvider"
-                    ],
-                    "aliases": {
-                        "AuthClient": "Leftsky\\AuthClient\\Facades\\AuthClient",
-                        "Token": "Leftsky\\AuthClient\\Facades\\Token",
-                        "SSO": "Leftsky\\AuthClient\\Facades\\SSO",
-                        "CacheMonitor": "Leftsky\\AuthClient\\Facades\\CacheMonitor"
-                    }
-                }
-            },
-            "autoload": {
-                "psr-4": {
-                    "Leftsky\\AuthClient\\": "src/"
-                },
-                "files": [
-                    "src/Helpers/functions.php"
-                ]
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "Leftsky\\AuthClient\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "description": "Laravel认证中心客户端集成包",
-            "transport-options": {
-                "relative": true
-            }
         },
         {
             "name": "livewire/flux",
@@ -4335,7 +4165,7 @@
             "version": "2.4.1",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.tencent.com/repository/composer/php-http/httplug/2.4.1/php-http-httplug-2.4.1.zip",
+                "url": "https://mirrors.cloud.tencent.com/repository/composer/php-http/httplug/2.4.1/php-http-httplug-2.4.1.zip",
                 "reference": "5cad731844891a4c282f3f3e1b582c46839d22f4",
                 "shasum": ""
             },
@@ -4826,7 +4656,7 @@
             "version": "1.1.0",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/psr/http-factory/1.1.0/psr-http-factory-1.1.0.zip",
+                "url": "https://mirrors.tencent.com/repository/composer/psr/http-factory/1.1.0/psr-http-factory-1.1.0.zip",
                 "reference": "2b4765fddfe3b508ac62f829e852b1501d3f6e8a",
                 "shasum": ""
             },
@@ -5122,7 +4952,7 @@
             "version": "2.1.1",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/ramsey/collection/2.1.1/ramsey-collection-2.1.1.zip",
+                "url": "https://mirrors.tencent.com/repository/composer/ramsey/collection/2.1.1/ramsey-collection-2.1.1.zip",
                 "reference": "344572933ad0181accbf4ba763e85a0306a8c5e2",
                 "shasum": ""
             },
@@ -5424,7 +5254,7 @@
             "version": "1.92.6",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.tencent.com/repository/composer/spatie/laravel-package-tools/1.92.6/spatie-laravel-package-tools-1.92.6.zip",
+                "url": "https://mirrors.cloud.tencent.com/repository/composer/spatie/laravel-package-tools/1.92.6/spatie-laravel-package-tools-1.92.6.zip",
                 "reference": "afa90e37741a953d33728e7106a1f24a13fdd808",
                 "shasum": ""
             },
@@ -5606,7 +5436,7 @@
             "version": "v3.6.0",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/symfony/cache-contracts/v3.6.0/symfony-cache-contracts-v3.6.0.zip",
+                "url": "https://mirrors.tencent.com/repository/composer/symfony/cache-contracts/v3.6.0/symfony-cache-contracts-v3.6.0.zip",
                 "reference": "5d68a57d66910405e5c0b63d6f0af941e66fc868",
                 "shasum": ""
             },
@@ -6558,7 +6388,7 @@
             "version": "v7.3.0",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.tencent.com/repository/composer/symfony/options-resolver/v7.3.0/symfony-options-resolver-v7.3.0.zip",
+                "url": "https://mirrors.cloud.tencent.com/repository/composer/symfony/options-resolver/v7.3.0/symfony-options-resolver-v7.3.0.zip",
                 "reference": "afb9a8038025e5dbc657378bfab9198d75f10fca",
                 "shasum": ""
             },
@@ -6785,7 +6615,7 @@
             "version": "v1.32.0",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/symfony/polyfill-intl-normalizer/v1.32.0/symfony-polyfill-intl-normalizer-v1.32.0.zip",
+                "url": "https://mirrors.tencent.com/repository/composer/symfony/polyfill-intl-normalizer/v1.32.0/symfony-polyfill-intl-normalizer-v1.32.0.zip",
                 "reference": "3833d7255cc303546435cb650316bff708a1c75c",
                 "shasum": ""
             },
@@ -7303,7 +7133,7 @@
             "version": "v3.6.0",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/symfony/service-contracts/v3.6.0/symfony-service-contracts-v3.6.0.zip",
+                "url": "https://mirrors.tencent.com/repository/composer/symfony/service-contracts/v3.6.0/symfony-service-contracts-v3.6.0.zip",
                 "reference": "f021b05a130d35510bd6b25fe9053c2a8a15d5d4",
                 "shasum": ""
             },
@@ -7433,7 +7263,7 @@
             "version": "v7.3.1",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/symfony/translation/v7.3.1/symfony-translation-v7.3.1.zip",
+                "url": "https://mirrors.tencent.com/repository/composer/symfony/translation/v7.3.1/symfony-translation-v7.3.1.zip",
                 "reference": "241d5ac4910d256660238a7ecf250deba4c73063",
                 "shasum": ""
             },
@@ -7618,11 +7448,11 @@
         },
         {
             "name": "symfony/var-dumper",
-            "version": "v7.3.1",
+            "version": "v7.3.2",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/symfony/var-dumper/v7.3.1/symfony-var-dumper-v7.3.1.zip",
-                "reference": "6e209fbe5f5a7b6043baba46fe5735a4b85d0d42",
+                "url": "https://mirrors.cloud.tencent.com/repository/composer/symfony/var-dumper/v7.3.2/symfony-var-dumper-v7.3.2.zip",
+                "reference": "53205bea27450dc5c65377518b3275e126d45e75",
                 "shasum": ""
             },
             "require": {
@@ -7634,7 +7464,6 @@
                 "symfony/console": "<6.4"
             },
             "require-dev": {
-                "ext-iconv": "*",
                 "symfony/console": "^6.4|^7.0",
                 "symfony/http-kernel": "^6.4|^7.0",
                 "symfony/process": "^6.4|^7.0",
@@ -7676,9 +7505,9 @@
                 "dump"
             ],
             "support": {
-                "source": "https://github.com/symfony/var-dumper/tree/v7.3.1"
+                "source": "https://github.com/symfony/var-dumper/tree/v7.3.2"
             },
-            "time": "2025-06-27T19:55:54+00:00"
+            "time": "2025-07-29T20:02:46+00:00"
         },
         {
             "name": "symfony/var-exporter",
@@ -8020,7 +7849,7 @@
             "version": "2.0.3",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/voku/portable-ascii/2.0.3/voku-portable-ascii-2.0.3.zip",
+                "url": "https://mirrors.tencent.com/repository/composer/voku/portable-ascii/2.0.3/voku-portable-ascii-2.0.3.zip",
                 "reference": "b1d923f88091c6bf09699efcd7c8a1b1bfd7351d",
                 "shasum": ""
             },
@@ -8611,7 +8440,7 @@
             "version": "v1.2.3",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/laravel/pail/v1.2.3/laravel-pail-v1.2.3.zip",
+                "url": "https://mirrors.tencent.com/repository/composer/laravel/pail/v1.2.3/laravel-pail-v1.2.3.zip",
                 "reference": "8cc3d575c1f0e57eeb923f366a37528c50d2385a",
                 "shasum": ""
             },
@@ -9373,7 +9202,7 @@
             "version": "3.2.1",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.tencent.com/repository/composer/phar-io/version/3.2.1/phar-io-version-3.2.1.zip",
+                "url": "https://mirrors.cloud.tencent.com/repository/composer/phar-io/version/3.2.1/phar-io-version-3.2.1.zip",
                 "reference": "4f7fd7836c6f332bb2933569e566a0d6c4cbed74",
                 "shasum": ""
             },
@@ -9418,7 +9247,7 @@
             "version": "2.2.0",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/phpdocumentor/reflection-common/2.2.0/phpdocumentor-reflection-common-2.2.0.zip",
+                "url": "https://mirrors.tencent.com/repository/composer/phpdocumentor/reflection-common/2.2.0/phpdocumentor-reflection-common-2.2.0.zip",
                 "reference": "1d01c49d4ed62f25aa84a747ad35d5a16924662b",
                 "shasum": ""
             },
@@ -9616,7 +9445,7 @@
             "version": "11.0.10",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/phpunit/php-code-coverage/11.0.10/phpunit-php-code-coverage-11.0.10.zip",
+                "url": "https://mirrors.tencent.com/repository/composer/phpunit/php-code-coverage/11.0.10/phpunit-php-code-coverage-11.0.10.zip",
                 "reference": "1a800a7446add2d79cc6b3c01c45381810367d76",
                 "shasum": ""
             },
@@ -9879,7 +9708,7 @@
             "version": "11.5.15",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/phpunit/phpunit/11.5.15/phpunit-phpunit-11.5.15.zip",
+                "url": "https://mirrors.tencent.com/repository/composer/phpunit/phpunit/11.5.15/phpunit-phpunit-11.5.15.zip",
                 "reference": "4b6a4ee654e5e0c5e1f17e2f83c0f4c91dee1f9c",
                 "shasum": ""
             },
@@ -9960,7 +9789,7 @@
             "version": "3.0.2",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/sebastian/cli-parser/3.0.2/sebastian-cli-parser-3.0.2.zip",
+                "url": "https://mirrors.tencent.com/repository/composer/sebastian/cli-parser/3.0.2/sebastian-cli-parser-3.0.2.zip",
                 "reference": "15c5dd40dc4f38794d383bb95465193f5e0ae180",
                 "shasum": ""
             },
@@ -10050,7 +9879,7 @@
             "version": "4.0.1",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/sebastian/code-unit-reverse-lookup/4.0.1/sebastian-code-unit-reverse-lookup-4.0.1.zip",
+                "url": "https://mirrors.tencent.com/repository/composer/sebastian/code-unit-reverse-lookup/4.0.1/sebastian-code-unit-reverse-lookup-4.0.1.zip",
                 "reference": "183a9b2632194febd219bb9246eee421dad8d45e",
                 "shasum": ""
             },
@@ -10208,7 +10037,7 @@
             "version": "6.0.2",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/sebastian/diff/6.0.2/sebastian-diff-6.0.2.zip",
+                "url": "https://mirrors.tencent.com/repository/composer/sebastian/diff/6.0.2/sebastian-diff-6.0.2.zip",
                 "reference": "b4ccd857127db5d41a5b676f24b51371d76d8544",
                 "shasum": ""
             },
@@ -10664,7 +10493,7 @@
             "version": "5.0.2",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/sebastian/version/5.0.2/sebastian-version-5.0.2.zip",
+                "url": "https://mirrors.tencent.com/repository/composer/sebastian/version/5.0.2/sebastian-version-5.0.2.zip",
                 "reference": "c687e3387b99f5b03b6caa64c74b63e2936ff874",
                 "shasum": ""
             },
@@ -10799,7 +10628,7 @@
             "version": "1.2.3",
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/theseer/tokenizer/1.2.3/theseer-tokenizer-1.2.3.zip",
+                "url": "https://mirrors.tencent.com/repository/composer/theseer/tokenizer/1.2.3/theseer-tokenizer-1.2.3.zip",
                 "reference": "737eda637ed5e28c3413cb1ebe8bb52cbf1ca7a2",
                 "shasum": ""
             },
