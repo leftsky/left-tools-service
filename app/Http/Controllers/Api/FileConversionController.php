@@ -332,6 +332,167 @@ class FileConversionController extends Controller
     }
 
     /**
+     * 创建客户端直传任务
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function createDirectUpload(Request $request): JsonResponse
+    {
+        try {
+            // 验证请求参数
+            $validator = Validator::make($request->all(), [
+                'filename' => 'required|string|max:255',
+                'output_format' => 'required|string|max:10',
+                'options' => 'nullable|array',
+                'options.*.key' => 'required_with:options|string',
+                'options.*.value' => 'required_with:options',
+                'engine' => 'string|in:convertio,cloudconvert'
+            ]);
+
+            if ($validator->fails()) {
+                return $this->validationError($validator->errors(), '参数验证失败');
+            }
+
+            $filename = $request->input('filename');
+            $outputFormat = $request->input('output_format', 'mp4');
+            $options = $request->input('options', []);
+            $engine = $request->input('engine', 'cloudconvert');
+            $userId = $request->user()?->id;
+
+            // 检查文件格式
+            $inputFormat = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+            if (!$this->validateFormat($inputFormat, $outputFormat)) {
+                return $this->error("不支持从 {$inputFormat} 转换到 {$outputFormat}", 400);
+            }
+
+            // 处理转换选项
+            $processedOptions = [];
+            if (is_array($options)) {
+                foreach ($options as $option) {
+                    if (isset($option['key']) && isset($option['value'])) {
+                        $processedOptions[$option['key']] = $option['value'];
+                    }
+                }
+            }
+
+            // 创建转换任务记录
+            $task = FileConversionTask::create([
+                'user_id' => $userId,
+                'conversion_engine' => $engine,
+                'input_method' => FileConversionTask::INPUT_METHOD_DIRECT_UPLOAD,
+                'input_file' => $filename,
+                'filename' => $filename,
+                'input_format' => $inputFormat,
+                'file_size' => 0, // 直传时还不知道文件大小
+                'output_format' => $outputFormat,
+                'conversion_options' => $options,
+                'status' => FileConversionTask::STATUS_WAIT,
+                'tag' => 'direct-upload-' . uniqid(),
+            ]);
+
+            // 根据引擎创建直传任务
+            if ($engine === 'cloudconvert') {
+                $cloudConvertService = app(CloudConvertService::class);
+                $result = $cloudConvertService->createDirectUploadJob($filename, $outputFormat, $processedOptions);
+
+                if (!$result['success']) {
+                    $task->markAsFailed($result['error']);
+                    return $this->serverError($result['error']);
+                }
+
+                // 更新任务记录
+                $task->setCloudConvertId($result['data']['job_id']);
+            } else {
+                // Convertio 暂不支持直传，返回错误
+                $task->markAsFailed('Convertio 暂不支持客户端直传');
+                return $this->error('Convertio 暂不支持客户端直传，请使用 CloudConvert 引擎', 400);
+            }
+
+            Log::info('客户端直传任务已创建', [
+                'task_id' => $task->id,
+                'engine' => $engine,
+                'filename' => $filename,
+                'output_format' => $outputFormat
+            ]);
+
+            return $this->success([
+                'task_id' => $task->id,
+                'upload_url' => $result['data']['upload_url'],
+                'form_data' => $result['data']['form_data'],
+                'filename' => $task->filename,
+                'output_format' => $outputFormat,
+                'engine' => $engine
+            ], '客户端直传任务已创建');
+
+        } catch (\Exception $e) {
+            Log::error('创建客户端直传任务失败', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return $this->serverError('创建客户端直传任务失败', $e->getMessage());
+        }
+    }
+
+    /**
+     * 确认客户端直传完成
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function confirmDirectUpload(Request $request): JsonResponse
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'task_id' => 'required|integer'
+            ]);
+
+            if ($validator->fails()) {
+                return $this->validationError($validator->errors(), '参数验证失败');
+            }
+
+            $taskId = $request->input('task_id');
+            $task = FileConversionTask::find($taskId);
+
+            if (!$task) {
+                return $this->notFound('任务不存在');
+            }
+
+            if ($task->input_method !== FileConversionTask::INPUT_METHOD_DIRECT_UPLOAD) {
+                return $this->error('该任务不是客户端直传任务', 400);
+            }
+
+            // 确认直传完成
+            if ($task->isCloudConvertEngine() && $task->cloudconvert_id) {
+                $cloudConvertService = app(CloudConvertService::class);
+                $result = $cloudConvertService->confirmDirectUpload($task->cloudconvert_id);
+
+                if (!$result['success']) {
+                    return $this->error($result['error'], 400);
+                }
+
+                // 更新任务状态
+                $task->startProcessing();
+
+                return $this->success([
+                    'task_id' => $task->id,
+                    'status' => 'processing'
+                ], '客户端直传确认成功，开始转换');
+            }
+
+            return $this->error('不支持的转换引擎', 400);
+
+        } catch (\Exception $e) {
+            Log::error('确认客户端直传失败', [
+                'error' => $e->getMessage()
+            ]);
+
+            return $this->serverError('确认客户端直传失败', $e->getMessage());
+        }
+    }
+
+    /**
      * 获取转换历史
      *
      * @param Request $request

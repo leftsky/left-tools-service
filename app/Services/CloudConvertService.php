@@ -364,7 +364,16 @@ class CloudConvertService
             }
 
             $result = $exportTask->getResult();
-            $files = $result['files'] ?? [];
+            $files = [];
+            
+            if ($result && is_object($result)) {
+                $files = $result->files ?? [];
+                if (is_array($files)) {
+                    $files = $files;
+                } else {
+                    $files = [];
+                }
+            }
 
             if (empty($files)) {
                 return [
@@ -554,6 +563,171 @@ class CloudConvertService
             return [
                 'success' => false,
                 'error' => '文件上传失败: ' . $e->getMessage(),
+                'code' => 500
+            ];
+        }
+    }
+
+    /**
+     * 创建客户端直传任务
+     *
+     * @param string $filename 文件名
+     * @param string $outputFormat 输出格式
+     * @param array $options 转换选项
+     * @return array 返回直传信息
+     */
+    public function createDirectUploadJob(string $filename, string $outputFormat, array $options = []): array
+    {
+        try {
+            $tag = 'direct-upload-' . uniqid();
+
+            $job = (new Job())
+                ->setTag($tag)
+                ->addTask(
+                    (new Task('import/upload', 'upload-file'))
+                        ->set('filename', $filename)
+                )
+                ->addTask(
+                    (new Task('convert', 'convert-file'))
+                        ->set('input', 'upload-file')
+                        ->set('output_format', $outputFormat)
+                        ->set('options', $options)
+                )
+                ->addTask(
+                    (new Task('export/url', 'export-file'))
+                        ->set('input', 'convert-file')
+                );
+
+            $createdJob = CloudConvert::jobs()->create($job);
+            $tasks = $createdJob->getTasks();
+            $uploadTask = null;
+            
+            // 遍历任务找到上传任务
+            foreach ($tasks as $task) {
+                if ($task->getName() === 'upload-file') {
+                    $uploadTask = $task;
+                    break;
+                }
+            }
+
+            if (!$uploadTask) {
+                throw new Exception('上传任务创建失败');
+            }
+
+            // 获取直传 URL
+            $result = $uploadTask->getResult();
+            $uploadUrl = null;
+            $formData = [];
+            
+            if ($result && is_object($result)) {
+                $formDataObj = $result->form_data ?? null;
+                if ($formDataObj && is_object($formDataObj)) {
+                    $uploadUrl = $formDataObj->url ?? null;
+                    // 将对象转换为数组
+                    $formData = (array) $formDataObj;
+                }
+            }
+
+            Log::info('CloudConvert直传任务已创建', [
+                'job_id' => $createdJob->getId(),
+                'filename' => $filename,
+                'output_format' => $outputFormat,
+                'upload_url' => $uploadUrl
+            ]);
+
+            return [
+                'success' => true,
+                'data' => [
+                    'job_id' => $createdJob->getId(),
+                    'upload_url' => $uploadUrl,
+                    'form_data' => $formData,
+                    'tag' => $tag
+                ],
+                'code' => 200
+            ];
+
+        } catch (Exception $e) {
+            Log::error('CloudConvert直传任务创建失败', [
+                'error' => $e->getMessage(),
+                'filename' => $filename
+            ]);
+
+            return [
+                'success' => false,
+                'error' => '直传任务创建失败: ' . $e->getMessage(),
+                'code' => 500
+            ];
+        }
+    }
+
+    /**
+     * 确认客户端直传完成
+     *
+     * @param string $jobId 任务ID
+     * @return array 返回确认结果
+     */
+    public function confirmDirectUpload(string $jobId): array
+    {
+        try {
+            $job = CloudConvert::jobs()->get($jobId);
+            
+            // 检查上传任务状态
+            $tasks = $job->getTasks();
+            $uploadTask = null;
+            
+            foreach ($tasks as $task) {
+                if ($task->getName() === 'upload-file') {
+                    $uploadTask = $task;
+                    break;
+                }
+            }
+
+            if (!$uploadTask) {
+                return [
+                    'success' => false,
+                    'error' => '上传任务不存在',
+                    'code' => 404
+                ];
+            }
+
+            if ($uploadTask->getStatus() === 'error') {
+                return [
+                    'success' => false,
+                    'error' => '文件上传失败: ' . ($uploadTask->getMessage() ?? '未知错误'),
+                    'code' => 400
+                ];
+            }
+
+            if ($uploadTask->getStatus() !== 'finished') {
+                return [
+                    'success' => false,
+                    'error' => '文件上传尚未完成',
+                    'code' => 400
+                ];
+            }
+
+            Log::info('CloudConvert直传确认成功', [
+                'job_id' => $jobId
+            ]);
+
+            return [
+                'success' => true,
+                'data' => [
+                    'job_id' => $jobId,
+                    'status' => 'uploaded'
+                ],
+                'code' => 200
+            ];
+
+        } catch (Exception $e) {
+            Log::error('CloudConvert直传确认失败', [
+                'job_id' => $jobId,
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => '直传确认失败: ' . $e->getMessage(),
                 'code' => 500
             ];
         }

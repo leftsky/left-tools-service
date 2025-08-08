@@ -45,6 +45,8 @@ Route::get('/seo/structured-data', [SeoController::class, 'getStructuredData']);
 Route::middleware('optional.auth')->group(function () {
     Route::post('/file-conversion/convert', [FileConversionController::class, 'convert']);
     Route::post('/file-conversion/upload', [FileConversionController::class, 'uploadAndConvert']);
+    Route::post('/file-conversion/direct-upload', [FileConversionController::class, 'createDirectUpload']);
+    Route::post('/file-conversion/confirm-direct-upload', [FileConversionController::class, 'confirmDirectUpload']);
     Route::get('/file-conversion/status', [FileConversionController::class, 'status']);
     Route::post('/file-conversion/cancel', [FileConversionController::class, 'cancel']);
     Route::get('/file-conversion/formats', [FileConversionController::class, 'getSupportedFormats']);

@@ -24,6 +24,7 @@ const videoQuality = ref("high");
 const resolution = ref("original");
 const framerate = ref("original");
 const conversionEngine = ref("cloudconvert");
+const useDirectUpload = ref(false); // 默认使用直传
 
 // 任务相关
 const currentTaskId = ref(null);
@@ -87,16 +88,16 @@ onMounted(async () => {
   // 直接设置默认消息，不显示加载过程
   setMessage("请选择视频文件开始转换");
 
-      // 静默加载支持的格式
-    try {
-      const result = await FileConversionAPI.getSupportedFormats();
-      if (result.code === 1) {
-        supportedFormats.value = result.data;
-      }
-    } catch (error) {
-      console.error("格式加载失败:", error);
-      // 静默处理错误，不影响用户体验
+  // 静默加载支持的格式
+  try {
+    const result = await FileConversionAPI.getSupportedFormats();
+    if (result.code === 1) {
+      supportedFormats.value = result.data;
     }
+  } catch (error) {
+    console.error("格式加载失败:", error);
+    // 静默处理错误，不影响用户体验
+  }
 });
 
 // 清理资源
@@ -194,7 +195,7 @@ const convertVideo = async () => {
   try {
     // 准备转换选项
     const conversionOptions = [];
-    
+
     if (videoQuality.value !== "high") {
       conversionOptions.push({ key: "quality", value: videoQuality.value });
     }
@@ -205,20 +206,42 @@ const convertVideo = async () => {
       conversionOptions.push({ key: "fps", value: parseInt(framerate.value) });
     }
 
-    // 上传文件并开始转换
-    const result = await FileConversionAPI.uploadAndConvert(selectedFile.value, {
-      outputFormat: outputFormat.value,
-      engine: conversionEngine.value,
-      conversionOptions,
-    });
+    let result;
 
-    if (result.code !== 1) {
-      throw new Error(result.message || "转换任务创建失败");
+    // 根据设置选择上传方式
+    if (useDirectUpload.value && conversionEngine.value === "cloudconvert") {
+      // 使用客户端直传
+      setMessage("正在创建直传任务...");
+
+      result = await FileConversionAPI.directUploadToCloudConvert(selectedFile.value, {
+        outputFormat: outputFormat.value,
+        engine: conversionEngine.value,
+        conversionOptions,
+        onProgress: (percent) => {
+          progress.value = percent;
+          setMessage(`正在直传文件... ${percent}%`);
+        },
+      });
+
+      currentTaskId.value = result.task_id;
+      isUploading.value = false;
+      setMessage("文件直传完成，开始转换...");
+    } else {
+      // 使用传统上传方式
+      result = await FileConversionAPI.uploadAndConvert(selectedFile.value, {
+        outputFormat: outputFormat.value,
+        engine: conversionEngine.value,
+        conversionOptions,
+      });
+
+      if (result.code !== 1) {
+        throw new Error(result.message || "转换任务创建失败");
+      }
+
+      currentTaskId.value = result.data.task_id;
+      isUploading.value = false;
+      setMessage("文件上传完成，开始转换...");
     }
-
-    currentTaskId.value = result.data.task_id;
-    isUploading.value = false;
-    setMessage("文件上传完成，开始转换...");
 
     // 开始轮询状态
     cancelPolling.value = FileConversionAPI.pollStatus(
@@ -587,6 +610,55 @@ const downloadFile = async () => {
               <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                 转换选项
               </h2>
+
+              <!-- 直传选项 -->
+              <div
+                class="hidden mb-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md"
+              >
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center">
+                    <svg
+                      class="h-5 w-5 text-green-400 mr-2"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M13 10V3L4 14h7v7l9-11h-7z"
+                      ></path>
+                    </svg>
+                    <div>
+                      <h4 class="text-sm font-medium text-green-800 dark:text-green-200">
+                        客户端直传（推荐）
+                      </h4>
+                      <p class="text-sm text-green-700 dark:text-green-300">
+                        文件直接从浏览器上传到 CloudConvert，节省服务器带宽
+                      </p>
+                    </div>
+                  </div>
+                  <label class="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      v-model="useDirectUpload"
+                      :disabled="conversionEngine !== 'cloudconvert'"
+                      class="sr-only peer"
+                    />
+                    <div
+                      class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"
+                    ></div>
+                  </label>
+                </div>
+                <div
+                  v-if="conversionEngine !== 'cloudconvert'"
+                  class="mt-2 text-xs text-green-600 dark:text-green-400"
+                >
+                  直传功能仅支持 CloudConvert 引擎
+                </div>
+              </div>
+
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- 输出格式 -->
                 <div>

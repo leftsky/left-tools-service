@@ -167,6 +167,106 @@ class FileConversionAPI {
     }
 
     /**
+     * 创建客户端直传任务
+     * @param {string} filename - 文件名
+     * @param {Object} options - 转换选项
+     * @returns {Promise<Object>}
+     */
+    static async createDirectUpload(filename, options = {}) {
+        try {
+            const response = await apiClient.post('/direct-upload', {
+                filename: filename,
+                output_format: options.outputFormat || 'mp4',
+                engine: options.engine || 'cloudconvert',
+                options: options.conversionOptions || []
+            });
+            return response.data;
+        } catch (error) {
+            throw new Error(error.message || '创建直传任务失败');
+        }
+    }
+
+    /**
+     * 确认客户端直传完成
+     * @param {number} taskId - 任务ID
+     * @returns {Promise<Object>}
+     */
+    static async confirmDirectUpload(taskId) {
+        try {
+            const response = await apiClient.post('/confirm-direct-upload', {
+                task_id: taskId
+            });
+            return response.data;
+        } catch (error) {
+            throw new Error(error.message || '确认直传失败');
+        }
+    }
+
+    /**
+     * 客户端直传文件到 CloudConvert
+     * @param {File} file - 文件对象
+     * @param {Object} options - 转换选项
+     * @returns {Promise<Object>}
+     */
+    static async directUploadToCloudConvert(file, options = {}) {
+        try {
+            // 1. 创建直传任务
+            const createResult = await this.createDirectUpload(file.name, options);
+            
+            if (createResult.code !== 1) {
+                throw new Error(createResult.message || '创建直传任务失败');
+            }
+
+            const { task_id, upload_url, form_data } = createResult.data;
+
+            // 2. 构建上传表单数据
+            const uploadFormData = new FormData();
+            
+            // 添加文件
+            uploadFormData.append('file', file);
+            
+            // 添加 CloudConvert 需要的表单字段
+            if (form_data) {
+                Object.keys(form_data).forEach(key => {
+                    if (key !== 'file') { // 文件字段已经添加过了
+                        uploadFormData.append(key, form_data[key]);
+                    }
+                });
+            }
+
+            // 3. 直接上传到 CloudConvert
+            await axios.post(upload_url, uploadFormData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+                timeout: 60000, // 上传可能需要更长时间
+                onUploadProgress: (progressEvent) => {
+                    if (options.onProgress) {
+                        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                        options.onProgress(percentCompleted);
+                    }
+                }
+            });
+
+            // 4. 确认直传完成
+            const confirmResult = await this.confirmDirectUpload(task_id);
+            
+            if (confirmResult.code !== 1) {
+                throw new Error(confirmResult.message || '确认直传失败');
+            }
+
+            return {
+                task_id: task_id,
+                status: 'uploaded',
+                message: '文件直传成功，开始转换'
+            };
+
+        } catch (error) {
+            throw new Error(`直传失败: ${error.message}`);
+        }
+    }
+
+    /**
      * 获取转换历史
      * @param {Object} params - 查询参数
      * @returns {Promise<Object>}

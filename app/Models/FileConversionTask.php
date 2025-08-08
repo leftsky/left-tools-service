@@ -43,6 +43,7 @@ class FileConversionTask extends Model
     const INPUT_METHOD_RAW = 'raw';
     const INPUT_METHOD_BASE64 = 'base64';
     const INPUT_METHOD_UPLOAD = 'upload';
+    const INPUT_METHOD_DIRECT_UPLOAD = 'direct_upload';
 
     /**
      * 可批量赋值的属性
