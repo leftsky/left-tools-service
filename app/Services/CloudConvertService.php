@@ -130,9 +130,23 @@ class CloudConvertService
             $tasks = $job->getTasks();
 
             // 获取各个任务状态
-            $importTask = $tasks->whereName('import-file')->first();
-            $convertTask = $tasks->whereName('convert-file')->first();
-            $exportTask = $tasks->whereName('export-file')->first();
+            $importTask = null;
+            $convertTask = null;
+            $exportTask = null;
+            
+            foreach ($tasks as $task) {
+                switch ($task->getName()) {
+                    case 'import-file':
+                        $importTask = $task;
+                        break;
+                    case 'convert-file':
+                        $convertTask = $task;
+                        break;
+                    case 'export-file':
+                        $exportTask = $task;
+                        break;
+                }
+            }
 
             $status = 'processing';
             $progress = 0;
@@ -330,7 +344,16 @@ class CloudConvertService
     {
         try {
             $job = CloudConvert::jobs()->get($jobId);
-            $exportTask = $job->getTasks()->whereName('export-file')->first();
+            $tasks = $job->getTasks();
+            $exportTask = null;
+            
+            // 遍历任务找到导出任务
+            foreach ($tasks as $task) {
+                if ($task->getName() === 'export-file') {
+                    $exportTask = $task;
+                    break;
+                }
+            }
 
             if (!$exportTask || $exportTask->getStatus() !== 'finished') {
                 return [
@@ -446,7 +469,16 @@ class CloudConvertService
                 );
 
             $createdJob = CloudConvert::jobs()->create($job);
-            $uploadTask = $createdJob->getTasks()->whereName('upload-file')->first();
+            $tasks = $createdJob->getTasks();
+            $uploadTask = null;
+            
+            // 遍历任务找到上传任务
+            foreach ($tasks as $task) {
+                if ($task->getName() === 'upload-file') {
+                    $uploadTask = $task;
+                    break;
+                }
+            }
 
             Log::info('CloudConvert上传任务已创建', [
                 'job_id' => $createdJob->getId(),

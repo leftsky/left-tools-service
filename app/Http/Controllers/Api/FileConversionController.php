@@ -4,14 +4,19 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\FileConversionTask;
+use App\Services\CloudConvertService;
+use App\Services\ConvertioService;
+use App\Traits\ApiResponseTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
 class FileConversionController extends Controller
 {
+    use ApiResponseTrait;
     /**
      * 提交视频转换任务
      *
@@ -29,11 +34,7 @@ class FileConversionController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => '参数验证失败',
-                    'errors' => $validator->errors()
-                ], 422);
+                return $this->validationError($validator->errors(), '参数验证失败');
             }
 
             $fileUrl = $request->input('file_url');
@@ -62,28 +63,20 @@ class FileConversionController extends Controller
                 'user_id' => $userId
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => '视频转换任务已提交',
-                'data' => [
-                    'task_id' => $task->id,
-                    'status' => 'wait',
-                    'filename' => $task->filename,
-                    'file_size' => $task->formatted_file_size,
-                    'output_format' => $task->output_format
-                ]
-            ]);
+            return $this->success([
+                'task_id' => $task->id,
+                'status' => 'wait',
+                'filename' => $task->filename,
+                'file_size' => $task->formatted_file_size,
+                'output_format' => $task->output_format
+            ], '视频转换任务已提交');
         } catch (\Exception $e) {
             Log::error('视频转换任务提交失败', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => '服务器内部错误',
-                'error' => $e->getMessage()
-            ], 500);
+            return $this->serverError('服务器内部错误', $e->getMessage());
         }
     }
 
@@ -101,53 +94,421 @@ class FileConversionController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => '参数验证失败',
-                    'errors' => $validator->errors()
-                ], 422);
+                return $this->validationError($validator->errors(), '参数验证失败');
             }
 
             $taskId = $request->input('task_id');
             $task = FileConversionTask::find($taskId);
 
             if (!$task) {
-                return response()->json([
-                    'success' => false,
-                    'message' => '任务不存在'
-                ], 404);
+                return $this->notFound('任务不存在');
             }
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'task_id' => $task->id,
-                    'convertio_id' => $task->convertio_id,
-                    'status' => $task->status,
-                    'status_text' => $task->status_text,
-                    'filename' => $task->filename,
-                    'file_size' => $task->formatted_file_size,
-                    'output_format' => $task->output_format,
-                    'step_percent' => $task->step_percent,
-                    'minutes_used' => $task->minutes_used,
-                    'output_url' => $task->output_url,
-                    'output_size' => $task->formatted_output_size,
-                    'error_message' => $task->error_message,
-                    'started_at' => $task->started_at,
-                    'completed_at' => $task->completed_at,
-                    'created_at' => $task->created_at
-                ]
-            ]);
+            // 主动查询转换引擎的状态
+            $this->updateTaskStatusFromEngine($task);
+
+            return $this->success([
+                'task_id' => $task->id,
+                'convertio_id' => $task->convertio_id,
+                'cloudconvert_id' => $task->cloudconvert_id,
+                'status' => $task->status,
+                'status_text' => $task->status_text,
+                'filename' => $task->filename,
+                'file_size' => $task->formatted_file_size,
+                'output_format' => $task->output_format,
+                'step_percent' => $task->step_percent,
+                'minutes_used' => $task->minutes_used,
+                'output_url' => $task->output_url,
+                'output_size' => $task->formatted_output_size,
+                'error_message' => $task->error_message,
+                'started_at' => $task->started_at,
+                'completed_at' => $task->completed_at,
+                'created_at' => $task->created_at
+            ], '获取任务状态成功');
         } catch (\Exception $e) {
             Log::error('获取任务状态失败', [
                 'error' => $e->getMessage()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => '获取任务状态失败',
+            return $this->serverError('获取任务状态失败', $e->getMessage());
+        }
+    }
+
+    /**
+     * 文件上传并转换
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function uploadAndConvert(Request $request): JsonResponse
+    {
+        try {
+            // 验证请求参数
+            $validator = Validator::make($request->all(), [
+                'file' => 'required|file|max:1024000', // 最大1GB
+                'output_format' => 'required|string|max:10',
+                'options' => 'nullable|array',
+                'options.*.key' => 'required_with:options|string',
+                'options.*.value' => 'required_with:options',
+                'engine' => 'string|in:convertio,cloudconvert'
+            ]);
+
+            if ($validator->fails()) {
+                return $this->validationError($validator->errors(), '参数验证失败');
+            }
+
+            $file = $request->file('file');
+            $outputFormat = $request->input('output_format', 'mp4');
+            $options = $request->input('options', []);
+            $engine = $request->input('engine', 'cloudconvert');
+            $userId = $request->user()?->id;
+
+            // 检查文件格式
+            $inputFormat = strtolower($file->getClientOriginalExtension());
+            if (!$this->validateFormat($inputFormat, $outputFormat)) {
+                return $this->error("不支持从 {$inputFormat} 转换到 {$outputFormat}", 400);
+            }
+
+            // 保存文件到临时目录
+            $tempPath = $file->store('temp/conversions', 'local');
+            $fullPath = Storage::disk('local')->path($tempPath);
+
+            // 创建转换任务记录
+            $task = FileConversionTask::create([
+                'user_id' => $userId,
+                'conversion_engine' => $engine,
+                'input_method' => FileConversionTask::INPUT_METHOD_UPLOAD,
+                'input_file' => $tempPath,
+                'filename' => $file->getClientOriginalName(),
+                'input_format' => $inputFormat,
+                'file_size' => $file->getSize(),
+                'output_format' => $outputFormat,
+                'conversion_options' => $options,
+                'status' => FileConversionTask::STATUS_WAIT,
+                'tag' => 'upload-' . uniqid(),
+            ]);
+
+            // 处理转换选项
+            $processedOptions = [];
+            if (is_array($options)) {
+                foreach ($options as $option) {
+                    if (isset($option['key']) && isset($option['value'])) {
+                        $processedOptions[$option['key']] = $option['value'];
+                    }
+                }
+            }
+
+            // 根据引擎选择服务
+            if ($engine === 'cloudconvert') {
+                $result = $this->processWithCloudConvert($task, $fullPath, $processedOptions);
+            } else {
+                $result = $this->processWithConvertio($task, $fullPath, $processedOptions);
+            }
+
+            if (!$result['success']) {
+                $task->markAsFailed($result['error']);
+                return $this->serverError($result['error']);
+            }
+
+            // 更新任务状态
+            $task->startProcessing();
+
+            Log::info('文件转换任务已创建', [
+                'task_id' => $task->id,
+                'engine' => $engine,
+                'filename' => $file->getClientOriginalName(),
+                'input_format' => $inputFormat,
+                'output_format' => $outputFormat
+            ]);
+
+            return $this->success([
+                'task_id' => $task->id,
+                'status' => 'processing',
+                'filename' => $task->filename,
+                'file_size' => $task->formatted_file_size,
+                'input_format' => $inputFormat,
+                'output_format' => $outputFormat,
+                'engine' => $engine,
+                'estimated_time' => $this->estimateConversionTime($inputFormat, $outputFormat, $file->getSize())
+            ], '文件转换任务已提交');
+        } catch (\Exception $e) {
+            Log::error('文件上传转换失败', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return $this->serverError('文件上传转换失败', $e->getMessage());
+        }
+    }
+
+    /**
+     * 取消转换任务
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function cancel(Request $request): JsonResponse
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'task_id' => 'required|integer'
+            ]);
+
+            if ($validator->fails()) {
+                return $this->validationError($validator->errors(), '参数验证失败');
+            }
+
+            $taskId = $request->input('task_id');
+            $task = FileConversionTask::find($taskId);
+
+            if (!$task) {
+                return $this->notFound('任务不存在');
+            }
+
+            if (!$task->canBeCancelled()) {
+                return $this->error('只有等待中或转换中的任务可以取消', 400);
+            }
+
+            // 根据引擎取消任务
+            if ($task->isCloudConvertEngine() && $task->cloudconvert_id) {
+                $cloudConvertService = app(CloudConvertService::class);
+                $result = $cloudConvertService->cancelConversion($task->cloudconvert_id);
+
+                if (!$result['success']) {
+                    Log::warning('CloudConvert任务取消失败', [
+                        'task_id' => $taskId,
+                        'cloudconvert_id' => $task->cloudconvert_id,
+                        'error' => $result['error']
+                    ]);
+                }
+            } elseif ($task->isConvertioEngine() && $task->convertio_id) {
+                $convertioService = app(ConvertioService::class);
+                $result = $convertioService->cancelConversion($task->convertio_id);
+
+                if (!$result['success']) {
+                    Log::warning('Convertio任务取消失败', [
+                        'task_id' => $taskId,
+                        'convertio_id' => $task->convertio_id,
+                        'error' => $result['error']
+                    ]);
+                }
+            }
+
+            // 标记任务为已取消
+            $task->markAsCancelled();
+
+            return $this->success([
+                'task_id' => $taskId,
+                'status' => 'cancelled'
+            ], '任务已取消');
+        } catch (\Exception $e) {
+            Log::error('取消任务失败', [
                 'error' => $e->getMessage()
-            ], 500);
+            ]);
+
+            return $this->serverError('取消任务失败', $e->getMessage());
+        }
+    }
+
+    /**
+     * 获取支持的格式
+     *
+     * @return JsonResponse
+     */
+    public function getSupportedFormats(): JsonResponse
+    {
+        try {
+            $cloudConvertService = app(CloudConvertService::class);
+            $formats = $cloudConvertService->getSupportedFormats();
+
+            return $this->success($formats, '获取支持的格式成功');
+        } catch (\Exception $e) {
+            Log::error('获取支持的格式失败', [
+                'error' => $e->getMessage()
+            ]);
+
+            return $this->serverError('获取支持的格式失败', $e->getMessage());
+        }
+    }
+
+    /**
+     * 获取转换历史
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function getConversionHistory(Request $request): JsonResponse
+    {
+        try {
+            $userId = $request->user()?->id;
+            $limit = $request->input('limit', 20);
+            $page = $request->input('page', 1);
+
+            $query = FileConversionTask::query();
+
+            if ($userId) {
+                $query->where('user_id', $userId);
+            }
+
+            $tasks = $query->orderBy('created_at', 'desc')
+                ->paginate($limit, ['*'], 'page', $page);
+
+            return $this->success([
+                'tasks' => $tasks->items(),
+                'pagination' => [
+                    'current_page' => $tasks->currentPage(),
+                    'last_page' => $tasks->lastPage(),
+                    'per_page' => $tasks->perPage(),
+                    'total' => $tasks->total()
+                ]
+            ], '获取转换历史成功');
+        } catch (\Exception $e) {
+            Log::error('获取转换历史失败', [
+                'error' => $e->getMessage()
+            ]);
+
+            return $this->serverError('获取转换历史失败', $e->getMessage());
+        }
+    }
+
+    /**
+     * 使用 CloudConvert 处理转换
+     */
+    protected function processWithCloudConvert(FileConversionTask $task, string $filePath, array $options): array
+    {
+        try {
+            $cloudConvertService = app(CloudConvertService::class);
+
+            // 创建上传任务
+            $result = $cloudConvertService->createUploadJob(
+                $task->filename,
+                $task->output_format,
+                $options
+            );
+
+            if (!$result['success']) {
+                return $result;
+            }
+
+            // 上传文件
+            $uploadResult = $cloudConvertService->uploadFile(
+                $result['data']['upload_task'],
+                $filePath
+            );
+
+            if (!$uploadResult['success']) {
+                return $uploadResult;
+            }
+
+            // 更新任务记录
+            $task->setCloudConvertId($result['data']['job_id']);
+
+            return [
+                'success' => true,
+                'data' => [
+                    'job_id' => $result['data']['job_id'],
+                    'tag' => $result['data']['tag']
+                ]
+            ];
+        } catch (\Exception $e) {
+            Log::error('CloudConvert处理失败', [
+                'task_id' => $task->id,
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => 'CloudConvert处理失败: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * 使用 Convertio 处理转换
+     */
+    protected function processWithConvertio(FileConversionTask $task, string $filePath, array $options): array
+    {
+        try {
+            $convertioService = app(ConvertioService::class);
+
+            // 创建转换任务
+            $result = $convertioService->createUploadConversion(
+                $task->filename,
+                $task->output_format,
+                $options
+            );
+
+            if (!$result['success']) {
+                return $result;
+            }
+
+            // 上传文件
+            $uploadResult = $convertioService->uploadFileAndConvert(
+                $result['data']['id'],
+                $filePath,
+                $task->filename
+            );
+
+            if (!$uploadResult['success']) {
+                return $uploadResult;
+            }
+
+            // 更新任务记录
+            $task->setConvertioId($result['data']['id']);
+
+            return [
+                'success' => true,
+                'data' => [
+                    'conversion_id' => $result['data']['id']
+                ]
+            ];
+        } catch (\Exception $e) {
+            Log::error('Convertio处理失败', [
+                'task_id' => $task->id,
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => 'Convertio处理失败: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * 验证格式是否支持
+     */
+    protected function validateFormat(string $inputFormat, string $outputFormat): bool
+    {
+        try {
+            $cloudConvertService = app(CloudConvertService::class);
+            return $cloudConvertService->validateFormat($inputFormat, $outputFormat);
+        } catch (\Exception $e) {
+            Log::error('格式验证失败', [
+                'input_format' => $inputFormat,
+                'output_format' => $outputFormat,
+                'error' => $e->getMessage()
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * 估算转换时间
+     */
+    protected function estimateConversionTime(string $inputFormat, string $outputFormat, int $fileSize): int
+    {
+        try {
+            $cloudConvertService = app(CloudConvertService::class);
+            return $cloudConvertService->estimateConversionTime($inputFormat, $outputFormat, $fileSize);
+        } catch (\Exception $e) {
+            Log::error('转换时间估算失败', [
+                'input_format' => $inputFormat,
+                'output_format' => $outputFormat,
+                'file_size' => $fileSize,
+                'error' => $e->getMessage()
+            ]);
+            return 60; // 默认1分钟
         }
     }
 
@@ -181,6 +542,120 @@ class FileConversionController extends Controller
                 'file_size' => 0,
                 'format' => 'unknown',
             ];
+        }
+    }
+
+    /**
+     * 从转换引擎更新任务状态
+     */
+    protected function updateTaskStatusFromEngine(FileConversionTask $task): void
+    {
+        try {
+            // 如果任务已经完成或失败，不需要再查询
+            if ($task->isCompleted() || $task->isFailed() || $task->isCancelled()) {
+                return;
+            }
+
+            // 根据引擎类型查询状态
+            if ($task->isCloudConvertEngine() && $task->cloudconvert_id) {
+                $this->updateCloudConvertStatus($task);
+            } elseif ($task->isConvertioEngine() && $task->convertio_id) {
+                $this->updateConvertioStatus($task);
+            }
+        } catch (\Exception $e) {
+            Log::error('更新任务状态失败', [
+                'task_id' => $task->id,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * 更新 CloudConvert 任务状态
+     */
+    protected function updateCloudConvertStatus(FileConversionTask $task): void
+    {
+        try {
+            $cloudConvertService = app(CloudConvertService::class);
+            $result = $cloudConvertService->getStatus($task->cloudconvert_id);
+
+            if ($result['success']) {
+                $data = $result['data'];
+                $status = $data['status'];
+                $progress = $data['progress'] ?? 0;
+
+                // 更新任务进度
+                $task->updateProgress($progress);
+
+                if ($status === 'finished') {
+                    // 获取输出文件信息
+                    $exportTask = $data['tasks']['export'] ?? null;
+                    if ($exportTask && isset($exportTask['result']['files'])) {
+                        $files = $exportTask['result']['files'];
+                        if (!empty($files)) {
+                            $outputFile = $files[0];
+                            $outputUrl = $outputFile['url'] ?? null;
+                            $outputSize = $outputFile['size'] ?? 0;
+
+                            if ($outputUrl) {
+                                $task->complete($outputUrl, $outputSize, 0);
+                            }
+                        }
+                    }
+                } elseif ($status === 'error') {
+                    $errorMessage = $data['error'] ?? '转换失败';
+                    $task->markAsFailed($errorMessage);
+                }
+            }
+        } catch (\Exception $e) {
+            Log::error('更新 CloudConvert 状态失败', [
+                'task_id' => $task->id,
+                'cloudconvert_id' => $task->cloudconvert_id,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * 更新 Convertio 任务状态
+     */
+    protected function updateConvertioStatus(FileConversionTask $task): void
+    {
+        try {
+            $convertioService = app(ConvertioService::class);
+            $result = $convertioService->getStatus($task->convertio_id);
+
+            if ($result['success']) {
+                $data = $result['data'];
+                $step = $data['step'] ?? null;
+                $progress = $data['step_percent'] ?? 0;
+
+                // 更新任务进度
+                $task->updateProgress($progress);
+
+                // Convertio 的状态处理
+                if ($step === 'finish') {
+                    // 任务完成，获取下载链接
+                    $downloadResult = $convertioService->downloadResult($task->convertio_id);
+                    if ($downloadResult['success']) {
+                        $outputUrl = $downloadResult['data']['download_url'] ?? null;
+                        $outputSize = $downloadResult['data']['size'] ?? 0;
+
+                        if ($outputUrl) {
+                            $task->complete($outputUrl, $outputSize, 0);
+                        }
+                    }
+                } elseif ($step === 'error') {
+                    $errorMessage = $data['error'] ?? '转换失败';
+                    $task->markAsFailed($errorMessage);
+                }
+            }
+        } catch (\Exception $e) {
+            Log::error('更新 Convertio 状态失败', [
+                'task_id' => $task->id,
+                'convertio_id' => $task->convertio_id,
+                'error' => $e->getMessage()
+            ]);
         }
     }
 }

@@ -42,9 +42,11 @@ Route::get('/seo/page-info', [SeoController::class, 'getPageSeo']);
 Route::get('/seo/structured-data', [SeoController::class, 'getStructuredData']);
 
 // 文件转换相关接口
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('optional.auth')->group(function () {
     Route::post('/file-conversion/convert', [FileConversionController::class, 'convert']);
+    Route::post('/file-conversion/upload', [FileConversionController::class, 'uploadAndConvert']);
     Route::get('/file-conversion/status', [FileConversionController::class, 'status']);
-    Route::get('/file-conversion/formats', [FileConversionController::class, 'supportedFormats']);
-    Route::get('/file-conversion/examples', [FileConversionController::class, 'conversionExamples']);
+    Route::post('/file-conversion/cancel', [FileConversionController::class, 'cancel']);
+    Route::get('/file-conversion/formats', [FileConversionController::class, 'getSupportedFormats']);
+    Route::get('/file-conversion/history', [FileConversionController::class, 'getConversionHistory']);
 });

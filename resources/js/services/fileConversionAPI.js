@@ -1,0 +1,353 @@
+import axios from 'axios';
+
+/**
+ * 文件转换 API 服务
+ */
+
+// API 基础配置
+const API_BASE = '/api/file-conversion';
+
+// 创建 axios 实例
+const apiClient = axios.create({
+    baseURL: API_BASE,
+    timeout: 30000, // 30秒超时
+    headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+    }
+});
+
+// 重试配置
+const retryConfig = {
+    retries: 3,
+    retryDelay: 1000,
+    retryCondition: (error) => {
+        // 只在网络错误或5xx服务器错误时重试
+        return !error.response || (error.response.status >= 500 && error.response.status < 600);
+    }
+};
+
+// 重试函数
+const retryRequest = async (requestFn, retries = retryConfig.retries) => {
+    try {
+        return await requestFn();
+    } catch (error) {
+        if (retries > 0 && retryConfig.retryCondition(error)) {
+            await new Promise(resolve => setTimeout(resolve, retryConfig.retryDelay));
+            return retryRequest(requestFn, retries - 1);
+        }
+        throw error;
+    }
+};
+
+// 请求拦截器
+apiClient.interceptors.request.use(
+    (config) => {
+        // 确保 CSRF token 是最新的
+        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        if (token) {
+            config.headers['X-CSRF-TOKEN'] = token;
+        }
+        return config;
+    },
+    (error) => {
+        return Promise.reject(error);
+    }
+);
+
+// 响应拦截器
+apiClient.interceptors.response.use(
+    (response) => {
+        // 检查业务逻辑错误
+        if (response.data && response.data.code === 0) {
+            return Promise.reject(new Error(response.data.message || '请求失败'));
+        }
+        return response;
+    },
+    (error) => {
+        // 处理网络错误
+        if (error.response) {
+            // 服务器返回错误状态码
+            const message = error.response.data?.message || `请求失败 (${error.response.status})`;
+            return Promise.reject(new Error(message));
+        } else if (error.request) {
+            // 请求已发出但没有收到响应
+            return Promise.reject(new Error('网络连接失败，请检查网络连接'));
+        } else {
+            // 其他错误
+            return Promise.reject(new Error(error.message || '请求失败'));
+        }
+    }
+);
+
+/**
+ * 文件转换 API 类
+ */
+class FileConversionAPI {
+    /**
+     * 上传文件并开始转换
+     * @param {File} file - 要转换的文件
+     * @param {Object} options - 转换选项
+     * @returns {Promise<Object>}
+     */
+    static async uploadAndConvert(file, options = {}) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('output_format', options.outputFormat || 'mp4');
+        formData.append('engine', options.engine || 'cloudconvert');
+
+        if (options.conversionOptions && Array.isArray(options.conversionOptions)) {
+            // 将数组中的每个对象分别添加到 FormData
+            options.conversionOptions.forEach((option, index) => {
+                if (option.key && option.value !== undefined) {
+                    formData.append(`options[${index}][key]`, option.key);
+                    formData.append(`options[${index}][value]`, option.value);
+                }
+            });
+        }
+
+        try {
+            const response = await apiClient.post('/upload', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                }
+            });
+            return response.data;
+        } catch (error) {
+            throw new Error(error.message || '上传失败');
+        }
+    }
+
+    /**
+     * 获取任务状态
+     * @param {number} taskId - 任务ID
+     * @returns {Promise<Object>}
+     */
+    static async getStatus(taskId) {
+        try {
+            const response = await retryRequest(() =>
+                apiClient.get('/status', {
+                    params: { task_id: taskId }
+                })
+            );
+            return response.data;
+        } catch (error) {
+            throw new Error(error.message || '获取状态失败');
+        }
+    }
+
+    /**
+     * 取消转换任务
+     * @param {number} taskId - 任务ID
+     * @returns {Promise<Object>}
+     */
+    static async cancelTask(taskId) {
+        try {
+            const response = await apiClient.post('/cancel', {
+                task_id: taskId
+            });
+            return response.data;
+        } catch (error) {
+            throw new Error(error.message || '取消失败');
+        }
+    }
+
+    /**
+     * 获取支持的格式
+     * @returns {Promise<Object>}
+     */
+    static async getSupportedFormats() {
+        try {
+            const response = await apiClient.get('/formats');
+            return response.data;
+        } catch (error) {
+            throw new Error(error.message || '获取格式失败');
+        }
+    }
+
+    /**
+     * 获取转换历史
+     * @param {Object} params - 查询参数
+     * @returns {Promise<Object>}
+     */
+    static async getHistory(params = {}) {
+        try {
+            const response = await apiClient.get('/history', {
+                params: {
+                    limit: params.limit || 20,
+                    page: params.page || 1,
+                    ...params
+                }
+            });
+            return response.data;
+        } catch (error) {
+            throw new Error(error.message || '获取历史失败');
+        }
+    }
+
+    /**
+     * 轮询任务状态
+     * @param {number} taskId - 任务ID
+     * @param {Function} onProgress - 进度回调
+     * @param {Function} onComplete - 完成回调
+     * @param {Function} onError - 错误回调
+     * @param {number} interval - 轮询间隔（毫秒）
+     * @returns {Function} 返回取消轮询的函数
+     */
+    static pollStatus(taskId, onProgress, onComplete, onError, interval = 2000) {
+        let isCancelled = false;
+
+        const poll = async () => {
+            if (isCancelled) return;
+
+            try {
+                const result = await this.getStatus(taskId);
+                const data = result.data;
+
+                // 调用进度回调
+                if (onProgress) {
+                    onProgress(data);
+                }
+
+                // 检查是否完成
+                if (data.status === 2) { // 已完成
+                    if (onComplete) {
+                        onComplete(data);
+                    }
+                    return;
+                }
+
+                // 检查是否失败
+                if (data.status === 3) { // 失败
+                    if (onError) {
+                        onError(new Error(data.error_message || '转换失败'));
+                    }
+                    return;
+                }
+
+                // 检查是否取消
+                if (data.status === 4) { // 已取消
+                    if (onComplete) {
+                        onComplete(data);
+                    }
+                    return;
+                }
+
+                // 继续轮询
+                setTimeout(poll, interval);
+            } catch (error) {
+                if (onError) {
+                    onError(error);
+                }
+            }
+        };
+
+        // 开始轮询
+        poll();
+
+        // 返回取消函数
+        return () => {
+            isCancelled = true;
+        };
+    }
+
+    /**
+     * 格式化文件大小
+     * @param {number} bytes - 字节数
+     * @returns {string}
+     */
+    static formatFileSize(bytes) {
+        if (bytes === 0) return '0 B';
+
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    /**
+     * 格式化时间
+     * @param {number} seconds - 秒数
+     * @returns {string}
+     */
+    static formatTime(seconds) {
+        if (seconds < 60) {
+            return `${seconds}秒`;
+        } else if (seconds < 3600) {
+            return `${Math.floor(seconds / 60)}分钟${seconds % 60}秒`;
+        } else {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            return `${hours}小时${minutes}分钟`;
+        }
+    }
+
+    /**
+     * 获取状态文本
+     * @param {number} status - 状态码
+     * @returns {string}
+     */
+    static getStatusText(status) {
+        const statusMap = {
+            0: '等待中',
+            1: '转换中',
+            2: '已完成',
+            3: '失败',
+            4: '已取消'
+        };
+        return statusMap[status] || '未知状态';
+    }
+
+    /**
+     * 检查文件是否支持转换
+     * @param {File} file - 文件对象
+     * @returns {boolean}
+     */
+    static isFileSupported(file) {
+        const supportedTypes = [
+            'video/mp4', 'video/avi', 'video/mov', 'video/mkv', 'video/wmv',
+            'video/flv', 'video/webm', 'video/m4v', 'video/3gp', 'video/ogv',
+            'image/gif', 'image/webp', 'image/avif', 'image/heic', 'image/heif'
+        ];
+
+        return supportedTypes.includes(file.type) ||
+            file.name.match(/\.(mp4|avi|mov|mkv|wmv|flv|webm|m4v|3gp|ogv|gif|webp|avif|heic|heif)$/i);
+    }
+
+    /**
+     * 获取文件类型信息
+     * @param {File} file - 文件对象
+     * @returns {Object}
+     */
+    static getFileInfo(file) {
+        return {
+            name: file.name,
+            size: file.size,
+            sizeFormatted: this.formatFileSize(file.size),
+            type: file.type,
+            extension: file.name.split('.').pop()?.toLowerCase() || 'unknown',
+            lastModified: new Date(file.lastModified).toLocaleString(),
+            isSupported: this.isFileSupported(file)
+        };
+    }
+
+    /**
+     * 设置请求超时时间
+     * @param {number} timeout - 超时时间（毫秒）
+     */
+    static setTimeout(timeout) {
+        apiClient.defaults.timeout = timeout;
+    }
+
+    /**
+     * 获取当前超时设置
+     * @returns {number}
+     */
+    static getTimeout() {
+        return apiClient.defaults.timeout;
+    }
+}
+
+export default FileConversionAPI;

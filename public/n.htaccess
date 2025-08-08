@@ -5,8 +5,8 @@
 #    try_files $uri $uri/ /index.php$is_args$query_string;
 #}
 
-add_header Cross-Origin-Embedder-Policy "require-corp" always;
-add_header Cross-Origin-Opener-Policy "same-origin" always;
+# add_header Cross-Origin-Embedder-Policy "require-corp" always;
+# add_header Cross-Origin-Opener-Policy "same-origin" always;
 # 允许外部字体资源
 # add_header Cross-Origin-Resource-Policy "cross-origin" always;
 

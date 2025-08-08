@@ -1,13 +1,20 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, onMounted } from "vue";
 import Layout from "@/components/Layout.vue";
-import FileConversionAPI from "@/services/fileConversionAPI.js";
+import ffmpegConverter, {
+  OUTPUT_FORMATS,
+  VIDEO_QUALITY_OPTIONS,
+  RESOLUTION_OPTIONS,
+  FRAMERATE_OPTIONS,
+} from "@/utils/ffmpeg";
 
 // 响应式数据
+const isLoaded = ref(false);
 const isConverting = ref(false);
-const isUploading = ref(false);
+const isLoading = ref(false);
 const progress = ref(0);
 const selectedFile = ref(null);
+const convertedBlob = ref(null);
 const downloadUrl = ref("");
 const message = ref("请选择视频文件开始转换");
 
@@ -15,60 +22,8 @@ const message = ref("请选择视频文件开始转换");
 const showErrorModal = ref(false);
 const errorMessage = ref("");
 
-// 文件信息
-const fileInfo = ref(null);
-
-// 转换选项
-const outputFormat = ref("mp4");
-const videoQuality = ref("high");
-const resolution = ref("original");
-const framerate = ref("original");
-const conversionEngine = ref("cloudconvert");
-
-// 任务相关
-const currentTaskId = ref(null);
-const cancelPolling = ref(null);
-
-// 支持的格式
-const supportedFormats = ref(null);
-
-// 格式选项常量
-const OUTPUT_FORMATS = [
-  { value: "mp4", label: "MP4 (H.264)" },
-  { value: "avi", label: "AVI" },
-  { value: "mov", label: "MOV (QuickTime)" },
-  { value: "mkv", label: "MKV (Matroska)" },
-  { value: "wmv", label: "WMV (Windows Media)" },
-  { value: "flv", label: "FLV (Flash Video)" },
-  { value: "webm", label: "WebM (VP8/VP9)" },
-  { value: "gif", label: "GIF (动画)" },
-  { value: "m4v", label: "M4V (iTunes)" },
-  { value: "3gp", label: "3GP (移动设备)" },
-  { value: "ogv", label: "OGV (Ogg Video)" },
-];
-
-const VIDEO_QUALITY_OPTIONS = [
-  { value: "high", label: "高质量" },
-  { value: "medium", label: "中等质量" },
-  { value: "low", label: "低质量" },
-];
-
-const RESOLUTION_OPTIONS = [
-  { value: "original", label: "原始分辨率" },
-  { value: "1920x1080", label: "1080p (1920x1080)" },
-  { value: "1280x720", label: "720p (1280x720)" },
-  { value: "854x480", label: "480p (854x480)" },
-  { value: "640x360", label: "360p (640x360)" },
-];
-
-const FRAMERATE_OPTIONS = [
-  { value: "original", label: "原始帧率" },
-  { value: "30", label: "30 FPS" },
-  { value: "25", label: "25 FPS" },
-  { value: "24", label: "24 FPS" },
-  { value: "15", label: "15 FPS" },
-  { value: "10", label: "10 FPS" },
-];
+// 视频信息
+const videoInfo = ref(null);
 
 // 设置消息的辅助函数
 const setMessage = (msg) => {
@@ -82,27 +37,44 @@ const showErrorDialog = (msg) => {
   showErrorModal.value = true;
 };
 
-// 初始化
+// 转换选项
+const outputFormat = ref("mp4");
+const videoQuality = ref("high");
+const resolution = ref("original");
+const framerate = ref("original");
+
+// 初始化FFmpeg
 onMounted(async () => {
-  // 直接设置默认消息，不显示加载过程
-  setMessage("请选择视频文件开始转换");
+  try {
+    isLoading.value = true;
+    setMessage("正在加载资源...");
 
-      // 静默加载支持的格式
-    try {
-      const result = await FileConversionAPI.getSupportedFormats();
-      if (result.code === 1) {
-        supportedFormats.value = result.data;
+    // 模拟加载进度
+    const progressInterval = setInterval(() => {
+      if (progress.value < 80) {
+        progress.value += 5;
+        setMessage(`正在加载资源... ${progress.value}%`);
       }
-    } catch (error) {
-      console.error("格式加载失败:", error);
-      // 静默处理错误，不影响用户体验
-    }
-});
+    }, 200);
 
-// 清理资源
-onUnmounted(() => {
-  if (cancelPolling.value) {
-    cancelPolling.value();
+    await ffmpegConverter.init((msg) => {
+      setMessage(msg);
+    });
+
+    clearInterval(progressInterval);
+    progress.value = 100;
+    setMessage("资源加载完成！");
+    isLoaded.value = true;
+    isLoading.value = false;
+
+    // 等待一秒让用户看到加载完成
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    setMessage("请选择视频文件开始转换");
+    progress.value = 0;
+  } catch (error) {
+    console.error("FFmpeg加载失败:", error);
+    setMessage("资源加载失败，请刷新页面重试");
+    isLoading.value = false;
   }
 });
 
@@ -112,28 +84,31 @@ const handleFileSelect = async (event) => {
   if (target.files && target.files[0]) {
     selectedFile.value = target.files[0];
     // 重置之前的结果
+    convertedBlob.value = null;
     downloadUrl.value = "";
     progress.value = 0;
-    fileInfo.value = null;
+    videoInfo.value = null;
     setMessage(`已选择文件: ${selectedFile.value.name}`);
 
-    // 读取文件信息
-    await readFileInfo();
+    // 读取视频信息
+    await readVideoInfo();
   }
 };
 
 // 拖拽处理
 const handleDrop = async (event) => {
+  console.log(event);
   event.preventDefault();
   if (event.dataTransfer?.files && event.dataTransfer.files[0]) {
     selectedFile.value = event.dataTransfer.files[0];
+    convertedBlob.value = null;
     downloadUrl.value = "";
     progress.value = 0;
-    fileInfo.value = null;
+    videoInfo.value = null;
     setMessage(`已选择文件: ${selectedFile.value.name}`);
 
-    // 读取文件信息
-    await readFileInfo();
+    // 读取视频信息
+    await readVideoInfo();
   }
 };
 
@@ -141,32 +116,51 @@ const handleDragOver = (event) => {
   event.preventDefault();
 };
 
-// 读取文件信息
-const readFileInfo = async () => {
+// 读取视频信息
+const readVideoInfo = async () => {
   if (!selectedFile.value) {
     return;
   }
 
-  try {
-    setMessage("正在读取文件信息...");
+  if (!isLoaded.value) {
+    setMessage("资源尚未加载完成，无法读取视频信息");
+    return;
+  }
 
-    // 获取文件基本信息
-    fileInfo.value = {
-      name: selectedFile.value.name,
-      size: selectedFile.value.size,
-      sizeFormatted: FileConversionAPI.formatFileSize(selectedFile.value.size),
-      type: selectedFile.value.type,
-      format: selectedFile.value.name.split(".").pop()?.toLowerCase() || "unknown",
-      lastModified: new Date(selectedFile.value.lastModified).toLocaleString(),
+  try {
+    setMessage("正在读取视频信息...");
+
+    // 使用 ffmpegConverter.getFileInfo 获取详细的文件信息
+    const fileInfo = await ffmpegConverter.getFileInfo(selectedFile.value, (msg) => {
+      setMessage(msg);
+    });
+
+    // 转换文件信息格式以匹配现有的 videoInfo 结构
+    videoInfo.value = {
+      duration: fileInfo.duration || 0,
+      fps: fileInfo.video?.framerate || 30,
+      totalFrames: fileInfo.duration
+        ? Math.round(fileInfo.duration * (fileInfo.video?.framerate || 30))
+        : 0,
+      resolution: fileInfo.video?.resolution || "未知",
+      bitrate: fileInfo.bitrateFormatted || "未知",
+      format: fileInfo.format,
+      // 添加更多详细信息
+      size: fileInfo.sizeFormatted,
+      videoCodec: fileInfo.video?.codec || "未知",
+      audioCodec: fileInfo.audio?.codec || "未知",
+      streams: fileInfo.streams,
     };
 
     setMessage(
-      `文件信息读取成功: ${fileInfo.value.sizeFormatted}, ${fileInfo.value.format} 格式`
+      `视频信息读取成功: ${fileInfo.video?.resolution || "未知分辨率"}, ${
+        fileInfo.durationFormatted || "未知时长"
+      }, ${fileInfo.video?.framerate || "未知"}fps`
     );
   } catch (error) {
-    console.error("读取文件信息失败:", error);
-    setMessage("读取文件信息失败，但可以继续转换");
-    fileInfo.value = null;
+    console.error("读取视频信息失败:", error);
+    setMessage("读取视频信息失败，但可以继续转换");
+    videoInfo.value = null;
   }
 };
 
@@ -177,117 +171,60 @@ const convertVideo = async () => {
     return;
   }
 
-  // 检查文件大小（限制为1GB）
-  const maxSize = 1024 * 1024 * 1024; // 1GB
+  // 检查文件大小（限制为100MB）
+  const maxSize = 100 * 1024 * 1024; // 100MB
   if (selectedFile.value.size > maxSize) {
-    alert("文件过大，请选择小于1GB的文件");
+    alert("文件过大，请选择小于100MB的文件");
     return;
   }
 
   console.log("开始转换:", selectedFile.value.name, "→", outputFormat.value);
 
   isConverting.value = true;
-  isUploading.value = true;
   progress.value = 0;
-  setMessage("正在上传文件...");
+  setMessage("正在加载资源...");
 
   try {
-    // 准备转换选项
-    const conversionOptions = [];
-    
-    if (videoQuality.value !== "high") {
-      conversionOptions.push({ key: "quality", value: videoQuality.value });
-    }
-    if (resolution.value !== "original") {
-      conversionOptions.push({ key: "resolution", value: resolution.value });
-    }
-    if (framerate.value !== "original") {
-      conversionOptions.push({ key: "fps", value: parseInt(framerate.value) });
+    // 检查FFmpeg是否已加载
+    if (!isLoaded.value) {
+      setMessage("资源尚未加载完成，请稍候...");
+      return;
     }
 
-    // 上传文件并开始转换
-    const result = await FileConversionAPI.uploadAndConvert(selectedFile.value, {
+    setMessage("开始转换...");
+    progress.value = 0;
+
+    const options = {
       outputFormat: outputFormat.value,
-      engine: conversionEngine.value,
-      conversionOptions,
-    });
+      videoQuality: videoQuality.value,
+      resolution: resolution.value,
+      framerate: framerate.value,
+    };
 
-    if (result.code !== 1) {
-      throw new Error(result.message || "转换任务创建失败");
-    }
-
-    currentTaskId.value = result.data.task_id;
-    isUploading.value = false;
-    setMessage("文件上传完成，开始转换...");
-
-    // 开始轮询状态
-    cancelPolling.value = FileConversionAPI.pollStatus(
-      result.data.task_id,
-      // 进度回调
-      (data) => {
-        progress.value = data.step_percent || 0;
-        setMessage(`转换中... ${data.step_percent || 0}%`);
-      },
-      // 完成回调
-      (data) => {
-        progress.value = 100;
-        setMessage("转换完成！");
-        isConverting.value = false;
-
-        // 如果有输出URL，设置下载链接
-        if (data.output_url) {
-          downloadUrl.value = data.output_url;
+    const result = await ffmpegConverter.convert(
+      selectedFile.value,
+      options,
+      (msg, progressValue) => {
+        setMessage(msg);
+        if (progressValue !== undefined) {
+          progress.value = progressValue;
         }
-
-        // 记录工具使用
-        recordToolUsage();
-      },
-      // 错误回调
-      (error) => {
-        console.error("转换失败:", error);
-        setMessage("转换失败，请检查文件格式或重试");
-        showErrorDialog(error.message || "转换失败，请检查文件格式或重试");
-        isConverting.value = false;
       }
     );
+
+    convertedBlob.value = result.blob;
+    downloadUrl.value = URL.createObjectURL(result.blob);
+    progress.value = 100;
+    setMessage("转换完成！");
   } catch (error) {
     console.error("转换失败:", error);
     setMessage("转换失败，请检查文件格式或重试");
     showErrorDialog(
       error instanceof Error ? error.message : "转换失败，请检查文件格式或重试"
     );
+  } finally {
     isConverting.value = false;
-    isUploading.value = false;
-  }
-};
-
-// 取消转换
-const cancelConversion = async () => {
-  if (!currentTaskId.value) {
-    return;
-  }
-
-  try {
-    setMessage("正在取消转换...");
-
-    const result = await FileConversionAPI.cancelTask(currentTaskId.value);
-
-    if (result.code === 1) {
-      setMessage("转换已取消");
-      isConverting.value = false;
-      progress.value = 0;
-
-      // 停止轮询
-      if (cancelPolling.value) {
-        cancelPolling.value();
-        cancelPolling.value = null;
-      }
-    } else {
-      setMessage("取消失败: " + (result.message || "未知错误"));
-    }
-  } catch (error) {
-    console.error("取消失败:", error);
-    setMessage("取消失败: " + error.message);
+    isLoading.value = false;
   }
 };
 
@@ -317,7 +254,7 @@ const recordToolUsage = async () => {
 
 // 下载转换后的文件
 const downloadFile = async () => {
-  if (downloadUrl.value && selectedFile.value) {
+  if (convertedBlob.value && downloadUrl.value && selectedFile.value) {
     const a = document.createElement("a");
     a.href = downloadUrl.value;
 
@@ -563,18 +500,50 @@ const downloadFile = async () => {
                     已选择: {{ selectedFile.name }}
                   </p>
                   <div
-                    v-if="fileInfo"
+                    v-if="videoInfo"
                     class="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-md"
                   >
                     <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                      文件信息
+                      视频信息
                     </h4>
                     <div class="space-y-2 text-xs text-gray-600 dark:text-gray-400">
+                      <!-- 基本信息 -->
                       <div class="grid grid-cols-2 gap-2">
-                        <div>文件名: {{ fileInfo.name }}</div>
-                        <div>文件大小: {{ fileInfo.sizeFormatted }}</div>
-                        <div>文件格式: {{ fileInfo.format }}</div>
-                        <div>修改时间: {{ fileInfo.lastModified }}</div>
+                        <div>文件大小: {{ videoInfo.size }}</div>
+                        <div>格式: {{ videoInfo.format }}</div>
+                        <div>
+                          时长:
+                          {{
+                            videoInfo.duration > 0
+                              ? videoInfo.duration.toFixed(2) + "秒"
+                              : "未知"
+                          }}
+                        </div>
+                        <div>流数量: {{ videoInfo.streams }}</div>
+                      </div>
+
+                      <!-- 视频信息 -->
+                      <div v-if="videoInfo.resolution !== '未知'" class="border-t pt-2">
+                        <div class="font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          视频信息
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                          <div>分辨率: {{ videoInfo.resolution }}</div>
+                          <div>帧率: {{ videoInfo.fps }}fps</div>
+                          <div>编码: {{ videoInfo.videoCodec }}</div>
+                          <div>比特率: {{ videoInfo.bitrate }}</div>
+                        </div>
+                      </div>
+
+                      <!-- 音频信息 -->
+                      <div v-if="videoInfo.audioCodec !== '未知'" class="border-t pt-2">
+                        <div class="font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          音频信息
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                          <div>编码: {{ videoInfo.audioCodec }}</div>
+                          <div>声道: 未知</div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -683,14 +652,14 @@ const downloadFile = async () => {
             </div>
 
             <!-- 转换按钮 -->
-            <div class="text-center space-y-4">
+            <div class="text-center">
               <button
                 @click="convertVideo"
-                :disabled="!selectedFile || isConverting || isUploading"
+                :disabled="!selectedFile || !videoInfo || isConverting || !isLoaded"
                 class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-3 px-8 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 <svg
-                  v-if="!isConverting && !isUploading"
+                  v-if="!isConverting"
                   class="inline-block h-5 w-5 mr-2"
                   fill="none"
                   stroke="currentColor"
@@ -717,40 +686,18 @@ const downloadFile = async () => {
                     d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                   ></path>
                 </svg>
-                {{ isUploading ? "上传中..." : isConverting ? "转换中..." : "开始转换" }}
-              </button>
-
-              <!-- 取消按钮 -->
-              <button
-                v-if="isConverting && currentTaskId"
-                @click="cancelConversion"
-                class="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-6 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-              >
-                <svg
-                  class="inline-block h-4 w-4 mr-2"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M6 18L18 6M6 6l12 12"
-                  ></path>
-                </svg>
-                取消转换
+                {{ isConverting ? "转换中..." : "开始转换" }}
               </button>
             </div>
 
-            <!-- 上传进度 -->
-            <div v-if="isUploading" class="mt-8">
+            <!-- 加载进度 -->
+            <div v-if="isLoading" class="mt-8">
               <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                文件上传进度
+                资源加载进度
               </h3>
               <div class="flex items-center justify-between mb-2">
                 <span class="text-sm text-gray-600 dark:text-gray-400"
-                  >正在上传文件，请稍候...</span
+                  >正在加载核心文件，请稍候...</span
                 >
                 <span class="text-sm font-medium text-blue-600 dark:text-blue-400"
                   >{{ Math.round(progress) }}%</span
@@ -765,7 +712,7 @@ const downloadFile = async () => {
             </div>
 
             <!-- 转换进度 -->
-            <div v-if="isConverting && !isUploading" class="mt-8">
+            <div v-if="isConverting && !isLoading" class="mt-8">
               <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
                 转换进度
               </h3>
@@ -787,7 +734,7 @@ const downloadFile = async () => {
 
             <!-- 下载区域 -->
             <div
-              v-if="downloadUrl && !isConverting"
+              v-if="convertedBlob && downloadUrl"
               class="mt-8 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md"
             >
               <div class="flex items-center justify-between">
