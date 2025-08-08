@@ -30,9 +30,9 @@ class CloudConvertService
      */
     public function __construct()
     {
-        $this->config = config('services.cloudconvert', []);
-        $this->timeout = $this->config['timeout'] ?? 30;
-        $this->maxRetries = $this->config['max_retries'] ?? 3;
+        $this->config = config('cloudconvert', []);
+        $this->timeout = 30; // 默认超时时间
+        $this->maxRetries = 3; // 默认重试次数
 
         if (empty($this->config['api_key'])) {
             throw new Exception('CloudConvert API密钥未配置');
@@ -43,6 +43,10 @@ class CloudConvertService
      * 开始转换任务
      *
      * @param array $params 转换参数
+     *   - input_url: string 输入文件URL（必需）
+     *   - output_format: string 输出格式，如 'mp4', 'avi', 'gif' 等（默认: 'mp4'）
+     *   - options: array 转换选项，如视频质量、分辨率等（可选）
+     *   - tag: string 任务标签，用于标识任务（可选，默认自动生成）
      * @return array
      */
     public function startConversion(array $params): array
@@ -116,8 +120,8 @@ class CloudConvertService
     /**
      * 获取转换状态
      *
-     * @param string $jobId 任务ID
-     * @return array
+     * @param string $jobId CloudConvert任务ID
+     * @return array 返回任务状态信息，包括进度、错误信息等
      */
     public function getStatus(string $jobId): array
     {
@@ -205,8 +209,8 @@ class CloudConvertService
     /**
      * 等待任务完成
      *
-     * @param string $jobId 任务ID
-     * @param int $timeout 超时时间（秒）
+     * @param string $jobId CloudConvert任务ID
+     * @param int $timeout 超时时间（秒），默认300秒（5分钟）
      * @return array
      */
     public function waitForJob(string $jobId, int $timeout = 300): array
@@ -232,8 +236,8 @@ class CloudConvertService
     /**
      * 取消转换任务
      *
-     * @param string $jobId 任务ID
-     * @return array
+     * @param string $jobId CloudConvert任务ID
+     * @return array 返回取消结果
      */
     public function cancelConversion(string $jobId): array
     {
@@ -270,7 +274,7 @@ class CloudConvertService
     /**
      * 获取支持的格式
      *
-     * @return array
+     * @return array 返回所有支持的输入和输出格式，按文件类型分类
      */
     public function getSupportedFormats(): array
     {
@@ -297,9 +301,9 @@ class CloudConvertService
     /**
      * 验证格式是否支持
      *
-     * @param string $inputFormat 输入格式
-     * @param string $outputFormat 输出格式
-     * @return bool
+     * @param string $inputFormat 输入文件格式，如 'mp4', 'avi', 'mov' 等
+     * @param string $outputFormat 输出文件格式，如 'mp4', 'gif', 'webm' 等
+     * @return bool 返回是否支持该格式转换
      */
     public function validateFormat(string $inputFormat, string $outputFormat): bool
     {
@@ -318,9 +322,9 @@ class CloudConvertService
     /**
      * 下载转换结果
      *
-     * @param string $jobId 任务ID
-     * @param string $outputPath 输出路径
-     * @return array
+     * @param string $jobId CloudConvert任务ID
+     * @param string $outputPath 本地保存路径，如 '/path/to/downloads/'
+     * @return array 返回下载结果，包含文件信息
      */
     public function downloadResult(string $jobId, string $outputPath): array
     {
@@ -409,9 +413,14 @@ class CloudConvertService
     /**
      * 创建上传任务
      *
-     * @param string $filename 文件名
-     * @param string $outputFormat 输出格式
+     * @param string $filename 文件名，包含扩展名
+     * @param string $outputFormat 输出格式，如 'mp4', 'avi', 'gif' 等
      * @param array $options 转换选项
+     *   - video_bitrate: int 视频比特率（可选）
+     *   - video_resolution: string 视频分辨率，如 '1920x1080'（可选）
+     *   - audio_bitrate: int 音频比特率（可选）
+     *   - fps: int 帧率（可选）
+     *   - quality: string 质量设置，如 'high', 'medium', 'low'（可选）
      * @return array
      */
     public function createUploadJob(string $filename, string $outputFormat, array $options = []): array
@@ -472,9 +481,9 @@ class CloudConvertService
     /**
      * 上传文件
      *
-     * @param Task $uploadTask 上传任务
-     * @param string $filePath 文件路径
-     * @return array
+     * @param Task $uploadTask CloudConvert上传任务对象
+     * @param string $filePath 本地文件路径
+     * @return array 返回上传结果
      */
     public function uploadFile(Task $uploadTask, string $filePath): array
     {
@@ -521,10 +530,10 @@ class CloudConvertService
     /**
      * 估算转换时间
      *
-     * @param string $inputFormat 输入格式
-     * @param string $outputFormat 输出格式
+     * @param string $inputFormat 输入文件格式，如 'mp4', 'avi', 'mov' 等
+     * @param string $outputFormat 输出文件格式，如 'mp4', 'gif', 'webm' 等
      * @param int $fileSize 文件大小（字节）
-     * @return int 估算时间（秒）
+     * @return int 估算转换时间（秒）
      */
     public function estimateConversionTime(string $inputFormat, string $outputFormat, int $fileSize): int
     {

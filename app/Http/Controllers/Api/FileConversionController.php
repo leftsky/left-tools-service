@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
-class VideoConversionController extends Controller
+class FileConversionController extends Controller
 {
     /**
      * 提交视频转换任务

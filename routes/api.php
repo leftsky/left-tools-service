@@ -6,7 +6,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ToolController;
 use App\Http\Controllers\Api\AccessLogController;
 use App\Http\Controllers\SeoController;
-use App\Http\Controllers\Api\VideoConversionController;
+use App\Http\Controllers\Api\FileConversionController;
 
 
 // 访问日志接口（无需认证）
@@ -43,8 +43,8 @@ Route::get('/seo/structured-data', [SeoController::class, 'getStructuredData']);
 
 // 文件转换相关接口
 Route::middleware('auth:sanctum')->group(function () {
-    Route::post('/file-conversion/convert', [VideoConversionController::class, 'convert']);
-    Route::get('/file-conversion/status', [VideoConversionController::class, 'status']);
-    Route::get('/file-conversion/formats', [VideoConversionController::class, 'supportedFormats']);
-    Route::get('/file-conversion/examples', [VideoConversionController::class, 'conversionExamples']);
+    Route::post('/file-conversion/convert', [FileConversionController::class, 'convert']);
+    Route::get('/file-conversion/status', [FileConversionController::class, 'status']);
+    Route::get('/file-conversion/formats', [FileConversionController::class, 'supportedFormats']);
+    Route::get('/file-conversion/examples', [FileConversionController::class, 'conversionExamples']);
 });
