@@ -98,7 +98,7 @@ class CloudConvertService
                     'job_id' => method_exists($createdJob, 'getId') ? $createdJob->getId() : 'unknown',
                     'tag' => $tag,
                     'status' => 'created',
-                    'tasks' => method_exists($createdJob, 'getTasks') ? $createdJob->getTasks()->toArray() : []
+                    'tasks' => method_exists($createdJob, 'getTasks') && $createdJob->getTasks()
                 ],
                 'code' => 200
             ];

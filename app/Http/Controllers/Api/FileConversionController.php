@@ -27,7 +27,7 @@ class FileConversionController extends Controller
         path: "/api/upload",
         tags: ["文件上传"],
         summary: "上传文件",
-        description: "上传文件到七牛云存储",
+        description: "上传文件到阿里云存储",
         security: [["sanctum" => []]]
     )]
     #[OA\RequestBody(
