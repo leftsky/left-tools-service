@@ -12,6 +12,7 @@
         "darkaonline/l5-swagger": "^9.0",
         "filament/filament": "^3.3",
         "guzzlehttp/guzzle": "^7.9",
+        "iidestiny/flysystem-oss": "^4.7",
         "inertiajs/inertia-laravel": "^2.0",
         "laravel/framework": "^12.0",
         "laravel/sanctum": "^4.0",

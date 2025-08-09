@@ -22,6 +22,123 @@ use OpenApi\Attributes as OA;
 class FileConversionController extends Controller
 {
     use ApiResponseTrait;
+
+    #[OA\Post(
+        path: "/api/upload",
+        tags: ["文件上传"],
+        summary: "上传文件",
+        description: "上传文件到七牛云存储",
+        security: [["sanctum" => []]]
+    )]
+    #[OA\RequestBody(
+        required: true,
+        content: [
+            new OA\MediaType(
+                mediaType: "multipart/form-data",
+                schema: new OA\Schema(
+                    required: ["file"],
+                    properties: [
+                        new OA\Property(
+                            property: "file",
+                            type: "string",
+                            format: "binary",
+                            description: "要上传的文件"
+                        ),
+                        new OA\Property(
+                            property: "type",
+                            type: "string",
+                            description: "文件类型，例如：image, document 等",
+                            example: "image"
+                        )
+                    ]
+                )
+            )
+        ]
+    )]
+    #[OA\Response(
+        response: 200,
+        description: "上传成功",
+        content: new OA\JsonContent(
+            properties: [
+                new OA\Property(property: "success", type: "boolean", example: true),
+                new OA\Property(property: "code", type: "integer", example: 200),
+                new OA\Property(property: "message", type: "string", example: "文件上传成功"),
+                new OA\Property(
+                    property: "data",
+                    properties: [
+                        new OA\Property(property: "url", type: "string", example: "http://example.com/uploads/123.jpg"),
+                        new OA\Property(property: "path", type: "string", example: "uploads/123.jpg")
+                    ],
+                    type: "object"
+                )
+            ]
+        )
+    )]
+    #[OA\Response(
+        response: 422,
+        description: "验证失败",
+        content: new OA\JsonContent(
+            properties: [
+                new OA\Property(property: "success", type: "boolean", example: false),
+                new OA\Property(property: "code", type: "integer", example: 422),
+                new OA\Property(property: "message", type: "string", example: "验证失败"),
+                new OA\Property(property: "errors", type: "object")
+            ]
+        )
+    )]
+    #[OA\Response(
+        response: 500,
+        description: "上传失败",
+        content: new OA\JsonContent(
+            properties: [
+                new OA\Property(property: "success", type: "boolean", example: false),
+                new OA\Property(property: "code", type: "integer", example: 500),
+                new OA\Property(property: "message", type: "string", example: "文件上传失败")
+            ]
+        )
+    )]
+    public function upload(Request $request)
+    {
+        // 验证请求
+        $request->validate([
+            'file' => 'required|file|max:10240', // 最大10MB
+            'folder' => 'nullable|string'
+        ]);
+
+        if (!$request->hasFile('file') || !$request->file('file')->isValid()) {
+            return $this->error('未提供文件或文件上传失败');
+        }
+
+        // 获取文件
+        $file = $request->file('file');
+
+        // 生成唯一文件名
+        $extension = $file->getClientOriginalExtension();
+        $fileName = Str::random(10) . '_' . time() . '.' . $extension;
+
+        // 确定存储路径
+        $folder = $request->input('folder', 'uploads');
+        $folder = trim($folder, '/');
+        $filePath = $folder . '/' . $fileName;
+
+        try {
+            // 使用七牛云存储上传文件
+            $disk = Storage::disk('oss');
+            $content = file_get_contents($file->getRealPath());
+            $disk->put($filePath, $content);
+
+            // 获取文件URL
+            $url = Storage::url($filePath);
+
+            return $this->success([
+                'url' => $url,
+                'path' => $filePath
+            ], '文件上传成功');
+        } catch (\Exception $e) {
+            return $this->error('文件上传失败：' . $e->getMessage());
+        }
+    }
+
     /**
      * 提交视频转换任务
      */
@@ -947,7 +1064,6 @@ class FileConversionController extends Controller
                 'output_format' => $outputFormat,
                 'engine' => $engine
             ], '客户端直传任务已创建');
-
         } catch (\Exception $e) {
             Log::error('创建客户端直传任务失败', [
                 'error' => $e->getMessage(),
@@ -1088,7 +1204,6 @@ class FileConversionController extends Controller
             }
 
             return $this->error('不支持的转换引擎', 400);
-
         } catch (\Exception $e) {
             Log::error('确认客户端直传失败', [
                 'error' => $e->getMessage()

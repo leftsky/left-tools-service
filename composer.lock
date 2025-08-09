@@ -4,8 +4,47 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "b30eda2eef5e1776be34a7d7c4a24e29",
+    "content-hash": "8e94f6e4c0cc8b741347ed8d90570ec5",
     "packages": [
+        {
+            "name": "aliyuncs/oss-sdk-php",
+            "version": "v2.7.2",
+            "dist": {
+                "type": "zip",
+                "url": "https://mirrors.tencent.com/repository/composer/aliyuncs/oss-sdk-php/v2.7.2/aliyuncs-oss-sdk-php-v2.7.2.zip",
+                "reference": "483dd0b8bff5d47f0e4ffc99f6077a295c5ccbb5",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=5.3"
+            },
+            "require-dev": {
+                "php-coveralls/php-coveralls": "*",
+                "phpunit/phpunit": "*"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "OSS\\": "src/OSS"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Aliyuncs",
+                    "homepage": "http://www.aliyun.com"
+                }
+            ],
+            "description": "Aliyun OSS SDK for PHP",
+            "homepage": "http://www.aliyun.com/product/oss/",
+            "support": {
+                "issues": "https://github.com/aliyun/aliyun-oss-php-sdk/issues",
+                "source": "https://github.com/aliyun/aliyun-oss-php-sdk/tree/v2.7.2"
+            },
+            "time": "2024-10-28T10:41:12+00:00"
+        },
         {
             "name": "anourvalar/eloquent-serialize",
             "version": "1.3.3",
@@ -1903,6 +1942,56 @@
                 "source": "https://github.com/guzzle/uri-template/tree/v1.0.4"
             },
             "time": "2025-02-03T10:55:03+00:00"
+        },
+        {
+            "name": "iidestiny/flysystem-oss",
+            "version": "4.7",
+            "dist": {
+                "type": "zip",
+                "url": "https://mirrors.cloud.tencent.com/repository/composer/iidestiny/flysystem-oss/4.7/iidestiny-flysystem-oss-4.7.zip",
+                "reference": "eaee0f26584ba1e4fbbf79cb243043dfca2e9232",
+                "shasum": ""
+            },
+            "require": {
+                "aliyuncs/oss-sdk-php": "^2",
+                "ext-curl": "*",
+                "ext-json": "*",
+                "ext-openssl": "*",
+                "league/flysystem": "^3.0",
+                "php": "^8.0.2"
+            },
+            "require-dev": {
+                "mockery/mockery": "^1.5",
+                "phpunit/phpunit": "^9.5",
+                "symfony/var-dumper": "^3.4"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Iidestiny\\Flysystem\\Oss\\": "src"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "iidestiny",
+                    "email": "iidestiny@vip.qq.com"
+                }
+            ],
+            "description": "Flysystem adapter for the Oss storage.",
+            "keywords": [
+                "alioss",
+                "laravel",
+                "oss",
+                "阿里oss"
+            ],
+            "support": {
+                "issues": "https://github.com/iiDestiny/flysystem-oss/issues",
+                "source": "https://github.com/iiDestiny/flysystem-oss/tree/4.7"
+            },
+            "time": "2025-04-24T01:35:16+00:00"
         },
         {
             "name": "inertiajs/inertia-laravel",

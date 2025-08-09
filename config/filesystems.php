@@ -60,6 +60,18 @@ return [
             'report' => false,
         ],
 
+
+        'oss' => [
+            'driver' => 'ali_oss',
+            'access_key' => env('ALI_OSS_ACCESS_KEY'),
+            'secret_key' => env('ALI_OSS_ACCESS_SECRET'),
+            'region' => env('ALI_OSS_REGION'),
+            'bucket' => env('ALI_OSS_BUCKET'),
+            'root' => 'auth',
+            'url' => env('ALI_OSS_URL'),
+            'endpoint' => env('ALI_OSS_ENDPOINT'),
+            'isCName' => env('ALI_OSS_IS_CNAME', false)
+        ]
     ],
 
     /*
