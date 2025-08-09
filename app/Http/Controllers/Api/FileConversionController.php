@@ -315,7 +315,7 @@ class FileConversionController extends Controller
      * 文件上传并转换
      */
     #[OA\Post(
-        path: '/api/file-conversion/upload-and-convert',
+        path: '/api/file-conversion/upload',
         summary: '文件上传并转换',
         description: '上传文件并进行格式转换（支持可选认证）',
         tags: ['文件转换接口'],
@@ -757,7 +757,7 @@ class FileConversionController extends Controller
      * 创建客户端直传任务
      */
     #[OA\Post(
-        path: '/api/file-conversion/create-direct-upload',
+        path: '/api/file-conversion/direct-upload',
         summary: '创建客户端直传任务',
         description: '创建客户端直传任务，获取上传URL和表单数据（支持可选认证）',
         tags: ['文件转换接口'],
