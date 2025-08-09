@@ -1605,12 +1605,10 @@ class FileConversionController extends Controller
 
                 if ($status === 'finished') {
                     $export = $data['tasks']['export'] ?? null;
-                    Log::info('CloudConvert 任务完成', ['export' => $export]);
                     // 直接获取输出文件信息并完成任务
                     $files = $export['result']->files ?? [];
                     if (!empty($files)) {
                         $outputFile = $files[0];
-                        Log::info('CloudConvert 任务完成 输出文件', [$outputFile]);
                         $outputUrl = $outputFile->url ?? null;
                         $outputSize = $outputFile->size ?? 0;
 
