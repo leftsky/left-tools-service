@@ -269,21 +269,76 @@ class FileConversionController extends Controller
                 'output_format' => $conversionParams['target_format'] ?? 'mp4',
                 'conversion_options' => $conversionParams,
                 'status' => FileConversionTask::STATUS_WAIT,
+                'conversion_engine' => 'cloudconvert', // 默认使用 CloudConvert
             ]);
 
-            Log::info('视频转换任务已提交', [
-                'task_id' => $task->id,
-                'file_url' => $fileUrl,
-                'user_id' => $userId
-            ]);
+            // 提交到 CloudConvert 进行实际转换
+            try {
+                $cloudConvertService = app(CloudConvertService::class);
 
-            return $this->success([
-                'task_id' => $task->id,
-                'status' => 'wait',
-                'filename' => $task->filename,
-                'file_size' => $task->formatted_file_size,
-                'output_format' => $task->output_format
-            ], '视频转换任务已提交');
+                // 准备转换参数
+                $conversionOptions = [];
+                if (isset($conversionParams['video_bitrate'])) {
+                    $conversionOptions['video_bitrate'] = $conversionParams['video_bitrate'];
+                }
+                if (isset($conversionParams['video_resolution'])) {
+                    $conversionOptions['video_resolution'] = $conversionParams['video_resolution'];
+                }
+
+                $result = $cloudConvertService->startConversion([
+                    'input_url' => $fileUrl,
+                    'output_format' => $task->output_format,
+                    'options' => $conversionOptions,
+                    'tag' => 'task-' . $task->id
+                ]);
+
+                if ($result['success']) {
+                    // 更新任务状态和 CloudConvert ID
+                    $task->update([
+                        'status' => FileConversionTask::STATUS_CONVERT,
+                        'cloudconvert_id' => $result['data']['job_id'],
+                        'conversion_engine' => 'cloudconvert'
+                    ]);
+
+                    Log::info('视频转换任务已提交到 CloudConvert', [
+                        'task_id' => $task->id,
+                        'cloudconvert_id' => $result['data']['job_id'],
+                        'file_url' => $fileUrl,
+                        'user_id' => $userId
+                    ]);
+
+                    return $this->success([
+                        'task_id' => $task->id,
+                        'status' => 'processing',
+                        'cloudconvert_id' => $result['data']['job_id'],
+                        'filename' => $task->filename,
+                        'file_size' => $task->formatted_file_size,
+                        'output_format' => $task->output_format
+                    ], '视频转换任务已提交到 CloudConvert');
+                } else {
+                    // CloudConvert 提交失败，回滚任务状态
+                    $task->update(['status' => FileConversionTask::STATUS_FAILED]);
+
+                    Log::error('CloudConvert 转换任务提交失败', [
+                        'task_id' => $task->id,
+                        'error' => $result['error'],
+                        'file_url' => $fileUrl
+                    ]);
+
+                    return $this->error('CloudConvert 转换任务提交失败: ' . $result['error'], 500);
+                }
+            } catch (\Exception $e) {
+                // CloudConvert 服务调用异常，回滚任务状态
+                $task->update(['status' => FileConversionTask::STATUS_FAILED]);
+
+                Log::error('CloudConvert 服务调用失败', [
+                    'task_id' => $task->id,
+                    'error' => $e->getMessage(),
+                    'file_url' => $fileUrl
+                ]);
+
+                return $this->error('CloudConvert 服务调用失败: ' . $e->getMessage(), 500);
+            }
         } catch (\Exception $e) {
             Log::error('视频转换任务提交失败', [
                 'error' => $e->getMessage(),
