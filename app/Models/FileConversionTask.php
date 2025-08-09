@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Log;
 
 class FileConversionTask extends Model
 {
@@ -230,6 +231,7 @@ class FileConversionTask extends Model
      */
     public function complete(string $outputUrl, int $outputSize, int $processingTime, ?array $outputFiles = null): void
     {
+        Log::info('complete', [$outputUrl, $outputSize, $processingTime, $outputFiles]);
         $this->update([
             'status' => self::STATUS_FINISH,
             'output_url' => $outputUrl,

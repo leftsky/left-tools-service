@@ -252,6 +252,7 @@ class FileConversionController extends Controller
             }
 
             $fileUrl = $request->input('file_url');
+            $fileUrl = 'https://romosoft-file-converter.oss-cn-shanghai.aliyuncs.com/uploads/uploads/IzMpGvBDPt_1754740037.mp4';
             $conversionParams = $request->input('conversion_params', []);
             $userId = $request->input('user_id');
 
@@ -1572,7 +1573,6 @@ class FileConversionController extends Controller
             if ($task->isCompleted() || $task->isFailed() || $task->isCancelled()) {
                 return;
             }
-
             // 根据引擎类型查询状态
             if ($task->isCloudConvertEngine() && $task->cloudconvert_id) {
                 $this->updateCloudConvertStatus($task);
@@ -1595,40 +1595,58 @@ class FileConversionController extends Controller
         try {
             $cloudConvertService = app(CloudConvertService::class);
             $result = $cloudConvertService->getStatus($task->cloudconvert_id);
-
             if ($result['success']) {
                 $data = $result['data'];
-                $status = $data['status'];
+                $status = $data['status'] ?? null;
                 $progress = $data['progress'] ?? 0;
 
                 // 更新任务进度
                 $task->updateProgress($progress);
 
                 if ($status === 'finished') {
-                    // 获取输出文件信息
-                    $exportTask = $data['tasks']['export'] ?? null;
-                    if ($exportTask && isset($exportTask['result']['files'])) {
-                        $files = $exportTask['result']['files'];
-                        if (!empty($files)) {
-                            $outputFile = $files[0];
-                            $outputUrl = $outputFile['url'] ?? null;
-                            $outputSize = $outputFile['size'] ?? 0;
+                    $export = $data['tasks']['export'] ?? null;
+                    Log::info('CloudConvert 任务完成', ['export' => $export]);
+                    // 直接获取输出文件信息并完成任务
+                    $files = $export['result']['files'] ?? [];
+                    if (!empty($files)) {
+                        $outputFile = $files[0];
+                        Log::info('CloudConvert 任务完成 输出文件', [$outputFile]);
+                        $outputUrl = $outputFile->url ?? null;
+                        $outputSize = $outputFile->size ?? 0;
 
-                            if ($outputUrl) {
-                                $task->complete($outputUrl, $outputSize, 0);
-                            }
+                        if ($outputUrl) {
+                            $task->complete($outputUrl, $outputSize, 0);
                         }
                     }
                 } elseif ($status === 'error') {
                     $errorMessage = $data['error'] ?? '转换失败';
+                    Log::error('CloudConvert 任务失败', [
+                        'task_id' => $task->id,
+                        'cloudconvert_id' => $task->cloudconvert_id,
+                        'error' => $errorMessage
+                    ]);
                     $task->markAsFailed($errorMessage);
+                } elseif ($status === 'processing') {
+                    // 添加处理中状态的日志
+                    Log::info('CloudConvert 任务处理中', [
+                        'task_id' => $task->id,
+                        'cloudconvert_id' => $task->cloudconvert_id,
+                        'progress' => $progress
+                    ]);
                 }
+            } else {
+                Log::error('获取 CloudConvert 状态失败', [
+                    'task_id' => $task->id,
+                    'cloudconvert_id' => $task->cloudconvert_id,
+                    'result' => $result
+                ]);
             }
         } catch (\Exception $e) {
             Log::error('更新 CloudConvert 状态失败', [
                 'task_id' => $task->id,
                 'cloudconvert_id' => $task->cloudconvert_id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
         }
     }
@@ -1644,34 +1662,61 @@ class FileConversionController extends Controller
 
             if ($result['success']) {
                 $data = $result['data'];
-                $step = $data['step'] ?? null;
-                $progress = $data['step_percent'] ?? 0;
+                // 确保数据是对象，如果不是则转换为对象
+                if (is_array($data)) {
+                    $data = (object) $data;
+                }
+
+                $step = $data->step ?? null;
+                $progress = $data->step_percent ?? 0;
 
                 // 更新任务进度
                 $task->updateProgress($progress);
+
+                Log::info('Convertio 状态', [$data]);
 
                 // Convertio 的状态处理
                 if ($step === 'finish') {
                     // 任务完成，获取下载链接
                     $downloadResult = $convertioService->downloadResult($task->convertio_id);
                     if ($downloadResult['success']) {
-                        $outputUrl = $downloadResult['data']['download_url'] ?? null;
-                        $outputSize = $downloadResult['data']['size'] ?? 0;
+                        $downloadData = $downloadResult['data'];
+                        $outputUrl = $downloadData['download_url'] ?? null;
+                        $outputSize = $downloadData['size'] ?? 0;
 
                         if ($outputUrl) {
                             $task->complete($outputUrl, $outputSize, 0);
                         }
                     }
                 } elseif ($step === 'error') {
-                    $errorMessage = $data['error'] ?? '转换失败';
+                    $errorMessage = $data->error ?? '转换失败';
+                    Log::error('Convertio 任务失败', [
+                        'task_id' => $task->id,
+                        'convertio_id' => $task->convertio_id,
+                        'error' => $errorMessage
+                    ]);
                     $task->markAsFailed($errorMessage);
+                } elseif ($step === 'convert') {
+                    // 添加转换中状态的日志
+                    Log::info('Convertio 任务转换中', [
+                        'task_id' => $task->id,
+                        'convertio_id' => $task->convertio_id,
+                        'progress' => $progress
+                    ]);
                 }
+            } else {
+                Log::error('获取 Convertio 状态失败', [
+                    'task_id' => $task->id,
+                    'convertio_id' => $task->convertio_id,
+                    'result' => $result
+                ]);
             }
         } catch (\Exception $e) {
             Log::error('更新 Convertio 状态失败', [
                 'task_id' => $task->id,
                 'convertio_id' => $task->convertio_id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
         }
     }
