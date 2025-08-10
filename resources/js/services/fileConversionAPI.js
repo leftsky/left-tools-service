@@ -86,26 +86,15 @@ apiClient.interceptors.response.use(
  */
 class FileConversionAPI {
     /**
-     * 上传文件并开始转换
-     * @param {File} file - 要转换的文件
-     * @param {Object} options - 转换选项
+     * 上传文件
+     * @param {File} file - 要上传的文件
+     * @param {Object} options - 上传选项
      * @returns {Promise<Object>}
      */
-    static async uploadAndConvert(file, options = {}) {
+    static async uploadFile(file, options = {}) {
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('output_format', options.outputFormat || 'mp4');
-        formData.append('engine', options.engine || 'cloudconvert');
-
-        if (options.conversionOptions && Array.isArray(options.conversionOptions)) {
-            // 将数组中的每个对象分别添加到 FormData
-            options.conversionOptions.forEach((option, index) => {
-                if (option.key && option.value !== undefined) {
-                    formData.append(`options[${index}][key]`, option.key);
-                    formData.append(`options[${index}][value]`, option.value);
-                }
-            });
-        }
+        formData.append('folder', options.folder || 'uploads');
 
         try {
             const response = await apiClient.post('/upload', formData, {
@@ -116,6 +105,59 @@ class FileConversionAPI {
             return response.data;
         } catch (error) {
             throw new Error(error.message || '上传失败');
+        }
+    }
+
+    /**
+     * 通过URL开始转换
+     * @param {string} fileUrl - 文件URL
+     * @param {Object} options - 转换选项
+     * @returns {Promise<Object>}
+     */
+    static async convertFromUrl(fileUrl, options = {}) {
+        const conversionParams = {};
+        
+        if (options.conversionOptions && Array.isArray(options.conversionOptions)) {
+            options.conversionOptions.forEach(option => {
+                if (option.key && option.value !== undefined) {
+                    conversionParams[option.key] = option.value;
+                }
+            });
+        }
+
+        try {
+            const response = await apiClient.post('/convert', {
+                file_url: fileUrl,
+                output_format: options.outputFormat || 'mp4',
+                conversion_params: conversionParams
+            });
+            return response.data;
+        } catch (error) {
+            throw new Error(error.message || '转换失败');
+        }
+    }
+
+    /**
+     * 上传文件并开始转换（统一接口，内部使用分离的上传+转换）
+     * @param {File} file - 要转换的文件
+     * @param {Object} options - 转换选项
+     * @returns {Promise<Object>}
+     */
+    static async uploadAndConvert(file, options = {}) {
+        try {
+            // 1. 先上传文件
+            const uploadResult = await this.uploadFile(file, { folder: 'conversions' });
+            
+            if (uploadResult.code !== 1 || !uploadResult.data?.url) {
+                throw new Error(uploadResult.message || '文件上传失败');
+            }
+
+            // 2. 使用上传后的URL进行转换
+            const convertResult = await this.convertFromUrl(uploadResult.data.url, options);
+            
+            return convertResult;
+        } catch (error) {
+            throw new Error(error.message || '上传转换失败');
         }
     }
 

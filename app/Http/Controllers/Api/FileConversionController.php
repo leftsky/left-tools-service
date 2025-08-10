@@ -144,36 +144,75 @@ class FileConversionController extends Controller
      */
     #[OA\Post(
         path: '/api/file-conversion/convert',
-        summary: '提交视频转换任务',
-        description: '通过URL提交视频转换任务（支持可选认证）',
+        summary: '提交文件转换任务',
+        description: '通过URL提交文件转换任务（支持可选认证）',
         tags: ['文件转换接口'],
         security: [], // 可选认证，支持登录和未登录用户
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(
-                required: ['file_url'],
+                required: ['file_url', 'output_format'],
                 properties: [
                     new OA\Property(
                         property: 'file_url',
                         type: 'string',
-                        description: '视频文件URL',
+                        description: '文件URL地址',
                         example: 'https://example.com/video.mp4'
+                    ),
+                    new OA\Property(
+                        property: 'output_format',
+                        type: 'string',
+                        description: '输出格式',
+                        example: 'mp4'
                     ),
                     new OA\Property(
                         property: 'conversion_params',
                         type: 'object',
-                        description: '转换参数',
+                        description: '转换参数（可选）',
                         properties: [
-                            new OA\Property(property: 'target_format', type: 'string', example: 'mp4'),
-                            new OA\Property(property: 'video_bitrate', type: 'integer', example: 2000),
-                            new OA\Property(property: 'video_resolution', type: 'string', example: '1920x1080')
+                            new OA\Property(
+                                property: 'video_bitrate',
+                                type: 'integer',
+                                description: '视频比特率（单位：kbps）',
+                                example: 2000
+                            ),
+                            new OA\Property(
+                                property: 'video_resolution',
+                                type: 'string',
+                                description: '视频分辨率（格式：宽x高）',
+                                example: '1920x1080'
+                            ),
+                            new OA\Property(
+                                property: 'audio_bitrate',
+                                type: 'integer',
+                                description: '音频比特率（单位：kbps）',
+                                example: 128
+                            ),
+                            new OA\Property(
+                                property: 'audio_frequency',
+                                type: 'integer',
+                                description: '音频采样率（单位：Hz）',
+                                example: 44100
+                            ),
+                            new OA\Property(
+                                property: 'video_codec',
+                                type: 'string',
+                                description: '视频编解码器',
+                                example: 'h264'
+                            ),
+                            new OA\Property(
+                                property: 'audio_codec',
+                                type: 'string',
+                                description: '音频编解码器',
+                                example: 'aac'
+                            ),
+                            new OA\Property(
+                                property: 'quality',
+                                type: 'string',
+                                description: '输出质量（low, medium, high）',
+                                example: 'high'
+                            )
                         ]
-                    ),
-                    new OA\Property(
-                        property: 'user_id',
-                        type: 'integer',
-                        description: '用户ID（可选）',
-                        example: 1
                     )
                 ]
             )
@@ -243,8 +282,15 @@ class FileConversionController extends Controller
             // 验证请求参数
             $validator = Validator::make($request->all(), [
                 'file_url' => 'required|url',
-                'conversion_params' => 'array',
-                'user_id' => 'nullable|integer'
+                'output_format' => 'required|string|max:10',
+                'conversion_params' => 'nullable|array',
+                'conversion_params.video_bitrate' => 'nullable|integer|min:100|max:50000',
+                'conversion_params.video_resolution' => 'nullable|string|regex:/^\d+x\d+$/',
+                'conversion_params.audio_bitrate' => 'nullable|integer|min:32|max:320',
+                'conversion_params.audio_frequency' => 'nullable|integer|in:8000,11025,22050,44100,48000',
+                'conversion_params.video_codec' => 'nullable|string|max:20',
+                'conversion_params.audio_codec' => 'nullable|string|max:20',
+                'conversion_params.quality' => 'nullable|string|in:low,medium,high'
             ]);
 
             if ($validator->fails()) {
@@ -252,9 +298,9 @@ class FileConversionController extends Controller
             }
 
             $fileUrl = $request->input('file_url');
-            $fileUrl = 'https://romosoft-file-converter.oss-cn-shanghai.aliyuncs.com/uploads/uploads/IzMpGvBDPt_1754740037.mp4';
+            $outputFormat = $request->input('output_format');
             $conversionParams = $request->input('conversion_params', []);
-            $userId = $request->input('user_id');
+            $userId = $request->user()?->id; // 从认证中获取用户ID
 
             // 获取文件信息（简化版本，只获取基本信息）
             $fileInfo = $this->getBasicFileInfo($fileUrl);
@@ -267,10 +313,10 @@ class FileConversionController extends Controller
                 'filename' => basename($fileUrl),
                 'input_format' => $fileInfo['format'] ?? null,
                 'file_size' => $fileInfo['file_size'] ?? 0,
-                'output_format' => $conversionParams['target_format'] ?? 'mp4',
+                'output_format' => $outputFormat,
                 'conversion_options' => $conversionParams,
                 'status' => FileConversionTask::STATUS_WAIT,
-                'conversion_engine' => 'cloudconvert', // 默认使用 CloudConvert
+                'conversion_engine' => 'cloudconvert', // 固定使用 CloudConvert
             ]);
 
             // 提交到 CloudConvert 进行实际转换
@@ -284,6 +330,21 @@ class FileConversionController extends Controller
                 }
                 if (isset($conversionParams['video_resolution'])) {
                     $conversionOptions['video_resolution'] = $conversionParams['video_resolution'];
+                }
+                if (isset($conversionParams['audio_bitrate'])) {
+                    $conversionOptions['audio_bitrate'] = $conversionParams['audio_bitrate'];
+                }
+                if (isset($conversionParams['audio_frequency'])) {
+                    $conversionOptions['audio_frequency'] = $conversionParams['audio_frequency'];
+                }
+                if (isset($conversionParams['video_codec'])) {
+                    $conversionOptions['video_codec'] = $conversionParams['video_codec'];
+                }
+                if (isset($conversionParams['audio_codec'])) {
+                    $conversionOptions['audio_codec'] = $conversionParams['audio_codec'];
+                }
+                if (isset($conversionParams['quality'])) {
+                    $conversionOptions['quality'] = $conversionParams['quality'];
                 }
 
                 $result = $cloudConvertService->startConversion([
@@ -301,10 +362,11 @@ class FileConversionController extends Controller
                         'conversion_engine' => 'cloudconvert'
                     ]);
 
-                    Log::info('视频转换任务已提交到 CloudConvert', [
+                    Log::info('文件转换任务已提交到 CloudConvert', [
                         'task_id' => $task->id,
                         'cloudconvert_id' => $result['data']['job_id'],
                         'file_url' => $fileUrl,
+                        'output_format' => $outputFormat,
                         'user_id' => $userId
                     ]);
 
@@ -314,8 +376,10 @@ class FileConversionController extends Controller
                         'cloudconvert_id' => $result['data']['job_id'],
                         'filename' => $task->filename,
                         'file_size' => $task->formatted_file_size,
-                        'output_format' => $task->output_format
-                    ], '视频转换任务已提交到 CloudConvert');
+                        'input_format' => $task->input_format,
+                        'output_format' => $task->output_format,
+                        'conversion_options' => $conversionParams
+                    ], '文件转换任务已提交到 CloudConvert');
                 } else {
                     // CloudConvert 提交失败，回滚任务状态
                     $task->update(['status' => FileConversionTask::STATUS_FAILED]);
@@ -341,7 +405,7 @@ class FileConversionController extends Controller
                 return $this->error('CloudConvert 服务调用失败: ' . $e->getMessage(), 500);
             }
         } catch (\Exception $e) {
-            Log::error('视频转换任务提交失败', [
+            Log::error('文件转换任务提交失败', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
@@ -484,218 +548,7 @@ class FileConversionController extends Controller
         }
     }
 
-    /**
-     * 文件上传并转换
-     */
-    #[OA\Post(
-        path: '/api/file-conversion/upload',
-        summary: '文件上传并转换',
-        description: '上传文件并进行格式转换（支持可选认证）',
-        tags: ['文件转换接口'],
-        security: [], // 可选认证，支持登录和未登录用户
-        requestBody: new OA\RequestBody(
-            required: true,
-            content: new OA\MediaType(
-                mediaType: 'multipart/form-data',
-                schema: new OA\Schema(
-                    required: ['file', 'output_format'],
-                    properties: [
-                        new OA\Property(
-                            property: 'file',
-                            type: 'string',
-                            format: 'binary',
-                            description: '要转换的文件（最大1GB）'
-                        ),
-                        new OA\Property(
-                            property: 'output_format',
-                            type: 'string',
-                            description: '输出格式',
-                            example: 'mp4'
-                        ),
-                        new OA\Property(
-                            property: 'options',
-                            type: 'array',
-                            description: '转换选项',
-                            items: new OA\Items(
-                                type: 'object',
-                                properties: [
-                                    new OA\Property(property: 'key', type: 'string', example: 'video_bitrate'),
-                                    new OA\Property(property: 'value', type: 'string', example: '2000')
-                                ]
-                            )
-                        ),
-                        new OA\Property(
-                            property: 'engine',
-                            type: 'string',
-                            description: '转换引擎',
-                            enum: ['convertio', 'cloudconvert'],
-                            example: 'cloudconvert'
-                        )
-                    ]
-                )
-            )
-        ),
-        responses: [
-            new OA\Response(
-                response: 200,
-                description: '任务创建成功',
-                content: new OA\JsonContent(
-                    properties: [
-                        new OA\Property(property: 'code', type: 'integer', example: 1),
-                        new OA\Property(property: 'status', type: 'string', example: 'success'),
-                        new OA\Property(property: 'message', type: 'string', example: '文件转换任务已提交'),
-                        new OA\Property(
-                            property: 'data',
-                            type: 'object',
-                            properties: [
-                                new OA\Property(property: 'task_id', type: 'integer', example: 123),
-                                new OA\Property(property: 'status', type: 'string', example: 'processing'),
-                                new OA\Property(property: 'filename', type: 'string', example: 'video.mp4'),
-                                new OA\Property(property: 'file_size', type: 'string', example: '10.5 MB'),
-                                new OA\Property(property: 'input_format', type: 'string', example: 'avi'),
-                                new OA\Property(property: 'output_format', type: 'string', example: 'mp4'),
-                                new OA\Property(property: 'engine', type: 'string', example: 'cloudconvert'),
-                                new OA\Property(property: 'estimated_time', type: 'integer', example: 120)
-                            ]
-                        )
-                    ]
-                )
-            ),
-            new OA\Response(
-                response: 400,
-                description: '格式不支持',
-                content: new OA\JsonContent(
-                    properties: [
-                        new OA\Property(property: 'code', type: 'integer', example: 0),
-                        new OA\Property(property: 'status', type: 'string', example: 'error'),
-                        new OA\Property(property: 'message', type: 'string', example: '不支持从 avi 转换到 mp4'),
-                    ]
-                )
-            ),
-            new OA\Response(
-                response: 422,
-                description: '验证失败',
-                content: new OA\JsonContent(
-                    properties: [
-                        new OA\Property(property: 'code', type: 'integer', example: 0),
-                        new OA\Property(property: 'status', type: 'string', example: 'error'),
-                        new OA\Property(property: 'message', type: 'string', example: '参数验证失败'),
-                    ]
-                )
-            ),
-            new OA\Response(
-                response: 500,
-                description: '服务器错误',
-                content: new OA\JsonContent(
-                    properties: [
-                        new OA\Property(property: 'code', type: 'integer', example: 0),
-                        new OA\Property(property: 'status', type: 'string', example: 'error'),
-                        new OA\Property(property: 'message', type: 'string', example: '文件上传转换失败'),
-                    ]
-                )
-            )
-        ]
-    )]
-    public function uploadAndConvert(Request $request): JsonResponse
-    {
-        try {
-            // 验证请求参数
-            $validator = Validator::make($request->all(), [
-                'file' => 'required|file|max:1024000', // 最大1GB
-                'output_format' => 'required|string|max:10',
-                'options' => 'nullable|array',
-                'options.*.key' => 'required_with:options|string',
-                'options.*.value' => 'required_with:options',
-                'engine' => 'string|in:convertio,cloudconvert'
-            ]);
 
-            if ($validator->fails()) {
-                return $this->validationError($validator->errors(), '参数验证失败');
-            }
-
-            $file = $request->file('file');
-            $outputFormat = $request->input('output_format', 'mp4');
-            $options = $request->input('options', []);
-            $engine = $request->input('engine', 'cloudconvert');
-            $userId = $request->user()?->id;
-
-            // 检查文件格式
-            $inputFormat = strtolower($file->getClientOriginalExtension());
-            if (!$this->validateFormat($inputFormat, $outputFormat)) {
-                return $this->error("不支持从 {$inputFormat} 转换到 {$outputFormat}", 400);
-            }
-
-            // 保存文件到临时目录
-            $tempPath = $file->store('temp/conversions', 'local');
-            $fullPath = Storage::disk('local')->path($tempPath);
-
-            // 创建转换任务记录
-            $task = FileConversionTask::create([
-                'user_id' => $userId,
-                'conversion_engine' => $engine,
-                'input_method' => FileConversionTask::INPUT_METHOD_UPLOAD,
-                'input_file' => $tempPath,
-                'filename' => $file->getClientOriginalName(),
-                'input_format' => $inputFormat,
-                'file_size' => $file->getSize(),
-                'output_format' => $outputFormat,
-                'conversion_options' => $options,
-                'status' => FileConversionTask::STATUS_WAIT,
-                'tag' => 'upload-' . uniqid(),
-            ]);
-
-            // 处理转换选项
-            $processedOptions = [];
-            if (is_array($options)) {
-                foreach ($options as $option) {
-                    if (isset($option['key']) && isset($option['value'])) {
-                        $processedOptions[$option['key']] = $option['value'];
-                    }
-                }
-            }
-
-            // 根据引擎选择服务
-            if ($engine === 'cloudconvert') {
-                $result = $this->processWithCloudConvert($task, $fullPath, $processedOptions);
-            } else {
-                $result = $this->processWithConvertio($task, $fullPath, $processedOptions);
-            }
-
-            if (!$result['success']) {
-                $task->markAsFailed($result['error']);
-                return $this->serverError($result['error']);
-            }
-
-            // 更新任务状态
-            $task->startProcessing();
-
-            Log::info('文件转换任务已创建', [
-                'task_id' => $task->id,
-                'engine' => $engine,
-                'filename' => $file->getClientOriginalName(),
-                'input_format' => $inputFormat,
-                'output_format' => $outputFormat
-            ]);
-
-            return $this->success([
-                'task_id' => $task->id,
-                'status' => 'processing',
-                'filename' => $task->filename,
-                'file_size' => $task->formatted_file_size,
-                'input_format' => $inputFormat,
-                'output_format' => $outputFormat,
-                'engine' => $engine,
-                'estimated_time' => $this->estimateConversionTime($inputFormat, $outputFormat, $file->getSize())
-            ], '文件转换任务已提交');
-        } catch (\Exception $e) {
-            Log::error('文件上传转换失败', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            return $this->serverError('文件上传转换失败', $e->getMessage());
-        }
-    }
 
     /**
      * 取消转换任务
@@ -1389,109 +1242,9 @@ class FileConversionController extends Controller
         }
     }
 
-    /**
-     * 使用 CloudConvert 处理转换
-     */
-    protected function processWithCloudConvert(FileConversionTask $task, string $filePath, array $options): array
-    {
-        try {
-            $cloudConvertService = app(CloudConvertService::class);
 
-            // 创建上传任务
-            $result = $cloudConvertService->createUploadJob(
-                $task->filename,
-                $task->output_format,
-                $options
-            );
 
-            if (!$result['success']) {
-                return $result;
-            }
 
-            // 上传文件
-            $uploadResult = $cloudConvertService->uploadFile(
-                $result['data']['upload_task'],
-                $filePath
-            );
-
-            if (!$uploadResult['success']) {
-                return $uploadResult;
-            }
-
-            // 更新任务记录
-            $task->setCloudConvertId($result['data']['job_id']);
-
-            return [
-                'success' => true,
-                'data' => [
-                    'job_id' => $result['data']['job_id'],
-                    'tag' => $result['data']['tag']
-                ]
-            ];
-        } catch (\Exception $e) {
-            Log::error('CloudConvert处理失败', [
-                'task_id' => $task->id,
-                'error' => $e->getMessage()
-            ]);
-
-            return [
-                'success' => false,
-                'error' => 'CloudConvert处理失败: ' . $e->getMessage()
-            ];
-        }
-    }
-
-    /**
-     * 使用 Convertio 处理转换
-     */
-    protected function processWithConvertio(FileConversionTask $task, string $filePath, array $options): array
-    {
-        try {
-            $convertioService = app(ConvertioService::class);
-
-            // 创建转换任务
-            $result = $convertioService->createUploadConversion(
-                $task->filename,
-                $task->output_format,
-                $options
-            );
-
-            if (!$result['success']) {
-                return $result;
-            }
-
-            // 上传文件
-            $uploadResult = $convertioService->uploadFileAndConvert(
-                $result['data']['id'],
-                $filePath,
-                $task->filename
-            );
-
-            if (!$uploadResult['success']) {
-                return $uploadResult;
-            }
-
-            // 更新任务记录
-            $task->setConvertioId($result['data']['id']);
-
-            return [
-                'success' => true,
-                'data' => [
-                    'conversion_id' => $result['data']['id']
-                ]
-            ];
-        } catch (\Exception $e) {
-            Log::error('Convertio处理失败', [
-                'task_id' => $task->id,
-                'error' => $e->getMessage()
-            ]);
-
-            return [
-                'success' => false,
-                'error' => 'Convertio处理失败: ' . $e->getMessage()
-            ];
-        }
-    }
 
     /**
      * 验证格式是否支持
