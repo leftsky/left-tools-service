@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Log;
+use App\Services\CloudConvertService;
+use App\Services\ConvertioService;
 
 class FileConversionTask extends Model
 {
@@ -509,5 +511,163 @@ class FileConversionTask extends Model
     public function scopeWithTag($query)
     {
         return $query->whereNotNull('tag');
+    }
+
+    /**
+     * 从转换引擎更新任务状态
+     */
+    public function updateStatusFromEngine(): void
+    {
+        try {
+            // 如果任务已经完成或失败，不需要再查询
+            if ($this->isCompleted() || $this->isFailed() || $this->isCancelled()) {
+                return;
+            }
+            
+            // 根据引擎类型查询状态
+            if ($this->isCloudConvertEngine() && $this->cloudconvert_id) {
+                $this->updateCloudConvertStatus();
+            } elseif ($this->isConvertioEngine() && $this->convertio_id) {
+                $this->updateConvertioStatus();
+            }
+        } catch (\Exception $e) {
+            Log::error('更新任务状态失败', [
+                'task_id' => $this->id,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * 更新 CloudConvert 任务状态
+     */
+    protected function updateCloudConvertStatus(): void
+    {
+        try {
+            $cloudConvertService = app(CloudConvertService::class);
+            $result = $cloudConvertService->getStatus($this->cloudconvert_id);
+            
+            if ($result['success']) {
+                $data = $result['data'];
+                $status = $data['status'] ?? null;
+                $progress = $data['progress'] ?? 0;
+
+                // 更新任务进度
+                $this->updateProgress($progress);
+
+                if ($status === 'finished') {
+                    $export = $data['tasks']['export'] ?? null;
+                    // 直接获取输出文件信息并完成任务
+                    $files = $export['result']->files ?? [];
+                    if (!empty($files)) {
+                        $outputFile = $files[0];
+                        $outputUrl = $outputFile->url ?? null;
+                        $outputSize = $outputFile->size ?? 0;
+
+                        if ($outputUrl) {
+                            $this->complete($outputUrl, $outputSize, 0);
+                        }
+                    }
+                } elseif ($status === 'error') {
+                    $errorMessage = $data['error'] ?? '转换失败';
+                    Log::error('CloudConvert 任务失败', [
+                        'task_id' => $this->id,
+                        'cloudconvert_id' => $this->cloudconvert_id,
+                        'error' => $errorMessage
+                    ]);
+                    $this->markAsFailed($errorMessage);
+                } elseif ($status === 'processing') {
+                    // 添加处理中状态的日志
+                    Log::info('CloudConvert 任务处理中', [
+                        'task_id' => $this->id,
+                        'cloudconvert_id' => $this->cloudconvert_id,
+                        'progress' => $progress
+                    ]);
+                }
+            } else {
+                Log::error('获取 CloudConvert 状态失败', [
+                    'task_id' => $this->id,
+                    'cloudconvert_id' => $this->cloudconvert_id,
+                    'result' => $result
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('更新 CloudConvert 状态失败', [
+                'task_id' => $this->id,
+                'cloudconvert_id' => $this->cloudconvert_id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
+    }
+
+    /**
+     * 更新 Convertio 任务状态
+     */
+    protected function updateConvertioStatus(): void
+    {
+        try {
+            $convertioService = app(ConvertioService::class);
+            $result = $convertioService->getStatus($this->convertio_id);
+
+            if ($result['success']) {
+                $data = $result['data'];
+                // 确保数据是对象，如果不是则转换为对象
+                if (is_array($data)) {
+                    $data = (object) $data;
+                }
+
+                $step = $data->step ?? null;
+                $progress = $data->step_percent ?? 0;
+
+                // 更新任务进度
+                $this->updateProgress($progress);
+
+                Log::info('Convertio 状态', [$data]);
+
+                // Convertio 的状态处理
+                if ($step === 'finish') {
+                    // 任务完成，获取下载链接
+                    $downloadResult = $convertioService->downloadResult($this->convertio_id);
+                    if ($downloadResult['success']) {
+                        $downloadData = $downloadResult['data'];
+                        $outputUrl = $downloadData['download_url'] ?? null;
+                        $outputSize = $downloadData['size'] ?? 0;
+
+                        if ($outputUrl) {
+                            $this->complete($outputUrl, $outputSize, 0);
+                        }
+                    }
+                } elseif ($step === 'error') {
+                    $errorMessage = $data->error ?? '转换失败';
+                    Log::error('Convertio 任务失败', [
+                        'task_id' => $this->id,
+                        'convertio_id' => $this->convertio_id,
+                        'error' => $errorMessage
+                    ]);
+                    $this->markAsFailed($errorMessage);
+                } elseif ($step === 'convert') {
+                    // 添加转换中状态的日志
+                    Log::info('Convertio 任务转换中', [
+                        'task_id' => $this->id,
+                        'convertio_id' => $this->convertio_id,
+                        'progress' => $progress
+                    ]);
+                }
+            } else {
+                Log::error('获取 Convertio 状态失败', [
+                    'task_id' => $this->id,
+                    'convertio_id' => $this->convertio_id,
+                    'result' => $result
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('更新 Convertio 状态失败', [
+                'task_id' => $this->id,
+                'convertio_id' => $this->convertio_id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
     }
 }

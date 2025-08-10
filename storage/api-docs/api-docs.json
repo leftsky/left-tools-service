@@ -509,13 +509,1351 @@
                 ]
             }
         },
+        "/api/upload": {
+            "post": {
+                "tags": [
+                    "文件上传"
+                ],
+                "summary": "上传文件",
+                "description": "上传文件到阿里云存储",
+                "operationId": "2e4c6d056a61a95809a6efde3e9a69eb",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "required": [
+                                    "file"
+                                ],
+                                "properties": {
+                                    "file": {
+                                        "description": "要上传的文件",
+                                        "type": "string",
+                                        "format": "binary"
+                                    },
+                                    "type": {
+                                        "description": "文件类型，例如：image, document 等",
+                                        "type": "string",
+                                        "example": "image"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "上传成功",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 200
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "文件上传成功"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "url": {
+                                                    "type": "string",
+                                                    "example": "http://example.com/uploads/123.jpg"
+                                                },
+                                                "path": {
+                                                    "type": "string",
+                                                    "example": "uploads/123.jpg"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "验证失败",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 422
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "验证失败"
+                                        },
+                                        "errors": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "上传失败",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 500
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "文件上传失败"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/file-conversion/convert": {
+            "post": {
+                "tags": [
+                    "文件转换接口"
+                ],
+                "summary": "提交文件转换任务",
+                "description": "通过URL提交文件转换任务（需要认证）",
+                "operationId": "992da357c587b04337a97a3c74e0c0f7",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "file_url",
+                                    "output_format"
+                                ],
+                                "properties": {
+                                    "file_url": {
+                                        "description": "文件URL地址",
+                                        "type": "string",
+                                        "example": "https://example.com/video.mp4"
+                                    },
+                                    "output_format": {
+                                        "description": "输出格式",
+                                        "type": "string",
+                                        "example": "mp4"
+                                    },
+                                    "conversion_params": {
+                                        "description": "转换参数（可选）",
+                                        "properties": {
+                                            "video_bitrate": {
+                                                "description": "视频比特率（单位：kbps）",
+                                                "type": "integer",
+                                                "example": 2000
+                                            },
+                                            "video_resolution": {
+                                                "description": "视频分辨率（格式：宽x高）",
+                                                "type": "string",
+                                                "example": "1920x1080"
+                                            },
+                                            "audio_bitrate": {
+                                                "description": "音频比特率（单位：kbps）",
+                                                "type": "integer",
+                                                "example": 128
+                                            },
+                                            "audio_frequency": {
+                                                "description": "音频采样率（单位：Hz）",
+                                                "type": "integer",
+                                                "example": 44100
+                                            },
+                                            "video_codec": {
+                                                "description": "视频编解码器",
+                                                "type": "string",
+                                                "example": "h264"
+                                            },
+                                            "audio_codec": {
+                                                "description": "音频编解码器",
+                                                "type": "string",
+                                                "example": "aac"
+                                            },
+                                            "quality": {
+                                                "description": "输出质量（low, medium, high）",
+                                                "type": "string",
+                                                "example": "high"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "任务提交成功",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 1
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "success"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "视频转换任务已提交"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "task_id": {
+                                                    "type": "integer",
+                                                    "example": 123
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "example": "wait"
+                                                },
+                                                "filename": {
+                                                    "type": "string",
+                                                    "example": "video.mp4"
+                                                },
+                                                "file_size": {
+                                                    "type": "string",
+                                                    "example": "10.5 MB"
+                                                },
+                                                "output_format": {
+                                                    "type": "string",
+                                                    "example": "mp4"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "验证失败",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 0
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "参数验证失败"
+                                        },
+                                        "errors": {
+                                            "properties": {
+                                                "file_url": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "example": [
+                                                        "file_url字段是必需的"
+                                                    ]
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "服务器错误",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 0
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "服务器内部错误"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/file-conversion/status": {
+            "get": {
+                "tags": [
+                    "文件转换接口"
+                ],
+                "summary": "获取任务状态",
+                "description": "获取文件转换任务的状态信息（需要认证）",
+                "operationId": "6da13027c1a8e92caada8c69683393a0",
+                "parameters": [
+                    {
+                        "name": "task_id",
+                        "in": "query",
+                        "description": "任务ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "example": 123
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取状态成功",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 1
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "success"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "获取任务状态成功"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "task_id": {
+                                                    "type": "integer",
+                                                    "example": 123
+                                                },
+                                                "convertio_id": {
+                                                    "type": "string",
+                                                    "example": "conv_123456",
+                                                    "nullable": true
+                                                },
+                                                "cloudconvert_id": {
+                                                    "type": "string",
+                                                    "example": "job_123456",
+                                                    "nullable": true
+                                                },
+                                                "status": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "status_text": {
+                                                    "type": "string",
+                                                    "example": "转换中"
+                                                },
+                                                "filename": {
+                                                    "type": "string",
+                                                    "example": "video.mp4"
+                                                },
+                                                "file_size": {
+                                                    "type": "string",
+                                                    "example": "10.5 MB"
+                                                },
+                                                "output_format": {
+                                                    "type": "string",
+                                                    "example": "mp4"
+                                                },
+                                                "step_percent": {
+                                                    "type": "integer",
+                                                    "example": 50
+                                                },
+                                                "output_url": {
+                                                    "type": "string",
+                                                    "example": "https://example.com/output.mp4",
+                                                    "nullable": true
+                                                },
+                                                "output_size": {
+                                                    "type": "string",
+                                                    "example": "8.2 MB",
+                                                    "nullable": true
+                                                },
+                                                "error_message": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "started_at": {
+                                                    "type": "string",
+                                                    "format": "date-time",
+                                                    "nullable": true
+                                                },
+                                                "completed_at": {
+                                                    "type": "string",
+                                                    "format": "date-time",
+                                                    "nullable": true
+                                                },
+                                                "created_at": {
+                                                    "type": "string",
+                                                    "format": "date-time"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "任务不存在",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 0
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "任务不存在"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "验证失败",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 0
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "参数验证失败"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "服务器错误",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 0
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "获取任务状态失败"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/file-conversion/cancel": {
+            "post": {
+                "tags": [
+                    "文件转换接口"
+                ],
+                "summary": "取消转换任务",
+                "description": "取消正在进行的文件转换任务（需要认证）",
+                "operationId": "d3687c8e3b3d42d96d8fd100a0301b8d",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "task_id"
+                                ],
+                                "properties": {
+                                    "task_id": {
+                                        "description": "任务ID",
+                                        "type": "integer",
+                                        "example": 123
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "取消成功",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 1
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "success"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "任务已取消"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "task_id": {
+                                                    "type": "integer",
+                                                    "example": 123
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "example": "cancelled"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "无法取消",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 0
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "只有等待中或转换中的任务可以取消"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "任务不存在",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 0
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "任务不存在"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "验证失败",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 0
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "参数验证失败"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "服务器错误",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 0
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "取消任务失败"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/file-conversion/formats": {
+            "get": {
+                "tags": [
+                    "文件转换接口"
+                ],
+                "summary": "获取支持的格式",
+                "description": "获取系统支持的文件转换格式列表（需要认证）",
+                "operationId": "150e0f2b755e4eb25b688ff23ca13b79",
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 1
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "success"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "获取支持的格式成功"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "video_formats": {
+                                                    "description": "支持的视频格式",
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "example": [
+                                                        "mp4",
+                                                        "avi",
+                                                        "mov",
+                                                        "wmv",
+                                                        "flv",
+                                                        "webm",
+                                                        "mkv"
+                                                    ]
+                                                },
+                                                "audio_formats": {
+                                                    "description": "支持的音频格式",
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "example": [
+                                                        "mp3",
+                                                        "wav",
+                                                        "aac",
+                                                        "ogg",
+                                                        "flac",
+                                                        "m4a"
+                                                    ]
+                                                },
+                                                "image_formats": {
+                                                    "description": "支持的图片格式",
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "example": [
+                                                        "jpg",
+                                                        "png",
+                                                        "gif",
+                                                        "bmp",
+                                                        "webp",
+                                                        "svg"
+                                                    ]
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "服务器错误",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 0
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "获取支持的格式失败"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/file-conversion/direct-upload": {
+            "post": {
+                "tags": [
+                    "文件转换接口"
+                ],
+                "summary": "创建客户端直传任务",
+                "description": "创建客户端直传任务，获取上传URL和表单数据（需要认证）",
+                "operationId": "3afa1a8620597e99589fa235bd3a3d74",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "filename",
+                                    "output_format"
+                                ],
+                                "properties": {
+                                    "filename": {
+                                        "description": "文件名（包含扩展名）",
+                                        "type": "string",
+                                        "example": "video.mp4"
+                                    },
+                                    "output_format": {
+                                        "description": "输出格式",
+                                        "type": "string",
+                                        "example": "mp4"
+                                    },
+                                    "options": {
+                                        "description": "转换选项",
+                                        "type": "array",
+                                        "items": {
+                                            "properties": {
+                                                "key": {
+                                                    "type": "string",
+                                                    "example": "video_bitrate"
+                                                },
+                                                "value": {
+                                                    "type": "string",
+                                                    "example": "2000"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "engine": {
+                                        "description": "转换引擎",
+                                        "type": "string",
+                                        "enum": [
+                                            "convertio",
+                                            "cloudconvert"
+                                        ],
+                                        "example": "cloudconvert"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "创建成功",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 1
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "success"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "客户端直传任务已创建"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "task_id": {
+                                                    "type": "integer",
+                                                    "example": 123
+                                                },
+                                                "upload_url": {
+                                                    "type": "string",
+                                                    "example": "https://upload.cloudconvert.com/..."
+                                                },
+                                                "form_data": {
+                                                    "type": "object",
+                                                    "example": {
+                                                        "key": "value"
+                                                    }
+                                                },
+                                                "filename": {
+                                                    "type": "string",
+                                                    "example": "video.mp4"
+                                                },
+                                                "output_format": {
+                                                    "type": "string",
+                                                    "example": "mp4"
+                                                },
+                                                "engine": {
+                                                    "type": "string",
+                                                    "example": "cloudconvert"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "格式不支持或引擎不支持",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 0
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Convertio 暂不支持客户端直传，请使用 CloudConvert 引擎"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "验证失败",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 0
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "参数验证失败"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "服务器错误",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 0
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "创建客户端直传任务失败"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/file-conversion/confirm-direct-upload": {
+            "post": {
+                "tags": [
+                    "文件转换接口"
+                ],
+                "summary": "确认客户端直传完成",
+                "description": "确认客户端直传完成，开始转换任务（需要认证）",
+                "operationId": "43d52db4ac09818fe2b7721c1a9ef418",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "task_id"
+                                ],
+                                "properties": {
+                                    "task_id": {
+                                        "description": "任务ID",
+                                        "type": "integer",
+                                        "example": 123
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "确认成功",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 1
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "success"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "客户端直传确认成功，开始转换"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "task_id": {
+                                                    "type": "integer",
+                                                    "example": 123
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "example": "processing"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "任务类型错误或确认失败",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 0
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "该任务不是客户端直传任务"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "任务不存在",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 0
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "任务不存在"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "验证失败",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 0
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "参数验证失败"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "服务器错误",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 0
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "确认客户端直传失败"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/file-conversion/history": {
+            "get": {
+                "tags": [
+                    "文件转换接口"
+                ],
+                "summary": "获取转换历史",
+                "description": "获取用户的文件转换历史记录（需要认证）",
+                "operationId": "49b3c6afe8a56643de57bc5b56999444",
+                "parameters": [
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "description": "每页记录数",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 20,
+                            "example": 20
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "页码",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 1,
+                            "example": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 1
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "success"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "获取转换历史成功"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "tasks": {
+                                                    "description": "任务列表",
+                                                    "type": "array",
+                                                    "items": {
+                                                        "properties": {
+                                                            "id": {
+                                                                "type": "integer",
+                                                                "example": 123
+                                                            },
+                                                            "filename": {
+                                                                "type": "string",
+                                                                "example": "video.mp4"
+                                                            },
+                                                            "status": {
+                                                                "type": "integer",
+                                                                "example": 2
+                                                            },
+                                                            "status_text": {
+                                                                "type": "string",
+                                                                "example": "已完成"
+                                                            },
+                                                            "input_format": {
+                                                                "type": "string",
+                                                                "example": "avi"
+                                                            },
+                                                            "output_format": {
+                                                                "type": "string",
+                                                                "example": "mp4"
+                                                            },
+                                                            "step_percent": {
+                                                                "type": "integer",
+                                                                "example": 100
+                                                            },
+                                                            "output_url": {
+                                                                "type": "string",
+                                                                "nullable": true
+                                                            },
+                                                            "created_at": {
+                                                                "type": "string",
+                                                                "format": "date-time"
+                                                            },
+                                                            "completed_at": {
+                                                                "type": "string",
+                                                                "format": "date-time",
+                                                                "nullable": true
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                },
+                                                "pagination": {
+                                                    "properties": {
+                                                        "current_page": {
+                                                            "type": "integer",
+                                                            "example": 1
+                                                        },
+                                                        "last_page": {
+                                                            "type": "integer",
+                                                            "example": 5
+                                                        },
+                                                        "per_page": {
+                                                            "type": "integer",
+                                                            "example": 20
+                                                        },
+                                                        "total": {
+                                                            "type": "integer",
+                                                            "example": 100
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "服务器错误",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "integer",
+                                            "example": 0
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "获取转换历史失败"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
         "/api/tools/extract-douyin": {
             "post": {
                 "tags": [
                     "工具接口"
                 ],
                 "summary": "提取抖音文案",
-                "description": "通过分享链接提取抖音视频文案",
+                "description": "通过分享链接提取抖音视频文案（支持可选认证）",
                 "operationId": "af58a8b67c5b98f746ce4448053557bd",
                 "requestBody": {
                     "required": true,
@@ -662,11 +2000,7 @@
                         }
                     }
                 },
-                "security": [
-                    {
-                        "sanctum": []
-                    }
-                ]
+                "security": []
             }
         },
         "/api/tools/parse-douyin": {
@@ -674,9 +2008,9 @@
                 "tags": [
                     "工具接口"
                 ],
-                "summary": "解析抖音分享链接",
-                "description": "从抖音分享文本中提取无水印视频链接和信息",
-                "operationId": "dd6f34d7e405e09fd10f7c0d632cdc05",
+                "summary": "解析视频分享链接",
+                "description": "从抖音或小红书分享文本中提取无水印视频链接和信息（支持可选认证）",
+                "operationId": "8a9293a1c223dff8d5afb9513daa51a0",
                 "requestBody": {
                     "required": true,
                     "content": {
@@ -687,7 +2021,7 @@
                                 ],
                                 "properties": {
                                     "share_text": {
-                                        "description": "抖音分享文本或链接",
+                                        "description": "抖音或小红书分享文本或链接",
                                         "type": "string",
                                         "example": "https://v.douyin.com/xxxxx/"
                                     }
@@ -826,11 +2160,7 @@
                         }
                     }
                 },
-                "security": [
-                    {
-                        "sanctum": []
-                    }
-                ]
+                "security": []
             }
         },
         "/api/tools/record-usage": {
@@ -1125,8 +2455,16 @@
             "description": "用户认证相关接口"
         },
         {
+            "name": "文件转换接口",
+            "description": "文件格式转换相关接口"
+        },
+        {
             "name": "工具接口",
             "description": "各种工具功能接口"
+        },
+        {
+            "name": "文件上传",
+            "description": "文件上传"
         }
     ]
 }

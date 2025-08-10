@@ -284,35 +284,7 @@ const convertVideo = async () => {
   }
 };
 
-// 取消转换
-const cancelConversion = async () => {
-  if (!currentTaskId.value) {
-    return;
-  }
 
-  try {
-    setMessage("正在取消转换...");
-
-    const result = await FileConversionAPI.cancelTask(currentTaskId.value);
-
-    if (result.code === 1) {
-      setMessage("转换已取消");
-      isConverting.value = false;
-      progress.value = 0;
-
-      // 停止轮询
-      if (cancelPolling.value) {
-        cancelPolling.value();
-        cancelPolling.value = null;
-      }
-    } else {
-      setMessage("取消失败: " + (result.message || "未知错误"));
-    }
-  } catch (error) {
-    console.error("取消失败:", error);
-    setMessage("取消失败: " + error.message);
-  }
-};
 
 // 记录工具使用
 const recordToolUsage = async () => {
@@ -792,27 +764,7 @@ const downloadFile = async () => {
                 {{ isUploading ? "上传中..." : isConverting ? "转换中..." : "开始转换" }}
               </button>
 
-              <!-- 取消按钮 -->
-              <button
-                v-if="isConverting && currentTaskId"
-                @click="cancelConversion"
-                class="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-6 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-              >
-                <svg
-                  class="inline-block h-4 w-4 mr-2"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M6 18L18 6M6 6l12 12"
-                  ></path>
-                </svg>
-                取消转换
-              </button>
+
             </div>
 
             <!-- 上传进度 -->

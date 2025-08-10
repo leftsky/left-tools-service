@@ -179,21 +179,7 @@ class FileConversionAPI {
         }
     }
 
-    /**
-     * 取消转换任务
-     * @param {number} taskId - 任务ID
-     * @returns {Promise<Object>}
-     */
-    static async cancelTask(taskId) {
-        try {
-            const response = await apiClient.post('/cancel', {
-                task_id: taskId
-            });
-            return response.data;
-        } catch (error) {
-            throw new Error(error.message || '取消失败');
-        }
-    }
+
 
     /**
      * 获取支持的格式
@@ -368,13 +354,7 @@ class FileConversionAPI {
                     return;
                 }
 
-                // 检查是否取消
-                if (data.status === 4) { // 已取消
-                    if (onComplete) {
-                        onComplete(data);
-                    }
-                    return;
-                }
+
 
                 // 继续轮询
                 setTimeout(poll, interval);
@@ -436,8 +416,7 @@ class FileConversionAPI {
             0: '等待中',
             1: '转换中',
             2: '已完成',
-            3: '失败',
-            4: '已取消'
+            3: '失败'
         };
         return statusMap[status] || '未知状态';
     }

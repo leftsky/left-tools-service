@@ -280,8 +280,33 @@ class FileConversionController extends Controller
             $conversionParams = $request->input('conversion_params', []);
             $userId = $request->user()->id; // 从认证中获取用户ID（必须认证）
 
-            // 获取文件信息（简化版本，只获取基本信息）
-            $fileInfo = $this->getBasicFileInfo($fileUrl);
+            // 获取基本文件信息
+            try {
+                $headers = get_headers($fileUrl, 1);
+                $fileSize = 0;
+
+                if ($headers && isset($headers['Content-Length'])) {
+                    $fileSize = is_array($headers['Content-Length'])
+                        ? (int) end($headers['Content-Length'])
+                        : (int) $headers['Content-Length'];
+                }
+
+                $filename = basename(parse_url($fileUrl, PHP_URL_PATH));
+                $extension = pathinfo($filename, PATHINFO_EXTENSION) ?: 'unknown';
+
+                $fileInfo = [
+                    'filename' => $filename,
+                    'file_size' => $fileSize,
+                    'format' => $extension,
+                ];
+            } catch (\Exception $e) {
+                Log::error('获取基本文件信息失败', ['error' => $e->getMessage()]);
+                $fileInfo = [
+                    'filename' => 'unknown',
+                    'file_size' => 0,
+                    'format' => 'unknown',
+                ];
+            }
 
             // 创建转换任务记录
             $task = FileConversionTask::create([
@@ -299,7 +324,7 @@ class FileConversionController extends Controller
 
             // 提交转换任务
             $result = $this->submitConversionTask($task, $fileUrl, $conversionParams);
-            
+
             if (!$result['success']) {
                 return $this->error($result['message'], $result['code']);
             }
@@ -420,7 +445,7 @@ class FileConversionController extends Controller
             }
 
             // 主动查询转换引擎的状态
-            $this->updateTaskStatusFromEngine($task);
+            $task->updateStatusFromEngine();
 
             return $this->success([
                 'task_id' => $task->id,
@@ -449,157 +474,7 @@ class FileConversionController extends Controller
         }
     }
 
-    /**
-     * 取消转换任务
-     */
-    #[OA\Post(
-        path: '/api/file-conversion/cancel',
-        summary: '取消转换任务',
-        description: '取消正在进行的文件转换任务（需要认证）',
-        tags: ['文件转换接口'],
-        security: [["sanctum" => []]],
-        requestBody: new OA\RequestBody(
-            required: true,
-            content: new OA\JsonContent(
-                required: ['task_id'],
-                properties: [
-                    new OA\Property(
-                        property: 'task_id',
-                        type: 'integer',
-                        description: '任务ID',
-                        example: 123
-                    )
-                ]
-            )
-        ),
-        responses: [
-            new OA\Response(
-                response: 200,
-                description: '取消成功',
-                content: new OA\JsonContent(
-                    properties: [
-                        new OA\Property(property: 'code', type: 'integer', example: 1),
-                        new OA\Property(property: 'status', type: 'string', example: 'success'),
-                        new OA\Property(property: 'message', type: 'string', example: '任务已取消'),
-                        new OA\Property(
-                            property: 'data',
-                            type: 'object',
-                            properties: [
-                                new OA\Property(property: 'task_id', type: 'integer', example: 123),
-                                new OA\Property(property: 'status', type: 'string', example: 'cancelled')
-                            ]
-                        )
-                    ]
-                )
-            ),
-            new OA\Response(
-                response: 400,
-                description: '无法取消',
-                content: new OA\JsonContent(
-                    properties: [
-                        new OA\Property(property: 'code', type: 'integer', example: 0),
-                        new OA\Property(property: 'status', type: 'string', example: 'error'),
-                        new OA\Property(property: 'message', type: 'string', example: '只有等待中或转换中的任务可以取消'),
-                    ]
-                )
-            ),
-            new OA\Response(
-                response: 404,
-                description: '任务不存在',
-                content: new OA\JsonContent(
-                    properties: [
-                        new OA\Property(property: 'code', type: 'integer', example: 0),
-                        new OA\Property(property: 'status', type: 'string', example: 'error'),
-                        new OA\Property(property: 'message', type: 'string', example: '任务不存在'),
-                    ]
-                )
-            ),
-            new OA\Response(
-                response: 422,
-                description: '验证失败',
-                content: new OA\JsonContent(
-                    properties: [
-                        new OA\Property(property: 'code', type: 'integer', example: 0),
-                        new OA\Property(property: 'status', type: 'string', example: 'error'),
-                        new OA\Property(property: 'message', type: 'string', example: '参数验证失败'),
-                    ]
-                )
-            ),
-            new OA\Response(
-                response: 500,
-                description: '服务器错误',
-                content: new OA\JsonContent(
-                    properties: [
-                        new OA\Property(property: 'code', type: 'integer', example: 0),
-                        new OA\Property(property: 'status', type: 'string', example: 'error'),
-                        new OA\Property(property: 'message', type: 'string', example: '取消任务失败'),
-                    ]
-                )
-            )
-        ]
-    )]
-    public function cancel(Request $request): JsonResponse
-    {
-        try {
-            $validator = Validator::make($request->all(), [
-                'task_id' => 'required|integer'
-            ]);
 
-            if ($validator->fails()) {
-                return $this->validationError($validator->errors(), '参数验证失败');
-            }
-
-            $taskId = $request->input('task_id');
-            $task = FileConversionTask::find($taskId);
-
-            if (!$task) {
-                return $this->notFound('任务不存在');
-            }
-
-            if (!$task->canBeCancelled()) {
-                return $this->error('只有等待中或转换中的任务可以取消', 400);
-            }
-
-            // 根据引擎取消任务
-            if ($task->isCloudConvertEngine() && $task->cloudconvert_id) {
-                $cloudConvertService = app(CloudConvertService::class);
-                $result = $cloudConvertService->cancelConversion($task->cloudconvert_id);
-
-                if (!$result['success']) {
-                    Log::warning('CloudConvert任务取消失败', [
-                        'task_id' => $taskId,
-                        'cloudconvert_id' => $task->cloudconvert_id,
-                        'error' => $result['error']
-                    ]);
-                }
-            } elseif ($task->isConvertioEngine() && $task->convertio_id) {
-                $convertioService = app(ConvertioService::class);
-                $result = $convertioService->cancelConversion($task->convertio_id);
-
-                if (!$result['success']) {
-                    Log::warning('Convertio任务取消失败', [
-                        'task_id' => $taskId,
-                        'convertio_id' => $task->convertio_id,
-                        'error' => $result['error']
-                    ]);
-                }
-            }
-
-            // 标记任务为已取消
-            $task->markAsCancelled();
-
-            return $this->success([
-                'task_id' => $taskId,
-                'status' => 'cancelled'
-            ], '任务已取消');
-        } catch (\Exception $e) {
-            Log::error('取消任务失败', [
-                'error' => $e->getMessage()
-            ]);
-
-            return $this->serverError('取消任务失败', $e->getMessage());
-        }
-    }
 
     /**
      * 获取支持的格式
@@ -810,7 +685,19 @@ class FileConversionController extends Controller
 
             // 检查文件格式
             $inputFormat = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-            if (!$this->validateFormat($inputFormat, $outputFormat)) {
+            try {
+                $cloudConvertService = app(CloudConvertService::class);
+                $isFormatSupported = $cloudConvertService->validateFormat($inputFormat, $outputFormat);
+            } catch (\Exception $e) {
+                Log::error('格式验证失败', [
+                    'input_format' => $inputFormat,
+                    'output_format' => $outputFormat,
+                    'error' => $e->getMessage()
+                ]);
+                $isFormatSupported = false;
+            }
+            
+            if (!$isFormatSupported) {
                 return $this->error("不支持从 {$inputFormat} 转换到 {$outputFormat}", 400);
             }
 
@@ -1137,232 +1024,6 @@ class FileConversionController extends Controller
     }
 
     /**
-     * 验证格式是否支持
-     */
-    protected function validateFormat(string $inputFormat, string $outputFormat): bool
-    {
-        try {
-            $cloudConvertService = app(CloudConvertService::class);
-            return $cloudConvertService->validateFormat($inputFormat, $outputFormat);
-        } catch (\Exception $e) {
-            Log::error('格式验证失败', [
-                'input_format' => $inputFormat,
-                'output_format' => $outputFormat,
-                'error' => $e->getMessage()
-            ]);
-            return false;
-        }
-    }
-
-    /**
-     * 估算转换时间
-     */
-    protected function estimateConversionTime(string $inputFormat, string $outputFormat, int $fileSize): int
-    {
-        try {
-            $cloudConvertService = app(CloudConvertService::class);
-            return $cloudConvertService->estimateConversionTime($inputFormat, $outputFormat, $fileSize);
-        } catch (\Exception $e) {
-            Log::error('转换时间估算失败', [
-                'input_format' => $inputFormat,
-                'output_format' => $outputFormat,
-                'file_size' => $fileSize,
-                'error' => $e->getMessage()
-            ]);
-            return 60; // 默认1分钟
-        }
-    }
-
-    /**
-     * 获取基本文件信息
-     */
-    protected function getBasicFileInfo(string $fileUrl): array
-    {
-        try {
-            $headers = get_headers($fileUrl, 1);
-            $fileSize = 0;
-
-            if ($headers && isset($headers['Content-Length'])) {
-                $fileSize = is_array($headers['Content-Length'])
-                    ? (int) end($headers['Content-Length'])
-                    : (int) $headers['Content-Length'];
-            }
-
-            $filename = basename(parse_url($fileUrl, PHP_URL_PATH));
-            $extension = pathinfo($filename, PATHINFO_EXTENSION) ?: 'unknown';
-
-            return [
-                'filename' => $filename,
-                'file_size' => $fileSize,
-                'format' => $extension,
-            ];
-        } catch (\Exception $e) {
-            Log::error('获取基本文件信息失败', ['error' => $e->getMessage()]);
-            return [
-                'filename' => 'unknown',
-                'file_size' => 0,
-                'format' => 'unknown',
-            ];
-        }
-    }
-
-    /**
-     * 从转换引擎更新任务状态
-     */
-    protected function updateTaskStatusFromEngine(FileConversionTask $task): void
-    {
-        try {
-            // 如果任务已经完成或失败，不需要再查询
-            if ($task->isCompleted() || $task->isFailed() || $task->isCancelled()) {
-                return;
-            }
-            // 根据引擎类型查询状态
-            if ($task->isCloudConvertEngine() && $task->cloudconvert_id) {
-                $this->updateCloudConvertStatus($task);
-            } elseif ($task->isConvertioEngine() && $task->convertio_id) {
-                $this->updateConvertioStatus($task);
-            }
-        } catch (\Exception $e) {
-            Log::error('更新任务状态失败', [
-                'task_id' => $task->id,
-                'error' => $e->getMessage()
-            ]);
-        }
-    }
-
-    /**
-     * 更新 CloudConvert 任务状态
-     */
-    protected function updateCloudConvertStatus(FileConversionTask $task): void
-    {
-        try {
-            $cloudConvertService = app(CloudConvertService::class);
-            $result = $cloudConvertService->getStatus($task->cloudconvert_id);
-            if ($result['success']) {
-                $data = $result['data'];
-                $status = $data['status'] ?? null;
-                $progress = $data['progress'] ?? 0;
-
-                // 更新任务进度
-                $task->updateProgress($progress);
-
-                if ($status === 'finished') {
-                    $export = $data['tasks']['export'] ?? null;
-                    // 直接获取输出文件信息并完成任务
-                    $files = $export['result']->files ?? [];
-                    if (!empty($files)) {
-                        $outputFile = $files[0];
-                        $outputUrl = $outputFile->url ?? null;
-                        $outputSize = $outputFile->size ?? 0;
-
-                        if ($outputUrl) {
-                            $task->complete($outputUrl, $outputSize, 0);
-                        }
-                    }
-                } elseif ($status === 'error') {
-                    $errorMessage = $data['error'] ?? '转换失败';
-                    Log::error('CloudConvert 任务失败', [
-                        'task_id' => $task->id,
-                        'cloudconvert_id' => $task->cloudconvert_id,
-                        'error' => $errorMessage
-                    ]);
-                    $task->markAsFailed($errorMessage);
-                } elseif ($status === 'processing') {
-                    // 添加处理中状态的日志
-                    Log::info('CloudConvert 任务处理中', [
-                        'task_id' => $task->id,
-                        'cloudconvert_id' => $task->cloudconvert_id,
-                        'progress' => $progress
-                    ]);
-                }
-            } else {
-                Log::error('获取 CloudConvert 状态失败', [
-                    'task_id' => $task->id,
-                    'cloudconvert_id' => $task->cloudconvert_id,
-                    'result' => $result
-                ]);
-            }
-        } catch (\Exception $e) {
-            Log::error('更新 CloudConvert 状态失败', [
-                'task_id' => $task->id,
-                'cloudconvert_id' => $task->cloudconvert_id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-        }
-    }
-
-    /**
-     * 更新 Convertio 任务状态
-     */
-    protected function updateConvertioStatus(FileConversionTask $task): void
-    {
-        try {
-            $convertioService = app(ConvertioService::class);
-            $result = $convertioService->getStatus($task->convertio_id);
-
-            if ($result['success']) {
-                $data = $result['data'];
-                // 确保数据是对象，如果不是则转换为对象
-                if (is_array($data)) {
-                    $data = (object) $data;
-                }
-
-                $step = $data->step ?? null;
-                $progress = $data->step_percent ?? 0;
-
-                // 更新任务进度
-                $task->updateProgress($progress);
-
-                Log::info('Convertio 状态', [$data]);
-
-                // Convertio 的状态处理
-                if ($step === 'finish') {
-                    // 任务完成，获取下载链接
-                    $downloadResult = $convertioService->downloadResult($task->convertio_id);
-                    if ($downloadResult['success']) {
-                        $downloadData = $downloadResult['data'];
-                        $outputUrl = $downloadData['download_url'] ?? null;
-                        $outputSize = $downloadData['size'] ?? 0;
-
-                        if ($outputUrl) {
-                            $task->complete($outputUrl, $outputSize, 0);
-                        }
-                    }
-                } elseif ($step === 'error') {
-                    $errorMessage = $data->error ?? '转换失败';
-                    Log::error('Convertio 任务失败', [
-                        'task_id' => $task->id,
-                        'convertio_id' => $task->convertio_id,
-                        'error' => $errorMessage
-                    ]);
-                    $task->markAsFailed($errorMessage);
-                } elseif ($step === 'convert') {
-                    // 添加转换中状态的日志
-                    Log::info('Convertio 任务转换中', [
-                        'task_id' => $task->id,
-                        'convertio_id' => $task->convertio_id,
-                        'progress' => $progress
-                    ]);
-                }
-            } else {
-                Log::error('获取 Convertio 状态失败', [
-                    'task_id' => $task->id,
-                    'convertio_id' => $task->convertio_id,
-                    'result' => $result
-                ]);
-            }
-        } catch (\Exception $e) {
-            Log::error('更新 Convertio 状态失败', [
-                'task_id' => $task->id,
-                'convertio_id' => $task->convertio_id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-        }
-    }
-
-    /**
      * 上传文件到存储
      */
     protected function uploadFileToStorage($file, string $folder): array
@@ -1383,26 +1044,23 @@ class FileConversionController extends Controller
     }
 
     /**
-     * 提取转换选项
-     */
-    protected function extractConversionOptions(array $conversionParams): array
-    {
-        $allowedOptions = [
-            'video_bitrate', 'video_resolution', 'audio_bitrate', 
-            'audio_frequency', 'video_codec', 'audio_codec', 'quality'
-        ];
-
-        return array_intersect_key($conversionParams, array_flip($allowedOptions));
-    }
-
-    /**
      * 提交转换任务
      */
     protected function submitConversionTask(FileConversionTask $task, string $fileUrl, array $conversionParams): array
     {
         try {
             $cloudConvertService = app(CloudConvertService::class);
-            $conversionOptions = $this->extractConversionOptions($conversionParams);
+            // 提取转换选项
+            $allowedOptions = [
+                'video_bitrate',
+                'video_resolution',
+                'audio_bitrate',
+                'audio_frequency',
+                'video_codec',
+                'audio_codec',
+                'quality'
+            ];
+            $conversionOptions = array_intersect_key($conversionParams, array_flip($allowedOptions));
 
             $result = $cloudConvertService->startConversion([
                 'input_url' => $fileUrl,
@@ -1412,7 +1070,12 @@ class FileConversionController extends Controller
             ]);
 
             if ($result['success']) {
-                $this->updateTaskAsStarted($task, $result['data']['job_id']);
+                // 更新任务为已开始状态
+                $task->update([
+                    'status' => FileConversionTask::STATUS_CONVERT,
+                    'cloudconvert_id' => $result['data']['job_id'],
+                    'conversion_engine' => 'cloudconvert'
+                ]);
 
                 Log::info('文件转换任务已提交到 CloudConvert', [
                     'task_id' => $task->id,
@@ -1437,15 +1100,25 @@ class FileConversionController extends Controller
                 ];
             }
 
-            $this->markTaskAsFailed($task, $result['error']);
-            
+            // 标记任务为失败状态
+            $task->update(['status' => FileConversionTask::STATUS_FAILED]);
+            Log::error('转换任务失败', [
+                'task_id' => $task->id,
+                'error' => $result['error']
+            ]);
+
             return [
                 'success' => false,
                 'message' => 'CloudConvert 转换任务提交失败: ' . $result['error'],
                 'code' => 500
             ];
         } catch (\Exception $e) {
-            $this->markTaskAsFailed($task, $e->getMessage());
+            // 标记任务为失败状态
+            $task->update(['status' => FileConversionTask::STATUS_FAILED]);
+            Log::error('转换任务失败', [
+                'task_id' => $task->id,
+                'error' => $e->getMessage()
+            ]);
 
             return [
                 'success' => false,
@@ -1453,30 +1126,5 @@ class FileConversionController extends Controller
                 'code' => 500
             ];
         }
-    }
-
-    /**
-     * 更新任务为已开始状态
-     */
-    protected function updateTaskAsStarted(FileConversionTask $task, string $jobId): void
-    {
-        $task->update([
-            'status' => FileConversionTask::STATUS_CONVERT,
-            'cloudconvert_id' => $jobId,
-            'conversion_engine' => 'cloudconvert'
-        ]);
-    }
-
-    /**
-     * 标记任务为失败状态
-     */
-    protected function markTaskAsFailed(FileConversionTask $task, string $error): void
-    {
-        $task->update(['status' => FileConversionTask::STATUS_FAILED]);
-        
-        Log::error('转换任务失败', [
-            'task_id' => $task->id,
-            'error' => $error
-        ]);
     }
 }
