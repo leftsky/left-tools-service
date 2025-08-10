@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\ToolController;
 use App\Http\Controllers\Api\AccessLogController;
 use App\Http\Controllers\SeoController;
 use App\Http\Controllers\Api\FileConversionController;
+use App\Http\Controllers\Api\CloudConvertWebhookController;
 
 
 // 访问日志接口（无需认证）
@@ -44,6 +45,10 @@ Route::post('/tools/record-usage-public', [ToolController::class, 'recordUsagePu
 // SEO相关接口
 Route::get('/seo/page-info', [SeoController::class, 'getPageSeo']);
 Route::get('/seo/structured-data', [SeoController::class, 'getStructuredData']);
+
+// CloudConvert Webhook接口（无需认证）
+Route::post('/cloudconvert/webhook', [CloudConvertWebhookController::class, 'handle'])
+    ->name('cloudconvert.webhook');
 
 // 文件转换相关接口（需要认证）
 Route::middleware('auth:sanctum')->group(function () {

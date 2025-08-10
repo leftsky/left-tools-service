@@ -66,7 +66,7 @@ class CloudConvertService
      */
     private function createBaseJob(string $tag, string $outputFormat, array $options): Job
     {
-        return (new Job())
+        $job = (new Job())
             ->setTag($tag)
             ->addTask(
                 (new Task('convert', 'convert-file'))
@@ -77,6 +77,17 @@ class CloudConvertService
                 (new Task('export/url', 'export-file'))
                     ->set('input', 'convert-file')
             );
+
+        // 自动添加webhook回调URL
+        if ($webhookUrl = config('cloudconvert.webhook_url')) {
+            $job->addTask(
+                (new Task('webhook', 'webhook'))
+                    ->set('url', $webhookUrl)
+                    ->set('events', ['job.finished', 'job.failed'])
+            );
+        }
+
+        return $job;
     }
 
     /**
@@ -730,5 +741,69 @@ class CloudConvertService
         }
 
         return (int) ($baseTime * $sizeFactor * $formatComplexity);
+    }
+
+    /**
+     * 下载转换结果到临时目录（用于webhook处理）
+     *
+     * @param string $jobId CloudConvert任务ID
+     * @return string|null 返回临时文件路径，失败返回null
+     */
+    public function downloadResultToTemp(string $jobId): ?string
+    {
+        try {
+            $job = CloudConvert::jobs()->get($jobId);
+            $tasks = $this->safeGet($job, 'getTasks', collect());
+            $exportTask = $this->findTaskByName($tasks, 'export-file');
+
+            if (!$exportTask || $this->safeGet($exportTask, 'getStatus') !== 'finished') {
+                Log::warning('CloudConvert导出任务未完成', ['job_id' => $jobId]);
+                return null;
+            }
+
+            $result = $this->safeGet($exportTask, 'getResult');
+            if (!$result || !isset($result->files[0])) {
+                Log::warning('CloudConvert导出任务无文件结果', ['job_id' => $jobId]);
+                return null;
+            }
+
+            $fileUrl = $result->files[0]['url'];
+            $originalFilename = $result->files[0]['filename'] ?? 'converted_file';
+            
+            // 创建临时目录
+            $tempDir = storage_path('app/temp');
+            if (!is_dir($tempDir)) {
+                mkdir($tempDir, 0755, true);
+            }
+
+            // 生成临时文件名
+            $tempFile = $tempDir . '/' . uniqid() . '_' . $originalFilename;
+
+            // 下载文件
+            $source = CloudConvert::getHttpTransport()->download($fileUrl)->detach();
+            $dest = fopen($tempFile, 'w');
+
+            if ($source && $dest) {
+                stream_copy_to_stream($source, $dest);
+                fclose($dest);
+                fclose($source);
+
+                Log::info('CloudConvert文件下载到临时目录成功', [
+                    'job_id' => $jobId,
+                    'temp_file' => $tempFile,
+                    'file_size' => filesize($tempFile)
+                ]);
+
+                return $tempFile;
+            }
+
+            return null;
+        } catch (Exception $e) {
+            Log::error('CloudConvert文件下载到临时目录失败', [
+                'job_id' => $jobId,
+                'error' => $e->getMessage()
+            ]);
+            return null;
+        }
     }
 }
