@@ -289,21 +289,37 @@ class CloudConvertService
     public function getSupportedFormats(): array
     {
         return [
-            'video' => [
-                'input' => ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv', 'm4v', '3gp', 'ogv'],
-                'output' => ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv', 'm4v', '3gp', 'ogv', 'gif']
-            ],
-            'audio' => [
-                'input' => ['mp3', 'wav', 'aac', 'ogg', 'wma', 'flac', 'm4a', 'opus'],
-                'output' => ['mp3', 'wav', 'aac', 'ogg', 'wma', 'flac', 'm4a', 'opus']
+            'document' => [
+                'input' => ['pdf', 'doc', 'docx', 'docm', 'dot', 'dotx', 'xls', 'xlsx', 'xlsm', 'ppt', 'pptx', 'pptm', 'pot', 'potx', 'pps', 'ppsx', 'txt', 'rtf', 'csv', 'html', 'htm', 'md', 'odt', 'ods', 'odp', 'pub', 'pages', 'numbers', 'key', 'epub', 'mobi', 'azw', 'azw3', 'azw4', 'fb2', 'djvu', 'chm', 'hwp', 'wpd', 'wps', 'et', 'dps', 'abw', 'lwp', 'odd', 'odg', 'cbc', 'cbr', 'cbz', 'lit', 'lrf', 'pdb', 'pml', 'prc', 'rb', 'rst', 'snb', 'tcr', 'tex', 'txtz', 'htmlz', 'xps', 'zabw'],
+                'output' => ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'rtf', 'csv', 'html', 'htm', 'odt', 'ods', 'odp', 'pub', 'pages', 'numbers', 'key', 'epub', 'pot', 'potx', 'pps', 'ppsx', 'pptm', 'xlsm', 'odg', 'tex']
             ],
             'image' => [
-                'input' => ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'webp', 'svg'],
-                'output' => ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'webp', 'svg', 'ico']
+                'input' => ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'tif', 'webp', 'svg', 'ico', 'psd', 'heic', 'heif', 'avif', 'jfif', 'raw', 'cr2', 'cr3', 'nef', 'arw', 'dng', 'orf', 'rw2', 'pef', 'raf', 'crw', 'dcr', 'erf', 'mos', 'mrw', 'x3f', 'xcf', '3fr', 'ppm'],
+                'output' => ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'tif', 'webp', 'ico', 'psd', 'heic', 'heif', 'avif']
             ],
-            'document' => [
-                'input' => ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'rtf'],
-                'output' => ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'rtf', 'html']
+            'video' => [
+                'input' => ['mp4', 'avi', 'mov', 'wmv', 'flv', 'mkv', 'webm', 'm4v', '3gp', 'ogv', 'gif', 'mpeg', 'mpg', 'm2ts', 'mts', 'ts', 'vob', 'swf', 'rmvb', 'rm', 'mxf', 'dv', 'dvr', 'cavs', 'mod', 'wtv', '3g2', '3gpp'],
+                'output' => ['mp4', 'avi', 'mov', 'wmv', 'flv', 'mkv', 'webm', 'm4v', '3gp', 'ogv', 'gif', 'mpeg', 'mpg', '3g2', '3gpp']
+            ],
+            'audio' => [
+                'input' => ['mp3', 'wav', 'aac', 'flac', 'ogg', 'wma', 'm4a', 'opus', 'ac3', 'aif', 'aiff', 'aifc', 'amr', 'au', 'caf', 'dss', 'm4b', 'oga', 'voc', 'weba'],
+                'output' => ['mp3', 'wav', 'aac', 'flac', 'ogg', 'wma', 'm4a', 'opus', 'ac3', 'aif', 'aiff', 'aifc', 'amr', 'au', 'caf', 'm4b', 'oga']
+            ],
+            'archive' => [
+                'input' => ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'tar.gz', 'tar.bz2', 'tar.xz', 'tgz', 'tbz2', 'iso', 'dmg', 'jar', 'deb', 'rpm', 'cab', 'ace', 'lzma', 'lzo', 'arj', 'alz', 'arc', 'bz', 'cpio', 'img', 'lha', 'lz', 'rz', 'tar.7z', 'tar.bz', 'tar.lzo', 'tar.z', 'tbz', 'tz', 'tzo', 'z'],
+                'output' => ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'tar.gz', 'tar.bz2', 'tar.xz']
+            ],
+            'vector' => [
+                'input' => ['svg', 'pdf', 'ai', 'eps', 'dwg', 'dxf', 'cdr', 'wmf', 'emf', 'vsd', 'cgm', 'ps', 'sk', 'sk1', 'svgz'],
+                'output' => ['svg', 'pdf', 'ai', 'eps', 'wmf', 'ps']
+            ],
+            'font' => [
+                'input' => ['ttf', 'otf', 'woff', 'woff2', 'eot'],
+                'output' => ['ttf', 'otf', 'woff', 'woff2', 'eot']
+            ],
+            'icon' => [
+                'input' => ['ico', 'icns'],
+                'output' => ['ico', 'icns', 'png']
             ]
         ];
     }
@@ -311,8 +327,8 @@ class CloudConvertService
     /**
      * 验证格式是否支持
      *
-     * @param string $inputFormat 输入文件格式，如 'mp4', 'avi', 'mov' 等
-     * @param string $outputFormat 输出文件格式，如 'mp4', 'gif', 'webm' 等
+     * @param string $inputFormat 输入文件格式，支持压缩包、视频、音频、图像、文档、字体、图标等格式
+     * @param string $outputFormat 输出文件格式，支持相应类型的输出格式
      * @return bool 返回是否支持该格式转换
      */
     public function validateFormat(string $inputFormat, string $outputFormat): bool
@@ -671,8 +687,8 @@ class CloudConvertService
     /**
      * 估算转换时间
      *
-     * @param string $inputFormat 输入文件格式，如 'mp4', 'avi', 'mov' 等
-     * @param string $outputFormat 输出文件格式，如 'mp4', 'gif', 'webm' 等
+     * @param string $inputFormat 输入文件格式，支持各种类型的文件格式
+     * @param string $outputFormat 输出文件格式，支持各种类型的输出格式
      * @param int $fileSize 文件大小（字节）
      * @return int 估算转换时间（秒）
      */
@@ -682,15 +698,35 @@ class CloudConvertService
         $baseTime = 30;
 
         // 根据文件大小调整
-        $sizeFactor = $fileSize / (10 * 1024 * 1024); // 10MB 基准
+        $sizeFactor = max(1, $fileSize / (10 * 1024 * 1024)); // 10MB 基准
 
         // 根据格式复杂度调整
         $formatComplexity = 1.0;
-        if (in_array($inputFormat, ['avi', 'mov', 'mkv'])) {
-            $formatComplexity = 1.5;
+        
+        // 复杂视频格式
+        if (in_array($inputFormat, ['avi', 'mov', 'mkv', 'mxf', 'rmvb'])) {
+            $formatComplexity *= 1.5;
         }
-        if (in_array($outputFormat, ['gif', 'webm'])) {
-            $formatComplexity = 1.3;
+        
+        // 压缩包解压需要更多时间
+        if (in_array($inputFormat, ['7z', 'rar', 'tar.xz', 'tar.bz2'])) {
+            $formatComplexity *= 1.3;
+        }
+        
+        // RAW图像格式处理复杂
+        if (in_array($inputFormat, ['cr2', 'cr3', 'nef', 'arw', 'raw', 'dng'])) {
+            $formatComplexity *= 1.4;
+        }
+        
+        // 特定输出格式需要更多处理时间
+        if (in_array($outputFormat, ['gif', 'webm', 'heic', 'avif'])) {
+            $formatComplexity *= 1.3;
+        }
+        
+        // 文档转换相对较快
+        $documentFormats = ['doc', 'docx', 'pdf', 'txt', 'rtf', 'html'];
+        if (in_array($inputFormat, $documentFormats) && in_array($outputFormat, $documentFormats)) {
+            $formatComplexity *= 0.8;
         }
 
         return (int) ($baseTime * $sizeFactor * $formatComplexity);
