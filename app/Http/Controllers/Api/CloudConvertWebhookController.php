@@ -127,9 +127,11 @@ class CloudConvertWebhookController extends Controller
         $uploadStartTime = microtime(true);
         
         try {
-            // 生成文件名
+            // 生成文件名：格式转换大王 + Y-m-s H:i:s + 随机数字 10000 ~ 99999
             $extension = pathinfo($tempFilePath, PATHINFO_EXTENSION);
-            $fileName = 'converted_' . $task->id . '_' . time() . '.' . $extension;
+            $randomNumber = rand(10000, 99999);
+            $timestamp = date('Y-m-d H:i:s');
+            $fileName = "格式转换大王 {$timestamp} {$randomNumber}.{$extension}";
             $folder = 'conversions';
             $filePath = $folder . '/' . $fileName;
 
