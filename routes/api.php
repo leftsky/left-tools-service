@@ -16,6 +16,10 @@ Route::middleware(['throttle:60,1'])->group(function () {
     Route::get('/access-log/stats', [AccessLogController::class, 'stats']);
 });
 
+// 认证接口
+Route::post('/auth/mini-login', [AuthController::class, 'miniLogin']);
+Route::post('/auth/h5-login', [AuthController::class, 'h5Login']);
+
 // 需要认证的接口
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', function (Request $request) {
