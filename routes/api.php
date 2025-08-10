@@ -59,6 +59,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/file-conversion/confirm-direct-upload', [FileConversionController::class, 'confirmDirectUpload']);
     Route::get('/file-conversion/status', [FileConversionController::class, 'status']);
 
-    Route::get('/file-conversion/formats', [FileConversionController::class, 'getSupportedFormats']);
+    Route::get('/file-conversion/formats', [FileConversionController::class, 'getSupportedFormats'])
+        ->withoutMiddleware('auth:sanctum');
     Route::get('/file-conversion/history', [FileConversionController::class, 'getConversionHistory']);
 });
