@@ -34,7 +34,7 @@ class CloudConvertWebhookController extends Controller
             $event = $jobData['event'] ?? 'unknown';
 
             // 查找对应的任务记录
-            $task = FileConversionTask::where('cloudconvert_job_id', $jobId)->first();
+            $task = FileConversionTask::where('cloudconvert_id', $jobId)->first();
             if (!$task) {
                 Log::warning('未找到对应的任务记录', ['job_id' => $jobId]);
                 return response()->json(['status' => 'task_not_found'], 404);
