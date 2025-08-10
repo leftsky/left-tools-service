@@ -240,7 +240,7 @@ class FileConversionTask extends Model
 
         Log::info('complete', [$outputUrl, $outputSize, $processingTime]);
         $this->update([
-            'status' => self::STATUS_FINISH,
+            // 'status' => self::STATUS_FINISH,
             // 'output_url' => $outputUrl,
             'output_size' => $outputSize,
             'processing_time' => $processingTime,
