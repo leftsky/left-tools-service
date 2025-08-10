@@ -30,7 +30,115 @@ class FileConversionTaskResource extends Resource
 
     protected static ?int $navigationSort = 1;
 
-    // 移除表单定义，因为不需要创建和编辑功能
+    public static function form(Form $form): Form
+    {
+        return $form
+            ->schema([
+                Forms\Components\Section::make('基本信息')
+                    ->schema([
+                        Forms\Components\TextInput::make('id')
+                            ->label('ID')
+                            ->disabled(),
+                        Forms\Components\TextInput::make('user.name')
+                            ->label('用户')
+                            ->disabled(),
+                        Forms\Components\TextInput::make('filename')
+                            ->label('文件名')
+                            ->disabled(),
+                        Forms\Components\TextInput::make('input_format')
+                            ->label('输入格式')
+                            ->disabled(),
+                        Forms\Components\TextInput::make('output_format')
+                            ->label('输出格式')
+                            ->disabled(),
+                        Forms\Components\TextInput::make('conversion_engine')
+                            ->label('转换引擎')
+                            ->disabled()
+                            ->formatStateUsing(fn (string $state): string => match ($state) {
+                                FileConversionTask::ENGINE_CONVERTIO => 'Convertio',
+                                FileConversionTask::ENGINE_CLOUDCONVERT => 'CloudConvert',
+                                default => $state,
+                            }),
+                    ])
+                    ->columns(2),
+                
+                Forms\Components\Section::make('状态信息')
+                    ->schema([
+                        Forms\Components\TextInput::make('status')
+                            ->label('状态')
+                            ->disabled()
+                            ->formatStateUsing(fn (int $state): string => match ($state) {
+                                FileConversionTask::STATUS_WAIT => '等待中',
+                                FileConversionTask::STATUS_CONVERT => '转换中',
+                                FileConversionTask::STATUS_FINISH => '已完成',
+                                FileConversionTask::STATUS_FAILED => '失败',
+                                FileConversionTask::STATUS_CANCELLED => '已取消',
+                                default => '未知',
+                            }),
+                        Forms\Components\TextInput::make('step_percent')
+                            ->label('进度')
+                            ->disabled()
+                            ->formatStateUsing(fn (int $state): string => $state . '%'),
+                        Forms\Components\TextInput::make('formatted_file_size')
+                            ->label('文件大小')
+                            ->disabled(),
+                        Forms\Components\TextInput::make('formatted_output_size')
+                            ->label('输出大小')
+                            ->disabled(),
+                        Forms\Components\TextInput::make('formatted_processing_time')
+                            ->label('处理时间')
+                            ->disabled(),
+                    ])
+                    ->columns(2),
+
+                Forms\Components\Section::make('文件信息')
+                    ->schema([
+                        Forms\Components\TextInput::make('input_file')
+                            ->label('输入文件')
+                            ->disabled(),
+                        Forms\Components\Placeholder::make('output_url_display')
+                            ->label('输出文件URL')
+                            ->content(fn (FileConversionTask $record): \Illuminate\Contracts\Support\Htmlable => 
+                                new \Illuminate\Support\HtmlString(
+                                    $record->output_url 
+                                        ? '<a href="' . htmlspecialchars($record->output_url, ENT_QUOTES, 'UTF-8') . '" target="_blank" class="text-primary-600 hover:text-primary-500 underline">' . htmlspecialchars($record->output_url, ENT_QUOTES, 'UTF-8') . '</a>'
+                                        : '<span class="text-gray-500">暂无</span>'
+                                )
+                            ),
+                    ]),
+
+                Forms\Components\Section::make('时间信息')
+                    ->schema([
+                        Forms\Components\DateTimePicker::make('created_at')
+                            ->label('创建时间')
+                            ->disabled(),
+                        Forms\Components\DateTimePicker::make('started_at')
+                            ->label('开始时间')
+                            ->disabled(),
+                        Forms\Components\DateTimePicker::make('completed_at')
+                            ->label('完成时间')
+                            ->disabled(),
+                    ])
+                    ->columns(3),
+
+                Forms\Components\Section::make('错误信息')
+                    ->schema([
+                        Forms\Components\Textarea::make('error_message')
+                            ->label('错误信息')
+                            ->disabled()
+                            ->rows(3),
+                    ])
+                    ->visible(fn (FileConversionTask $record): bool => !empty($record->error_message)),
+
+                Forms\Components\Section::make('转换选项')
+                    ->schema([
+                        Forms\Components\KeyValue::make('conversion_options')
+                            ->label('转换选项')
+                            ->disabled(),
+                    ])
+                    ->visible(fn (FileConversionTask $record): bool => !empty($record->conversion_options)),
+            ]);
+    }
 
     public static function table(Table $table): Table
     {
