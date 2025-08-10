@@ -704,27 +704,27 @@ class CloudConvertService
 
         // 根据格式复杂度调整
         $formatComplexity = 1.0;
-        
+
         // 复杂视频格式
         if (in_array($inputFormat, ['avi', 'mov', 'mkv', 'mxf', 'rmvb'])) {
             $formatComplexity *= 1.5;
         }
-        
+
         // 压缩包解压需要更多时间
         if (in_array($inputFormat, ['7z', 'rar', 'tar.xz', 'tar.bz2'])) {
             $formatComplexity *= 1.3;
         }
-        
+
         // RAW图像格式处理复杂
         if (in_array($inputFormat, ['cr2', 'cr3', 'nef', 'arw', 'raw', 'dng'])) {
             $formatComplexity *= 1.4;
         }
-        
+
         // 特定输出格式需要更多处理时间
         if (in_array($outputFormat, ['gif', 'webm', 'heic', 'avif'])) {
             $formatComplexity *= 1.3;
         }
-        
+
         // 文档转换相对较快
         $documentFormats = ['doc', 'docx', 'pdf', 'txt', 'rtf', 'html'];
         if (in_array($inputFormat, $documentFormats) && in_array($outputFormat, $documentFormats)) {
@@ -758,9 +758,9 @@ class CloudConvertService
                 return null;
             }
 
-            $fileUrl = $result->files[0]['url'];
-            $originalFilename = $result->files[0]['filename'] ?? 'converted_file';
-            
+            $fileUrl = $result->files[0]->url;
+            $originalFilename = $result->files[0]->filename ?? 'converted_file';
+
             // 创建临时目录
             $tempDir = storage_path('app/temp');
             if (!is_dir($tempDir)) {
