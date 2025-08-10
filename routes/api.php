@@ -48,7 +48,8 @@ Route::get('/seo/structured-data', [SeoController::class, 'getStructuredData']);
 // 文件转换相关接口（需要认证）
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/file-conversion/convert', [FileConversionController::class, 'convert']);
-    Route::post('/file-conversion/upload', [FileConversionController::class, 'upload']);
+    Route::post('/file-conversion/upload', [FileConversionController::class, 'upload'])
+        ->withoutMiddleware('auth:sanctum');
     Route::post('/file-conversion/direct-upload', [FileConversionController::class, 'createDirectUpload']);
     Route::post('/file-conversion/confirm-direct-upload', [FileConversionController::class, 'confirmDirectUpload']);
     Route::get('/file-conversion/status', [FileConversionController::class, 'status']);
