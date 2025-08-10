@@ -17,9 +17,4 @@ return [
      */
     'webhook_signing_secret' => env('CLOUDCONVERT_WEBHOOK_SIGNING_SECRET', ''),
 
-    /**
-     * Webhook URL for receiving CloudConvert callbacks
-     */
-    'webhook_url' => env('CLOUDCONVERT_WEBHOOK_URL', null),
-
 ];

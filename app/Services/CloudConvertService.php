@@ -79,7 +79,7 @@ class CloudConvertService
             );
 
         // 自动添加webhook回调URL
-        if ($webhookUrl = config('cloudconvert.webhook_url')) {
+        if ($webhookUrl = route('cloudconvert.webhook')) {
             Log::info('添加webhook回调URL', ['webhook_url' => $webhookUrl]);
             $job->addTask(
                 (new Task('webhook', 'webhook'))

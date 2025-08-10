@@ -179,9 +179,10 @@ class AuthController extends Controller
 
             if (!$user) {
                 // 创建新用户
+                $randomNumber = random_int(10000000, 99999999);
                 $user = User::create([
-                    'name' => '微信用户_' . substr($openid, -8), // 生成默认用户名
-                    'email' => $openid . '@wechat.local', // 生成临时邮箱
+                    'name' => '微信用户_' . $randomNumber, // 生成默认用户名
+                    'email' => $randomNumber . '@wechat.local', // 生成临时邮箱
                     'password' => bcrypt(Str::random(16)), // 生成随机密码
                     'weixin_mini_openid' => $openid,
                     'weixin_unionid' => $unionid,
