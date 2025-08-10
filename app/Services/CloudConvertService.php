@@ -78,16 +78,6 @@ class CloudConvertService
                     ->set('input', 'convert-file')
             );
 
-        // 自动添加webhook回调URL
-        if ($webhookUrl = route('cloudconvert.webhook')) {
-            Log::info('添加webhook回调URL', ['webhook_url' => $webhookUrl]);
-            $job->addTask(
-                (new Task('webhook', 'webhook'))
-                    ->set('url', $webhookUrl)
-                    ->set('events', ['job.finished', 'job.failed'])
-            );
-        }
-
         return $job;
     }
 
