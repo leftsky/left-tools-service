@@ -231,17 +231,22 @@ class FileConversionTask extends Model
     /**
      * 完成任务
      */
-    public function complete(string $outputUrl, int $outputSize, int $processingTime, ?array $outputFiles = null): void
+    public function complete(string $outputUrl, int $outputSize): void
     {
-        Log::info('complete', [$outputUrl, $outputSize, $processingTime, $outputFiles]);
+        $completedAt = now();
+
+        // 自动计算处理时间（完成时间 - 创建时间）
+        $processingTime = $this->created_at->diffInSeconds($completedAt);
+
+        Log::info('complete', [$outputUrl, $outputSize, $processingTime]);
         $this->update([
             'status' => self::STATUS_FINISH,
             'output_url' => $outputUrl,
             'output_size' => $outputSize,
             'processing_time' => $processingTime,
-            'output_files' => $outputFiles,
+            'output_files' => null,
             'step_percent' => 100,
-            'completed_at' => now(),
+            'completed_at' => $completedAt,
         ]);
     }
 
@@ -347,9 +352,9 @@ class FileConversionTask extends Model
         $bytes = max($bytes, 0);
         $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
         $pow = min($pow, count($units) - 1);
-        
+
         $bytes /= pow(1024, $pow);
-        
+
         return round($bytes, 2) . ' ' . $units[$pow];
     }
 
@@ -523,7 +528,7 @@ class FileConversionTask extends Model
             if ($this->isCompleted() || $this->isFailed() || $this->isCancelled()) {
                 return;
             }
-            
+
             // 根据引擎类型查询状态
             if ($this->isCloudConvertEngine() && $this->cloudconvert_id) {
                 $this->updateCloudConvertStatus();
@@ -546,7 +551,7 @@ class FileConversionTask extends Model
         try {
             $cloudConvertService = app(CloudConvertService::class);
             $result = $cloudConvertService->getStatus($this->cloudconvert_id);
-            
+
             if ($result['success']) {
                 $data = $result['data'];
                 $status = $data['status'] ?? null;
@@ -565,7 +570,7 @@ class FileConversionTask extends Model
                         $outputSize = $outputFile->size ?? 0;
 
                         if ($outputUrl) {
-                            $this->complete($outputUrl, $outputSize, 0);
+                            $this->complete($outputUrl, $outputSize);
                         }
                     }
                 } elseif ($status === 'error') {
@@ -635,7 +640,7 @@ class FileConversionTask extends Model
                         $outputSize = $downloadData['size'] ?? 0;
 
                         if ($outputUrl) {
-                            $this->complete($outputUrl, $outputSize, 0);
+                            $this->complete($outputUrl, $outputSize);
                         }
                     }
                 } elseif ($step === 'error') {

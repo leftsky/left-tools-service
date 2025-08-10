@@ -23,9 +23,9 @@ class FileConversionTaskResource extends Resource
     protected static ?string $navigationGroup = '文件转换';
 
     protected static ?string $navigationLabel = '转换任务';
-    
+
     protected static ?string $modelLabel = '转换任务';
-    
+
     protected static ?string $pluralModelLabel = '转换任务';
 
     protected static ?int $navigationSort = 1;
@@ -39,7 +39,8 @@ class FileConversionTaskResource extends Resource
                 Tables\Columns\TextColumn::make('id')
                     ->label('ID')
                     ->sortable()
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('user.name')
                     ->label('用户')
                     ->searchable()
@@ -48,7 +49,8 @@ class FileConversionTaskResource extends Resource
                     ->label('文件名')
                     ->searchable()
                     ->sortable()
-                    ->limit(30),
+                    ->limit(30)
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('input_format')
                     ->label('输入格式')
                     ->badge()
@@ -60,7 +62,7 @@ class FileConversionTaskResource extends Resource
                 Tables\Columns\TextColumn::make('status')
                     ->label('状态')
                     ->badge()
-                    ->color(fn (int $state): string => match ($state) {
+                    ->color(fn(int $state): string => match ($state) {
                         FileConversionTask::STATUS_WAIT => 'warning',
                         FileConversionTask::STATUS_CONVERT => 'info',
                         FileConversionTask::STATUS_FINISH => 'success',
@@ -68,7 +70,7 @@ class FileConversionTaskResource extends Resource
                         FileConversionTask::STATUS_CANCELLED => 'secondary',
                         default => 'gray',
                     })
-                    ->formatStateUsing(fn (int $state): string => match ($state) {
+                    ->formatStateUsing(fn(int $state): string => match ($state) {
                         FileConversionTask::STATUS_WAIT => '等待中',
                         FileConversionTask::STATUS_CONVERT => '转换中',
                         FileConversionTask::STATUS_FINISH => '已完成',
@@ -78,9 +80,9 @@ class FileConversionTaskResource extends Resource
                     }),
                 Tables\Columns\TextColumn::make('step_percent')
                     ->label('进度')
-                    ->formatStateUsing(fn (int $state): string => $state . '%')
+                    ->formatStateUsing(fn(int $state): string => $state . '%')
                     ->badge()
-                    ->color(fn (int $state): string => match (true) {
+                    ->color(fn(int $state): string => match (true) {
                         $state >= 100 => 'success',
                         $state >= 50 => 'info',
                         $state > 0 => 'warning',
@@ -89,30 +91,29 @@ class FileConversionTaskResource extends Resource
                 Tables\Columns\TextColumn::make('conversion_engine')
                     ->label('引擎')
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn(string $state): string => match ($state) {
                         FileConversionTask::ENGINE_CONVERTIO => 'orange',
                         FileConversionTask::ENGINE_CLOUDCONVERT => 'purple',
                         default => 'gray',
                     })
-                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                    ->formatStateUsing(fn(string $state): string => match ($state) {
                         FileConversionTask::ENGINE_CONVERTIO => 'Convertio',
                         FileConversionTask::ENGINE_CLOUDCONVERT => 'CloudConvert',
                         default => $state,
                     }),
                 Tables\Columns\TextColumn::make('formatted_file_size')
                     ->label('文件大小')
-                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('file_size', $direction)),
+                    ->sortable(query: fn(Builder $query, string $direction): Builder => $query->orderBy('file_size', $direction)),
                 Tables\Columns\TextColumn::make('formatted_output_size')
                     ->label('输出大小')
-                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('output_size', $direction)),
+                    ->sortable(query: fn(Builder $query, string $direction): Builder => $query->orderBy('output_size', $direction)),
                 Tables\Columns\TextColumn::make('formatted_processing_time')
                     ->label('处理时间')
-                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('processing_time', $direction)),
+                    ->sortable(query: fn(Builder $query, string $direction): Builder => $query->orderBy('processing_time', $direction)),
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('创建时间')
                     ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->sortable(),
                 Tables\Columns\TextColumn::make('started_at')
                     ->label('开始时间')
                     ->dateTime()
@@ -160,11 +161,11 @@ class FileConversionTaskResource extends Resource
                         return $query
                             ->when(
                                 $data['created_from'],
-                                fn (Builder $query, $date): Builder => $query->whereDate('created_at', '>=', $date),
+                                fn(Builder $query, $date): Builder => $query->whereDate('created_at', '>=', $date),
                             )
                             ->when(
                                 $data['created_until'],
-                                fn (Builder $query, $date): Builder => $query->whereDate('created_at', '<=', $date),
+                                fn(Builder $query, $date): Builder => $query->whereDate('created_at', '<=', $date),
                             );
                     }),
             ])
@@ -174,19 +175,22 @@ class FileConversionTaskResource extends Resource
                     ->label('重试')
                     ->icon('heroicon-o-arrow-path')
                     ->color('warning')
-                    ->visible(fn (FileConversionTask $record): bool => $record->isFailed())
+                    ->visible(fn(FileConversionTask $record): bool => $record->isFailed())
                     ->action(function (FileConversionTask $record): void {
                         // 这里可以添加重试逻辑
                         $record->update(['status' => FileConversionTask::STATUS_WAIT]);
                     }),
-                Tables\Actions\Action::make('cancel')
-                    ->label('取消')
-                    ->icon('heroicon-o-x-mark')
-                    ->color('danger')
-                    ->visible(fn (FileConversionTask $record): bool => $record->canBeCancelled())
+                Tables\Actions\Action::make('update_progress')
+                    ->label('更新进度')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('info')
+                    ->visible(fn(FileConversionTask $record): bool => $record->status === FileConversionTask::STATUS_CONVERT)
                     ->action(function (FileConversionTask $record): void {
-                        $record->markAsCancelled();
-                    }),
+                        // 从转换引擎更新任务状态和进度
+                        $record->updateStatusFromEngine();
+                    })
+                    ->successNotificationTitle('进度已更新'),
+
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
@@ -202,6 +206,18 @@ class FileConversionTaskResource extends Resource
                                 }
                             });
                         }),
+                    Tables\Actions\BulkAction::make('update_progress_bulk')
+                        ->label('批量更新进度')
+                        ->icon('heroicon-o-arrow-path')
+                        ->color('info')
+                        ->action(function ($records): void {
+                            $records->each(function ($record) {
+                                if ($record->status === FileConversionTask::STATUS_CONVERT) {
+                                    $record->updateStatusFromEngine();
+                                }
+                            });
+                        })
+                        ->deselectRecordsAfterCompletion(),
                 ]),
             ])
             ->defaultSort('created_at', 'desc');

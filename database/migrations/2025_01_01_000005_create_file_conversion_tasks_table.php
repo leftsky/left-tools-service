@@ -20,7 +20,7 @@ return new class extends Migration
             $table->string('convertio_id')->nullable()->comment('Convertio API任务ID');
             $table->string('cloudconvert_id')->nullable()->comment('CloudConvert API任务ID');
             $table->string('conversion_engine', 20)->default('convertio')->comment('转换引擎: convertio/cloudconvert');
-            
+
             // 文件信息
             $table->string('input_method', 20)->default('url')->comment('输入方式: url/raw/base64/upload');
             $table->text('input_file')->comment('输入文件URL或内容');
@@ -36,7 +36,7 @@ return new class extends Migration
             $table->integer('processing_time')->default(0)->comment('处理时间(秒)');
 
             // 输出文件信息
-            $table->string('output_url')->nullable()->comment('输出文件URL');
+            $table->string('output_url', 1024)->nullable()->comment('输出文件URL');
             $table->unsignedBigInteger('output_size')->nullable()->comment('输出文件大小(字节)');
             $table->json('output_files')->nullable()->comment('输出文件列表(JSON格式)');
 
@@ -47,7 +47,7 @@ return new class extends Migration
             $table->timestamp('started_at')->nullable()->comment('开始时间');
             $table->timestamp('completed_at')->nullable()->comment('完成时间');
             $table->timestamps();
-            
+
             // 索引
             $table->index(['user_id', 'status']);
             $table->index(['conversion_engine', 'status']);
