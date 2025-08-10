@@ -99,41 +99,19 @@ class FileConversionController extends Controller
     )]
     public function upload(Request $request)
     {
-        // 验证请求
         $request->validate([
             'file' => 'required|file|max:10240', // 最大10MB
             'folder' => 'nullable|string'
         ]);
 
-        if (!$request->hasFile('file') || !$request->file('file')->isValid()) {
+        $file = $request->file('file');
+        if (!$file || !$file->isValid()) {
             return $this->error('未提供文件或文件上传失败');
         }
 
-        // 获取文件
-        $file = $request->file('file');
-
-        // 生成唯一文件名
-        $extension = $file->getClientOriginalExtension();
-        $fileName = Str::random(10) . '_' . time() . '.' . $extension;
-
-        // 确定存储路径
-        $folder = $request->input('folder', 'uploads');
-        $folder = trim($folder, '/');
-        $filePath = $folder . '/' . $fileName;
-
         try {
-            // 使用七牛云存储上传文件
-            $disk = Storage::disk('oss');
-            $content = file_get_contents($file->getRealPath());
-            $disk->put($filePath, $content);
-
-            // 获取文件URL
-            $url = Storage::url($filePath);
-
-            return $this->success([
-                'url' => $url,
-                'path' => $filePath
-            ], '文件上传成功');
+            $result = $this->uploadFileToStorage($file, $request->input('folder', 'uploads'));
+            return $this->success($result, '文件上传成功');
         } catch (\Exception $e) {
             return $this->error('文件上传失败：' . $e->getMessage());
         }
@@ -145,9 +123,9 @@ class FileConversionController extends Controller
     #[OA\Post(
         path: '/api/file-conversion/convert',
         summary: '提交文件转换任务',
-        description: '通过URL提交文件转换任务（支持可选认证）',
+        description: '通过URL提交文件转换任务（需要认证）',
         tags: ['文件转换接口'],
-        security: [], // 可选认证，支持登录和未登录用户
+        security: [["sanctum" => []]],
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(
@@ -300,7 +278,7 @@ class FileConversionController extends Controller
             $fileUrl = $request->input('file_url');
             $outputFormat = $request->input('output_format');
             $conversionParams = $request->input('conversion_params', []);
-            $userId = $request->user()?->id; // 从认证中获取用户ID
+            $userId = $request->user()->id; // 从认证中获取用户ID（必须认证）
 
             // 获取文件信息（简化版本，只获取基本信息）
             $fileInfo = $this->getBasicFileInfo($fileUrl);
@@ -319,91 +297,14 @@ class FileConversionController extends Controller
                 'conversion_engine' => 'cloudconvert', // 固定使用 CloudConvert
             ]);
 
-            // 提交到 CloudConvert 进行实际转换
-            try {
-                $cloudConvertService = app(CloudConvertService::class);
-
-                // 准备转换参数
-                $conversionOptions = [];
-                if (isset($conversionParams['video_bitrate'])) {
-                    $conversionOptions['video_bitrate'] = $conversionParams['video_bitrate'];
-                }
-                if (isset($conversionParams['video_resolution'])) {
-                    $conversionOptions['video_resolution'] = $conversionParams['video_resolution'];
-                }
-                if (isset($conversionParams['audio_bitrate'])) {
-                    $conversionOptions['audio_bitrate'] = $conversionParams['audio_bitrate'];
-                }
-                if (isset($conversionParams['audio_frequency'])) {
-                    $conversionOptions['audio_frequency'] = $conversionParams['audio_frequency'];
-                }
-                if (isset($conversionParams['video_codec'])) {
-                    $conversionOptions['video_codec'] = $conversionParams['video_codec'];
-                }
-                if (isset($conversionParams['audio_codec'])) {
-                    $conversionOptions['audio_codec'] = $conversionParams['audio_codec'];
-                }
-                if (isset($conversionParams['quality'])) {
-                    $conversionOptions['quality'] = $conversionParams['quality'];
-                }
-
-                $result = $cloudConvertService->startConversion([
-                    'input_url' => $fileUrl,
-                    'output_format' => $task->output_format,
-                    'options' => $conversionOptions,
-                    'tag' => 'task-' . $task->id
-                ]);
-
-                if ($result['success']) {
-                    // 更新任务状态和 CloudConvert ID
-                    $task->update([
-                        'status' => FileConversionTask::STATUS_CONVERT,
-                        'cloudconvert_id' => $result['data']['job_id'],
-                        'conversion_engine' => 'cloudconvert'
-                    ]);
-
-                    Log::info('文件转换任务已提交到 CloudConvert', [
-                        'task_id' => $task->id,
-                        'cloudconvert_id' => $result['data']['job_id'],
-                        'file_url' => $fileUrl,
-                        'output_format' => $outputFormat,
-                        'user_id' => $userId
-                    ]);
-
-                    return $this->success([
-                        'task_id' => $task->id,
-                        'status' => 'processing',
-                        'cloudconvert_id' => $result['data']['job_id'],
-                        'filename' => $task->filename,
-                        'file_size' => $task->formatted_file_size,
-                        'input_format' => $task->input_format,
-                        'output_format' => $task->output_format,
-                        'conversion_options' => $conversionParams
-                    ], '文件转换任务已提交到 CloudConvert');
-                } else {
-                    // CloudConvert 提交失败，回滚任务状态
-                    $task->update(['status' => FileConversionTask::STATUS_FAILED]);
-
-                    Log::error('CloudConvert 转换任务提交失败', [
-                        'task_id' => $task->id,
-                        'error' => $result['error'],
-                        'file_url' => $fileUrl
-                    ]);
-
-                    return $this->error('CloudConvert 转换任务提交失败: ' . $result['error'], 500);
-                }
-            } catch (\Exception $e) {
-                // CloudConvert 服务调用异常，回滚任务状态
-                $task->update(['status' => FileConversionTask::STATUS_FAILED]);
-
-                Log::error('CloudConvert 服务调用失败', [
-                    'task_id' => $task->id,
-                    'error' => $e->getMessage(),
-                    'file_url' => $fileUrl
-                ]);
-
-                return $this->error('CloudConvert 服务调用失败: ' . $e->getMessage(), 500);
+            // 提交转换任务
+            $result = $this->submitConversionTask($task, $fileUrl, $conversionParams);
+            
+            if (!$result['success']) {
+                return $this->error($result['message'], $result['code']);
             }
+
+            return $this->success($result['data'], $result['message']);
         } catch (\Exception $e) {
             Log::error('文件转换任务提交失败', [
                 'error' => $e->getMessage(),
@@ -420,9 +321,9 @@ class FileConversionController extends Controller
     #[OA\Get(
         path: '/api/file-conversion/status',
         summary: '获取任务状态',
-        description: '获取文件转换任务的状态信息（支持可选认证）',
+        description: '获取文件转换任务的状态信息（需要认证）',
         tags: ['文件转换接口'],
-        security: [], // 可选认证，支持登录和未登录用户
+        security: [["sanctum" => []]],
         parameters: [
             new OA\Parameter(
                 name: 'task_id',
@@ -548,17 +449,15 @@ class FileConversionController extends Controller
         }
     }
 
-
-
     /**
      * 取消转换任务
      */
     #[OA\Post(
         path: '/api/file-conversion/cancel',
         summary: '取消转换任务',
-        description: '取消正在进行的文件转换任务（支持可选认证）',
+        description: '取消正在进行的文件转换任务（需要认证）',
         tags: ['文件转换接口'],
-        security: [], // 可选认证，支持登录和未登录用户
+        security: [["sanctum" => []]],
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(
@@ -708,9 +607,9 @@ class FileConversionController extends Controller
     #[OA\Get(
         path: '/api/file-conversion/formats',
         summary: '获取支持的格式',
-        description: '获取系统支持的文件转换格式列表（支持可选认证）',
+        description: '获取系统支持的文件转换格式列表（需要认证）',
         tags: ['文件转换接口'],
-        security: [], // 可选认证，支持登录和未登录用户
+        security: [["sanctum" => []]],
         responses: [
             new OA\Response(
                 response: 200,
@@ -785,9 +684,9 @@ class FileConversionController extends Controller
     #[OA\Post(
         path: '/api/file-conversion/direct-upload',
         summary: '创建客户端直传任务',
-        description: '创建客户端直传任务，获取上传URL和表单数据（支持可选认证）',
+        description: '创建客户端直传任务，获取上传URL和表单数据（需要认证）',
         tags: ['文件转换接口'],
-        security: [], // 可选认证，支持登录和未登录用户
+        security: [["sanctum" => []]],
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(
@@ -907,7 +806,7 @@ class FileConversionController extends Controller
             $outputFormat = $request->input('output_format', 'mp4');
             $options = $request->input('options', []);
             $engine = $request->input('engine', 'cloudconvert');
-            $userId = $request->user()?->id;
+            $userId = $request->user()->id;
 
             // 检查文件格式
             $inputFormat = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
@@ -989,9 +888,9 @@ class FileConversionController extends Controller
     #[OA\Post(
         path: '/api/file-conversion/confirm-direct-upload',
         summary: '确认客户端直传完成',
-        description: '确认客户端直传完成，开始转换任务（支持可选认证）',
+        description: '确认客户端直传完成，开始转换任务（需要认证）',
         tags: ['文件转换接口'],
-        security: [], // 可选认证，支持登录和未登录用户
+        security: [["sanctum" => []]],
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(
@@ -1128,9 +1027,9 @@ class FileConversionController extends Controller
     #[OA\Get(
         path: '/api/file-conversion/history',
         summary: '获取转换历史',
-        description: '获取用户的文件转换历史记录（支持可选认证）',
+        description: '获取用户的文件转换历史记录（需要认证）',
         tags: ['文件转换接口'],
-        security: [], // 可选认证，支持登录和未登录用户
+        security: [["sanctum" => []]],
         parameters: [
             new OA\Parameter(
                 name: 'limit',
@@ -1211,17 +1110,12 @@ class FileConversionController extends Controller
     public function getConversionHistory(Request $request): JsonResponse
     {
         try {
-            $userId = $request->user()?->id;
+            $userId = $request->user()->id; // 必须认证
             $limit = $request->input('limit', 20);
             $page = $request->input('page', 1);
 
-            $query = FileConversionTask::query();
-
-            if ($userId) {
-                $query->where('user_id', $userId);
-            }
-
-            $tasks = $query->orderBy('created_at', 'desc')
+            $tasks = FileConversionTask::where('user_id', $userId)
+                ->orderBy('created_at', 'desc')
                 ->paginate($limit, ['*'], 'page', $page);
 
             return $this->success([
@@ -1241,10 +1135,6 @@ class FileConversionController extends Controller
             return $this->serverError('获取转换历史失败', $e->getMessage());
         }
     }
-
-
-
-
 
     /**
      * 验证格式是否支持
@@ -1470,5 +1360,123 @@ class FileConversionController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
         }
+    }
+
+    /**
+     * 上传文件到存储
+     */
+    protected function uploadFileToStorage($file, string $folder): array
+    {
+        $extension = $file->getClientOriginalExtension();
+        $fileName = Str::random(10) . '_' . time() . '.' . $extension;
+        $folder = trim($folder, '/');
+        $filePath = $folder . '/' . $fileName;
+
+        $disk = Storage::disk('oss');
+        $content = file_get_contents($file->getRealPath());
+        $disk->put($filePath, $content);
+
+        return [
+            'url' => Storage::url($filePath),
+            'path' => $filePath
+        ];
+    }
+
+    /**
+     * 提取转换选项
+     */
+    protected function extractConversionOptions(array $conversionParams): array
+    {
+        $allowedOptions = [
+            'video_bitrate', 'video_resolution', 'audio_bitrate', 
+            'audio_frequency', 'video_codec', 'audio_codec', 'quality'
+        ];
+
+        return array_intersect_key($conversionParams, array_flip($allowedOptions));
+    }
+
+    /**
+     * 提交转换任务
+     */
+    protected function submitConversionTask(FileConversionTask $task, string $fileUrl, array $conversionParams): array
+    {
+        try {
+            $cloudConvertService = app(CloudConvertService::class);
+            $conversionOptions = $this->extractConversionOptions($conversionParams);
+
+            $result = $cloudConvertService->startConversion([
+                'input_url' => $fileUrl,
+                'output_format' => $task->output_format,
+                'options' => $conversionOptions,
+                'tag' => 'task-' . $task->id
+            ]);
+
+            if ($result['success']) {
+                $this->updateTaskAsStarted($task, $result['data']['job_id']);
+
+                Log::info('文件转换任务已提交到 CloudConvert', [
+                    'task_id' => $task->id,
+                    'cloudconvert_id' => $result['data']['job_id'],
+                    'file_url' => $fileUrl,
+                    'output_format' => $task->output_format
+                ]);
+
+                return [
+                    'success' => true,
+                    'message' => '文件转换任务已提交到 CloudConvert',
+                    'data' => [
+                        'task_id' => $task->id,
+                        'status' => 'processing',
+                        'cloudconvert_id' => $result['data']['job_id'],
+                        'filename' => $task->filename,
+                        'file_size' => $task->formatted_file_size,
+                        'input_format' => $task->input_format,
+                        'output_format' => $task->output_format,
+                        'conversion_options' => $conversionParams
+                    ]
+                ];
+            }
+
+            $this->markTaskAsFailed($task, $result['error']);
+            
+            return [
+                'success' => false,
+                'message' => 'CloudConvert 转换任务提交失败: ' . $result['error'],
+                'code' => 500
+            ];
+        } catch (\Exception $e) {
+            $this->markTaskAsFailed($task, $e->getMessage());
+
+            return [
+                'success' => false,
+                'message' => 'CloudConvert 服务调用失败: ' . $e->getMessage(),
+                'code' => 500
+            ];
+        }
+    }
+
+    /**
+     * 更新任务为已开始状态
+     */
+    protected function updateTaskAsStarted(FileConversionTask $task, string $jobId): void
+    {
+        $task->update([
+            'status' => FileConversionTask::STATUS_CONVERT,
+            'cloudconvert_id' => $jobId,
+            'conversion_engine' => 'cloudconvert'
+        ]);
+    }
+
+    /**
+     * 标记任务为失败状态
+     */
+    protected function markTaskAsFailed(FileConversionTask $task, string $error): void
+    {
+        $task->update(['status' => FileConversionTask::STATUS_FAILED]);
+        
+        Log::error('转换任务失败', [
+            'task_id' => $task->id,
+            'error' => $error
+        ]);
     }
 }

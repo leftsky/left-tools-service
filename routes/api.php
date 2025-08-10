@@ -45,8 +45,8 @@ Route::post('/tools/record-usage-public', [ToolController::class, 'recordUsagePu
 Route::get('/seo/page-info', [SeoController::class, 'getPageSeo']);
 Route::get('/seo/structured-data', [SeoController::class, 'getStructuredData']);
 
-// 文件转换相关接口
-Route::middleware('optional.auth')->group(function () {
+// 文件转换相关接口（需要认证）
+Route::middleware('auth:sanctum')->group(function () {
     Route::post('/file-conversion/convert', [FileConversionController::class, 'convert']);
     Route::post('/file-conversion/upload', [FileConversionController::class, 'upload']);
     Route::post('/file-conversion/direct-upload', [FileConversionController::class, 'createDirectUpload']);
