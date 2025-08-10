@@ -20,8 +20,6 @@ class CloudConvertWebhookController extends Controller
     {
         try {
             $jobData = $request->json()->all();
-            
-            Log::info('收到CloudConvert webhook回调', ['data' => $jobData]);
 
             // 验证基本数据结构
             if (!isset($jobData['job']['id']) || !isset($jobData['job']['status'])) {
@@ -45,12 +43,6 @@ class CloudConvertWebhookController extends Controller
                 $this->handleSuccessfulJob($task, $jobId);
             } elseif ($status === 'error' || $event === 'job.failed') {
                 $this->handleFailedJob($task, $jobData);
-            } else {
-                Log::info('CloudConvert任务状态更新', [
-                    'job_id' => $jobId,
-                    'status' => $status,
-                    'event' => $event
-                ]);
             }
 
             return response()->json(['status' => 'ok']);
@@ -69,7 +61,6 @@ class CloudConvertWebhookController extends Controller
     private function handleSuccessfulJob(FileConversionTask $task, string $jobId): void
     {
         try {
-            Log::info('开始处理成功完成的任务', ['task_id' => $task->id, 'job_id' => $jobId]);
 
             // 1. 从CloudConvert下载文件到临时目录
             $cloudConvertService = app(CloudConvertService::class);
@@ -89,10 +80,9 @@ class CloudConvertWebhookController extends Controller
                 'completed_at' => now()
             ]);
 
-            Log::info('任务处理完成', [
+            Log::info('Webhook任务处理完成', [
                 'task_id' => $task->id,
-                'job_id' => $jobId,
-                'output_url' => $ossResult['url']
+                'job_id' => $jobId
             ]);
 
         } catch (Exception $e) {
@@ -122,7 +112,7 @@ class CloudConvertWebhookController extends Controller
             'error_message' => $errorMessage
         ]);
 
-        Log::info('任务标记为失败', [
+        Log::warning('CloudConvert任务失败', [
             'task_id' => $task->id,
             'job_id' => $jobData['job']['id'],
             'error' => $errorMessage
@@ -134,6 +124,8 @@ class CloudConvertWebhookController extends Controller
      */
     private function uploadToOSS(string $tempFilePath, FileConversionTask $task): array
     {
+        $uploadStartTime = microtime(true);
+        
         try {
             // 生成文件名
             $extension = pathinfo($tempFilePath, PATHINFO_EXTENSION);
@@ -149,23 +141,36 @@ class CloudConvertWebhookController extends Controller
             // 删除临时文件
             unlink($tempFilePath);
 
+            $uploadTime = round((microtime(true) - $uploadStartTime) * 1000, 2);
+            $fileSize = strlen($content);
+
             $result = [
                 'url' => Storage::url($filePath),
                 'path' => $filePath
             ];
 
-            Log::info('文件上传到OSS成功', [
+            Log::info('文件上传到OSS完成', [
                 'task_id' => $task->id,
-                'file_path' => $filePath,
-                'file_size' => strlen($content)
+                'filename' => $fileName,
+                'file_size' => $fileSize,
+                'upload_time_ms' => $uploadTime
             ]);
 
             return $result;
         } catch (Exception $e) {
+            $uploadTime = round((microtime(true) - $uploadStartTime) * 1000, 2);
+            
             // 确保删除临时文件
             if (file_exists($tempFilePath)) {
                 unlink($tempFilePath);
             }
+            
+            Log::error('文件上传到OSS失败', [
+                'task_id' => $task->id,
+                'error' => $e->getMessage(),
+                'upload_time_ms' => $uploadTime
+            ]);
+            
             throw $e;
         }
     }

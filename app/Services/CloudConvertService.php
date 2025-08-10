@@ -139,7 +139,6 @@ class CloudConvertService
             Log::info('CloudConvert转换任务已创建', [
                 'job_id' => $jobId,
                 'tag' => $tag,
-                'input_url' => $inputUrl,
                 'output_format' => $outputFormat
             ]);
 
@@ -432,7 +431,7 @@ class CloudConvertService
 
             Log::info('CloudConvert文件下载完成', [
                 'job_id' => $jobId,
-                'files' => $downloadedFiles
+                'files_count' => count($downloadedFiles)
             ]);
 
             return [
@@ -499,7 +498,6 @@ class CloudConvertService
 
             Log::info('CloudConvert上传任务已创建', [
                 'job_id' => $jobId,
-                'filename' => $filename,
                 'output_format' => $outputFormat
             ]);
 
@@ -538,8 +536,7 @@ class CloudConvertService
             $taskId = $this->safeGet($uploadTask, 'getId', 'unknown');
 
             Log::info('CloudConvert文件上传完成', [
-                'task_id' => $taskId,
-                'file_path' => $filePath
+                'task_id' => $taskId
             ]);
 
             return $this->buildSuccessResponse([
@@ -599,9 +596,7 @@ class CloudConvertService
 
             Log::info('CloudConvert直传任务已创建', [
                 'job_id' => $jobId,
-                'filename' => $filename,
-                'output_format' => $outputFormat,
-                'upload_url' => $uploadUrl
+                'output_format' => $outputFormat
             ]);
 
             return $this->buildSuccessResponse([
@@ -668,9 +663,7 @@ class CloudConvertService
                 return $this->buildErrorResponse('文件上传尚未完成', 400);
             }
 
-            Log::info('CloudConvert直传确认成功', [
-                'job_id' => $jobId
-            ]);
+
 
             return $this->buildSuccessResponse([
                 'job_id' => $jobId,
@@ -742,6 +735,8 @@ class CloudConvertService
      */
     public function downloadResultToTemp(string $jobId): ?string
     {
+        $downloadStartTime = microtime(true);
+        
         try {
             $job = CloudConvert::jobs()->get($jobId);
             $tasks = $this->safeGet($job, 'getTasks', collect());
@@ -779,10 +774,14 @@ class CloudConvertService
                 fclose($dest);
                 fclose($source);
 
-                Log::info('CloudConvert文件下载到临时目录成功', [
+                $downloadTime = round((microtime(true) - $downloadStartTime) * 1000, 2);
+                $fileSize = filesize($tempFile);
+
+                Log::info('CloudConvert文件下载完成', [
                     'job_id' => $jobId,
-                    'temp_file' => $tempFile,
-                    'file_size' => filesize($tempFile)
+                    'filename' => $originalFilename,
+                    'file_size' => $fileSize,
+                    'download_time_ms' => $downloadTime
                 ]);
 
                 return $tempFile;
@@ -790,9 +789,12 @@ class CloudConvertService
 
             return null;
         } catch (Exception $e) {
-            Log::error('CloudConvert文件下载到临时目录失败', [
+            $downloadTime = round((microtime(true) - $downloadStartTime) * 1000, 2);
+            
+            Log::error('CloudConvert文件下载失败', [
                 'job_id' => $jobId,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'download_time_ms' => $downloadTime
             ]);
             return null;
         }
