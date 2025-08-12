@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\AccessLogController;
 use App\Http\Controllers\SeoController;
 use App\Http\Controllers\Api\FileConversionController;
 use App\Http\Controllers\Api\CloudConvertWebhookController;
+use App\Http\Controllers\Api\UserFeedbackController;
 
 
 // 访问日志接口（无需认证）
@@ -26,6 +27,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
+    
+    // 用户反馈接口
+    Route::apiResource('feedback', UserFeedbackController::class)->only(['store', 'index', 'show']);
+});
+
+// 无需认证的反馈接口
+Route::group([], function () {
+    Route::post('/feedback', [UserFeedbackController::class, 'store']); // 支持匿名反馈
+    Route::get('/feedback/types', [UserFeedbackController::class, 'types']);
 });
 
 // 工具相关接口
