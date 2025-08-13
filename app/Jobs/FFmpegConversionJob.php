@@ -220,8 +220,14 @@ class FFmpegConversionJob implements ShouldQueue
         $outputExt = $this->task->output_format;
         $outputFilePath = $tempDir . '/output_' . $this->task->id . '_' . time() . '.' . $outputExt;
 
-        // 使用分离式转码（类似JS版本）
-        $this->performSeparateTranscode($inputFilePath, $outputFilePath);
+        // 检查是否为图像格式（GIF、APNG、WebP等）
+        if ($this->isImageFormat($outputExt)) {
+            // 图像格式使用直接转换
+            $this->performDirectConversion($inputFilePath, $outputFilePath);
+        } else {
+            // 视频格式使用分离式转码
+            $this->performSeparateTranscode($inputFilePath, $outputFilePath);
+        }
 
         if (!file_exists($outputFilePath)) {
             throw new Exception('转换失败，输出文件不存在');
@@ -429,6 +435,116 @@ class FFmpegConversionJob implements ShouldQueue
             if (file_exists($file)) {
                 unlink($file);
             }
+        }
+    }
+
+    /**
+     * 判断是否为图像格式
+     */
+    protected function isImageFormat(string $format): bool
+    {
+        $imageFormats = ['gif', 'apng', 'webp', 'avif', 'heic', 'heif'];
+        return in_array(strtolower($format), $imageFormats);
+    }
+
+    /**
+     * 直接转换（用于图像格式）
+     */
+    protected function performDirectConversion(string $inputFilePath, string $outputFilePath): void
+    {
+        $outputExt = $this->task->output_format;
+        $options = $this->task->getConversionOptions();
+
+        $this->task->updateProgress(20);
+
+        $command = ['ffmpeg', '-i', $inputFilePath];
+
+        // 只处理视频流，忽略音频
+        $command = array_merge($command, ['-an']);
+
+        // 根据输出格式设置特定参数
+        switch (strtolower($outputExt)) {
+            case 'gif':
+                // GIF特殊处理：使用简化的单步转换
+                $fps = $options['framerate'] ?? '10'; // GIF默认10fps
+                
+                // 获取分辨率设置
+                $scaleFilter = '320:-1'; // 默认宽度320px
+                if (!empty($options['resolution']) && $options['resolution'] !== 'original') {
+                    $resolution = self::RESOLUTION_MAP[$options['resolution']] ?? null;
+                    if ($resolution) {
+                        $scaleFilter = $resolution;
+                    }
+                }
+                
+                // 使用单步转换，生成高质量GIF
+                $command = [
+                    'ffmpeg',
+                    '-i', $inputFilePath,
+                    '-an', // 忽略音频
+                    '-vf', "fps={$fps},scale={$scaleFilter}:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse",
+                    '-y', $outputFilePath
+                ];
+                
+                $this->executeFFmpegCommand($command);
+                break;
+
+            case 'webp':
+                // WebP格式
+                $quality = $this->getQualityValue($options['videoQuality'] ?? 'medium');
+                $command = array_merge($command, [
+                    '-c:v', 'libwebp',
+                    '-quality', (string)$quality,
+                    '-preset', 'default'
+                ]);
+                break;
+
+            case 'apng':
+                // APNG格式
+                $command = array_merge($command, [
+                    '-c:v', 'apng',
+                    '-plays', '0' // 无限循环
+                ]);
+                break;
+
+            default:
+                // 其他图像格式的通用处理
+                $command = array_merge($command, ['-c:v', 'copy']);
+                break;
+        }
+
+        // 分辨率设置
+        if (!empty($options['resolution']) && $options['resolution'] !== 'original') {
+            $resolution = self::RESOLUTION_MAP[$options['resolution']] ?? null;
+            if ($resolution && $outputExt !== 'gif') { // GIF已经在上面处理了缩放
+                $command = array_merge($command, ['-vf', "scale={$resolution}"]);
+            }
+        }
+
+        // 添加输出文件（如果还没添加的话）
+        if (!in_array($outputFilePath, $command)) {
+            $command = array_merge($command, ['-y', $outputFilePath]);
+        }
+
+        $this->task->updateProgress(80);
+        $this->executeFFmpegCommand($command);
+        $this->task->updateProgress(90);
+    }
+
+    /**
+     * 获取质量值（用于WebP等格式）
+     */
+    protected function getQualityValue(string $quality): int
+    {
+        switch ($quality) {
+            case 'high':
+                return 90;
+            case 'medium':
+                return 75;
+            case 'low':
+                return 50;
+            default:
+                return 75;
         }
     }
 
