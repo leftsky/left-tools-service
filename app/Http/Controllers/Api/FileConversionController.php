@@ -500,17 +500,15 @@ class FileConversionController extends Controller
         }
     }
 
-
-
-    /**
+   /**
      * 获取支持的格式
      */
     #[OA\Get(
         path: '/api/file-conversion/formats',
         summary: '获取支持的格式',
-        description: '获取系统支持的文件转换格式列表（需要认证）',
+        description: '获取系统支持的文件转换格式列表（支持可选认证）',
         tags: ['文件转换接口'],
-        security: [["sanctum" => []]],
+        security: [], // 可选认证，支持登录和未登录用户
         responses: [
             new OA\Response(
                 response: 200,
@@ -566,30 +564,8 @@ class FileConversionController extends Controller
     public function getSupportedFormats(): JsonResponse
     {
         try {
-            $ffmpegService = app(FFmpegService::class);
             $cloudConvertService = app(CloudConvertService::class);
-            
-            // 获取FFmpeg支持的格式
-            $ffmpegFormats = $ffmpegService->getSupportedConfigs();
-            
-            // 获取CloudConvert支持的格式
-            $cloudConvertFormats = $cloudConvertService->getSupportedFormats();
-
-            // 合并格式信息
-            $formats = [
-                'ffmpeg' => [
-                    'available' => $ffmpegService->isFFmpegAvailable(),
-                    'version' => $ffmpegService->getFFmpegVersion(),
-                    'output_formats' => $ffmpegFormats['outputFormats'],
-                    'supported_extensions' => $ffmpegFormats['supportedExtensions'],
-                    'video_quality_options' => $ffmpegFormats['videoQualityOptions'],
-                    'resolution_options' => $ffmpegFormats['resolutionOptions'],
-                    'framerate_options' => $ffmpegFormats['framerateOptions'],
-                    'max_file_size' => $ffmpegFormats['maxFileSize']
-                ],
-                'cloudconvert' => $cloudConvertFormats,
-                'recommended_engine' => $ffmpegService->isFFmpegAvailable() ? 'ffmpeg' : 'cloudconvert'
-            ];
+            $formats = $cloudConvertService->getSupportedFormats();
 
             return $this->success($formats, '获取支持的格式成功');
         } catch (\Exception $e) {
