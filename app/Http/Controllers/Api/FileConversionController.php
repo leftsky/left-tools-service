@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\FileConversionTask;
 use App\Services\CloudConvertService;
 use App\Services\ConvertioService;
+use App\Services\FFmpegService;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -308,6 +309,10 @@ class FileConversionController extends Controller
                 ];
             }
 
+            // 检查FFmpeg是否支持该格式转换
+            $ffmpegService = app(FFmpegService::class);
+            $useFFmpeg = $this->shouldUseFFmpeg($fileInfo['format'], $outputFormat, $ffmpegService);
+
             // 创建转换任务记录
             $task = FileConversionTask::create([
                 'user_id' => $userId,
@@ -317,13 +322,17 @@ class FileConversionController extends Controller
                 'input_format' => $fileInfo['format'] ?? null,
                 'file_size' => $fileInfo['file_size'] ?? 0,
                 'output_format' => $outputFormat,
-                'conversion_options' => $conversionParams,
+                'conversion_options' => $this->normalizeConversionOptions($conversionParams, $useFFmpeg),
                 'status' => FileConversionTask::STATUS_WAIT,
-                'conversion_engine' => 'cloudconvert', // 固定使用 CloudConvert
+                'conversion_engine' => $useFFmpeg ? 'ffmpeg' : 'cloudconvert',
             ]);
 
             // 提交转换任务
-            $result = $this->submitConversionTask($task, $fileUrl, $conversionParams);
+            if ($useFFmpeg) {
+                $result = $this->submitFFmpegTask($task, $ffmpegService);
+            } else {
+                $result = $this->submitConversionTask($task, $fileUrl, $conversionParams);
+            }
 
             if (!$result['success']) {
                 return $this->error($result['message'], $result['code']);
@@ -540,8 +549,30 @@ class FileConversionController extends Controller
     public function getSupportedFormats(): JsonResponse
     {
         try {
+            $ffmpegService = app(FFmpegService::class);
             $cloudConvertService = app(CloudConvertService::class);
-            $formats = $cloudConvertService->getSupportedFormats();
+            
+            // 获取FFmpeg支持的格式
+            $ffmpegFormats = $ffmpegService->getSupportedConfigs();
+            
+            // 获取CloudConvert支持的格式
+            $cloudConvertFormats = $cloudConvertService->getSupportedFormats();
+
+            // 合并格式信息
+            $formats = [
+                'ffmpeg' => [
+                    'available' => $ffmpegService->isFFmpegAvailable(),
+                    'version' => $ffmpegService->getFFmpegVersion(),
+                    'output_formats' => $ffmpegFormats['outputFormats'],
+                    'supported_extensions' => $ffmpegFormats['supportedExtensions'],
+                    'video_quality_options' => $ffmpegFormats['videoQualityOptions'],
+                    'resolution_options' => $ffmpegFormats['resolutionOptions'],
+                    'framerate_options' => $ffmpegFormats['framerateOptions'],
+                    'max_file_size' => $ffmpegFormats['maxFileSize']
+                ],
+                'cloudconvert' => $cloudConvertFormats,
+                'recommended_engine' => $ffmpegService->isFFmpegAvailable() ? 'ffmpeg' : 'cloudconvert'
+            ];
 
             return $this->success($formats, '获取支持的格式成功');
         } catch (\Exception $e) {
@@ -1123,6 +1154,134 @@ class FileConversionController extends Controller
             return [
                 'success' => false,
                 'message' => 'CloudConvert 服务调用失败: ' . $e->getMessage(),
+                'code' => 500
+            ];
+        }
+    }
+
+    /**
+     * 判断是否应该使用FFmpeg进行转换
+     */
+    protected function shouldUseFFmpeg(string $inputFormat, string $outputFormat, FFmpegService $ffmpegService): bool
+    {
+        // 检查FFmpeg是否可用
+        if (!$ffmpegService->isFFmpegAvailable()) {
+            Log::info('FFmpeg不可用，使用CloudConvert', [
+                'input_format' => $inputFormat,
+                'output_format' => $outputFormat
+            ]);
+            return false;
+        }
+
+        // 检查格式是否在FFmpeg支持列表中
+        $supportedExtensions = $ffmpegService::SUPPORTED_EXTENSIONS;
+        if (!in_array($inputFormat, $supportedExtensions) || !in_array($outputFormat, array_column($ffmpegService::OUTPUT_FORMATS, 'value'))) {
+            Log::info('格式不在FFmpeg支持列表中，使用CloudConvert', [
+                'input_format' => $inputFormat,
+                'output_format' => $outputFormat
+            ]);
+            return false;
+        }
+
+        Log::info('使用FFmpeg进行转换', [
+            'input_format' => $inputFormat,
+            'output_format' => $outputFormat
+        ]);
+        return true;
+    }
+
+    /**
+     * 规范化转换选项
+     */
+    protected function normalizeConversionOptions(array $conversionParams, bool $useFFmpeg): array
+    {
+        if (!$useFFmpeg) {
+            return $conversionParams;
+        }
+
+        // 将CloudConvert格式的参数转换为FFmpeg格式
+        $normalized = [];
+
+        // 映射质量参数
+        if (isset($conversionParams['quality'])) {
+            $normalized['videoQuality'] = $conversionParams['quality'];
+        }
+
+        // 映射分辨率参数
+        if (isset($conversionParams['video_resolution'])) {
+            $resolution = $conversionParams['video_resolution'];
+            // 将 "1920x1080" 格式转换为 FFmpeg 支持的格式
+            if ($resolution === '3840x2160') {
+                $normalized['resolution'] = '4k';
+            } elseif ($resolution === '1920x1080') {
+                $normalized['resolution'] = '1080p';
+            } elseif ($resolution === '1280x720') {
+                $normalized['resolution'] = '720p';
+            } elseif ($resolution === '854x480') {
+                $normalized['resolution'] = '480p';
+            }
+        }
+
+        // 映射帧率参数（如果有的话）
+        if (isset($conversionParams['framerate'])) {
+            $normalized['framerate'] = $conversionParams['framerate'];
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * 提交FFmpeg转换任务
+     */
+    protected function submitFFmpegTask(FileConversionTask $task, FFmpegService $ffmpegService): array
+    {
+        try {
+            // 验证转换选项
+            $options = $task->getConversionOptions();
+            if (!$ffmpegService->validateConversionOptions($options)) {
+                throw new \Exception('转换选项验证失败');
+            }
+
+            // 调度FFmpeg转换任务
+            $ffmpegService->dispatchConversionJob($task);
+
+            Log::info('FFmpeg转换任务已提交', [
+                'task_id' => $task->id,
+                'input_format' => $task->input_format,
+                'output_format' => $task->output_format
+            ]);
+
+            return [
+                'success' => true,
+                'message' => 'FFmpeg转换任务已提交',
+                'data' => [
+                    'task_id' => $task->id,
+                    'status' => 'wait',
+                    'engine' => 'ffmpeg',
+                    'filename' => $task->filename,
+                    'file_size' => $task->formatted_file_size,
+                    'input_format' => $task->input_format,
+                    'output_format' => $task->output_format,
+                    'conversion_options' => $options
+                ]
+            ];
+
+        } catch (\Exception $e) {
+            // 标记任务为失败状态
+            $task->update([
+                'status' => FileConversionTask::STATUS_FAILED,
+                'error_message' => 'FFmpeg任务提交失败: ' . $e->getMessage()
+            ]);
+
+            Log::error('FFmpeg转换任务提交失败', [
+                'task_id' => $task->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return [
+                'success' => false,
+                'message' => 'FFmpeg转换任务提交失败: ' . $e->getMessage(),
                 'code' => 500
             ];
         }
