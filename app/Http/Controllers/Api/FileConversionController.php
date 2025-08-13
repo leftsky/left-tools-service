@@ -145,6 +145,12 @@ class FileConversionController extends Controller
                         example: 'mp4'
                     ),
                     new OA\Property(
+                        property: 'filename',
+                        type: 'string',
+                        description: '自定义文件名（可选，不包含扩展名）',
+                        example: 'my_video'
+                    ),
+                    new OA\Property(
                         property: 'conversion_params',
                         type: 'object',
                         description: '转换参数（可选）',
@@ -262,6 +268,7 @@ class FileConversionController extends Controller
             $validator = Validator::make($request->all(), [
                 'file_url' => 'required|url',
                 'output_format' => 'required|string|max:10',
+                'filename' => 'nullable|string|max:255|regex:/^[a-zA-Z0-9\s\-_\u4e00-\u9fa5]+$/',
                 'conversion_params' => 'nullable|array',
                 'conversion_params.video_bitrate' => 'nullable|integer|min:100|max:50000',
                 'conversion_params.video_resolution' => 'nullable|string|regex:/^\d+x\d+$/',
@@ -278,6 +285,7 @@ class FileConversionController extends Controller
 
             $fileUrl = $request->input('file_url');
             $outputFormat = $request->input('output_format');
+            $customFilename = $request->input('filename');
             $conversionParams = $request->input('conversion_params', []);
             $userId = $request->user()->id; // 从认证中获取用户ID（必须认证）
 
@@ -292,8 +300,17 @@ class FileConversionController extends Controller
                         : (int) $headers['Content-Length'];
                 }
 
-                $filename = basename(parse_url($fileUrl, PHP_URL_PATH));
-                $extension = pathinfo($filename, PATHINFO_EXTENSION) ?: 'unknown';
+                // 处理文件名
+                if ($customFilename) {
+                    // 使用自定义文件名
+                    $filename = $customFilename;
+                    $originalFilename = basename(parse_url($fileUrl, PHP_URL_PATH));
+                    $extension = pathinfo($originalFilename, PATHINFO_EXTENSION) ?: 'unknown';
+                } else {
+                    // 使用URL中的文件名
+                    $filename = basename(parse_url($fileUrl, PHP_URL_PATH));
+                    $extension = pathinfo($filename, PATHINFO_EXTENSION) ?: 'unknown';
+                }
 
                 $fileInfo = [
                     'filename' => $filename,
@@ -303,7 +320,7 @@ class FileConversionController extends Controller
             } catch (\Exception $e) {
                 Log::error('获取基本文件信息失败', ['error' => $e->getMessage()]);
                 $fileInfo = [
-                    'filename' => 'unknown',
+                    'filename' => $customFilename ?: 'unknown',
                     'file_size' => 0,
                     'format' => 'unknown',
                 ];
@@ -318,7 +335,7 @@ class FileConversionController extends Controller
                 'user_id' => $userId,
                 'input_method' => FileConversionTask::INPUT_METHOD_URL,
                 'input_file' => $fileUrl,
-                'filename' => basename($fileUrl),
+                'filename' => $fileInfo['filename'],
                 'input_format' => $fileInfo['format'] ?? null,
                 'file_size' => $fileInfo['file_size'] ?? 0,
                 'output_format' => $outputFormat,
