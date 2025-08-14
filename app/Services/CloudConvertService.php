@@ -648,7 +648,7 @@ class CloudConvertService
             $originalFilename = $result->files[0]->filename ?? 'converted_file';
 
             // 创建临时目录
-            $tempDir = storage_path('app/temp');
+            $tempDir = storage_path('app/temp_cloudconvert');
             if (!is_dir($tempDir)) {
                 if (!mkdir($tempDir, 0755, true)) {
                     throw new Exception('无法创建临时目录: ' . $tempDir);
