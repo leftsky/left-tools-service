@@ -7,6 +7,7 @@ use App\Models\FileConversionTask;
 use App\Services\CloudConvertService;
 use App\Services\ConvertioService;
 use App\Services\FFmpegService;
+use App\Services\LibreOfficeService;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -326,9 +327,20 @@ class FileConversionController extends Controller
                 ];
             }
 
-            // 检查FFmpeg是否支持该格式转换
+            // 检查本地转换引擎支持情况
             $ffmpegService = app(FFmpegService::class);
-            $useFFmpeg = $this->shouldUseFFmpeg($fileInfo['format'], $outputFormat, $ffmpegService);
+            $libreOfficeService = app(LibreOfficeService::class);
+            
+            $useLibreOffice = $this->shouldUseLibreOffice($fileInfo['format'], $outputFormat, $libreOfficeService);
+            $useFFmpeg = !$useLibreOffice && $this->shouldUseFFmpeg($fileInfo['format'], $outputFormat, $ffmpegService);
+            
+            // 确定转换引擎
+            $conversionEngine = 'cloudconvert'; // 默认使用云端转换
+            if ($useLibreOffice) {
+                $conversionEngine = 'libreoffice';
+            } elseif ($useFFmpeg) {
+                $conversionEngine = 'ffmpeg';
+            }
 
             // 创建转换任务记录
             $task = FileConversionTask::create([
@@ -341,11 +353,13 @@ class FileConversionController extends Controller
                 'output_format' => $outputFormat,
                 'conversion_options' => $this->normalizeConversionOptions($conversionParams, $useFFmpeg),
                 'status' => FileConversionTask::STATUS_WAIT,
-                'conversion_engine' => $useFFmpeg ? 'ffmpeg' : 'cloudconvert',
+                'conversion_engine' => $conversionEngine,
             ]);
 
             // 提交转换任务
-            if ($useFFmpeg) {
+            if ($useLibreOffice) {
+                $result = $this->submitLibreOfficeTask($task, $libreOfficeService);
+            } elseif ($useFFmpeg) {
                 $result = $this->submitFFmpegTask($task, $ffmpegService);
             } else {
                 $result = $this->submitConversionTask($task, $fileUrl, $conversionParams);
@@ -1153,6 +1167,14 @@ class FileConversionController extends Controller
     }
 
     /**
+     * 判断是否应该使用LibreOffice进行转换
+     */
+    protected function shouldUseLibreOffice(string $inputFormat, string $outputFormat, LibreOfficeService $libreOfficeService): bool
+    {
+        return $libreOfficeService->shouldUseLibreOffice($inputFormat, $outputFormat);
+    }
+
+    /**
      * 判断是否应该使用FFmpeg进行转换
      */
     protected function shouldUseFFmpeg(string $inputFormat, string $outputFormat, FFmpegService $ffmpegService): bool
@@ -1275,6 +1297,63 @@ class FileConversionController extends Controller
             return [
                 'success' => false,
                 'message' => 'FFmpeg转换任务提交失败: ' . $e->getMessage(),
+                'code' => 500
+            ];
+        }
+    }
+
+    /**
+     * 提交LibreOffice转换任务
+     */
+    protected function submitLibreOfficeTask(FileConversionTask $task, LibreOfficeService $libreOfficeService): array
+    {
+        try {
+            // 验证转换选项
+            $options = $task->getConversionOptions();
+            if (!$libreOfficeService->validateConversionOptions($options)) {
+                throw new \Exception('转换选项验证失败');
+            }
+
+            // 调度LibreOffice转换任务
+            $libreOfficeService->dispatchConversionJob($task);
+
+            Log::info('LibreOffice转换任务已提交', [
+                'task_id' => $task->id,
+                'input_format' => $task->input_format,
+                'output_format' => $task->output_format
+            ]);
+
+            return [
+                'success' => true,
+                'message' => 'LibreOffice转换任务已提交',
+                'data' => [
+                    'task_id' => $task->id,
+                    'status' => 'wait',
+                    'engine' => 'libreoffice',
+                    'filename' => $task->filename,
+                    'file_size' => $task->formatted_file_size,
+                    'input_format' => $task->input_format,
+                    'output_format' => $task->output_format,
+                    'conversion_options' => $options
+                ]
+            ];
+
+        } catch (\Exception $e) {
+            // 标记任务为失败状态
+            $task->update([
+                'status' => FileConversionTask::STATUS_FAILED,
+                'error_message' => 'LibreOffice任务提交失败: ' . $e->getMessage()
+            ]);
+
+            Log::error('LibreOffice转换任务提交失败', [
+                'task_id' => $task->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return [
+                'success' => false,
+                'message' => 'LibreOffice转换任务提交失败: ' . $e->getMessage(),
                 'code' => 500
             ];
         }

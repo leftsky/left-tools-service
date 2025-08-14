@@ -173,7 +173,7 @@ class FFmpegService
     {
         try {
             // 调度异步任务
-            FFmpegConversionJob::dispatch($task)->onQueue('ffmpeg');
+            FFmpegConversionJob::dispatch($task)->onQueue('local-conversion');
 
             Log::info('FFmpeg转换任务已调度', [
                 'task_id' => $task->id
