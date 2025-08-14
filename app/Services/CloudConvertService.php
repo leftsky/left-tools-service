@@ -349,115 +349,6 @@ class CloudConvertService
     }
 
     /**
-     * 下载转换结果
-     *
-     * @param string $jobId CloudConvert任务ID
-     * @param string $outputPath 本地保存路径，如 '/path/to/downloads/'
-     * @return array 返回下载结果，包含文件信息
-     */
-    public function downloadResult(string $jobId, string $outputPath): array
-    {
-        try {
-            $job = CloudConvert::jobs()->get($jobId);
-            $tasks = method_exists($job, 'getTasks') ? $job->getTasks() : collect();
-            $exportTask = null;
-
-            // 遍历任务找到导出任务
-            foreach ($tasks as $task) {
-                $taskName = method_exists($task, 'getName') ? $task->getName() : '';
-                if ($taskName === 'export-file') {
-                    $exportTask = $task;
-                    break;
-                }
-            }
-
-            if (!$exportTask || (method_exists($exportTask, 'getStatus') && $exportTask->getStatus() !== 'finished')) {
-                return [
-                    'success' => false,
-                    'error' => '任务未完成或导出失败',
-                    'code' => 400
-                ];
-            }
-
-            $result = method_exists($exportTask, 'getResult') ? $exportTask->getResult() : null;
-            $files = [];
-
-            if ($result && is_object($result)) {
-                $files = $result->files ?? [];
-                if (is_array($files)) {
-                    $files = $files;
-                } else {
-                    $files = [];
-                }
-            }
-
-            if (empty($files)) {
-                return [
-                    'success' => false,
-                    'error' => '没有可下载的文件',
-                    'code' => 404
-                ];
-            }
-
-            $downloadedFiles = [];
-
-            foreach ($files as $file) {
-                $url = $file['url'];
-                $filename = $file['filename'] ?? basename($url);
-                $filePath = rtrim($outputPath, '/') . '/' . $filename;
-
-                // 确保目录存在
-                $dir = dirname($filePath);
-                if (!is_dir($dir)) {
-                    mkdir($dir, 0755, true);
-                }
-
-                // 下载文件
-                $source = CloudConvert::getHttpTransport()->download($url)->detach();
-                $dest = fopen($filePath, 'w');
-
-                if ($source && $dest) {
-                    stream_copy_to_stream($source, $dest);
-                    fclose($dest);
-                    fclose($source);
-
-                    $downloadedFiles[] = [
-                        'filename' => $filename,
-                        'path' => $filePath,
-                        'size' => filesize($filePath)
-                    ];
-                }
-            }
-
-            Log::info('CloudConvert文件下载完成', [
-                'job_id' => $jobId,
-                'files_count' => count($downloadedFiles)
-            ]);
-
-            return [
-                'success' => true,
-                'data' => [
-                    'job_id' => $jobId,
-                    'files' => $downloadedFiles,
-                    'count' => count($downloadedFiles)
-                ],
-                'code' => 200
-            ];
-        } catch (Exception $e) {
-            Log::error('CloudConvert文件下载失败', [
-                'job_id' => $jobId,
-                'error' => $e->getMessage()
-            ]);
-
-            return [
-                'success' => false,
-                'error' => '文件下载失败: ' . $e->getMessage(),
-                'code' => 500
-            ];
-        }
-    }
-
-    /**
      * 创建上传任务
      *
      * @param string $filename 文件名，包含扩展名
@@ -736,7 +627,7 @@ class CloudConvertService
     public function downloadResultToTemp(string $jobId): ?string
     {
         $downloadStartTime = microtime(true);
-        
+
         try {
             $job = CloudConvert::jobs()->get($jobId);
             $tasks = $this->safeGet($job, 'getTasks', collect());
@@ -759,7 +650,17 @@ class CloudConvertService
             // 创建临时目录
             $tempDir = storage_path('app/temp');
             if (!is_dir($tempDir)) {
-                mkdir($tempDir, 0755, true);
+                if (!mkdir($tempDir, 0755, true)) {
+                    throw new Exception('无法创建临时目录: ' . $tempDir);
+                }
+            }
+
+            // 确保目录可写
+            if (!is_writable($tempDir)) {
+                chmod($tempDir, 0755);
+                if (!is_writable($tempDir)) {
+                    throw new Exception('临时目录不可写: ' . $tempDir);
+                }
             }
 
             // 生成临时文件名
@@ -767,7 +668,14 @@ class CloudConvertService
 
             // 下载文件
             $source = CloudConvert::getHttpTransport()->download($fileUrl)->detach();
+            if (!$source) {
+                throw new Exception('无法获取下载流');
+            }
+
             $dest = fopen($tempFile, 'w');
+            if (!$dest) {
+                throw new Exception('无法创建临时文件: ' . $tempFile);
+            }
 
             if ($source && $dest) {
                 stream_copy_to_stream($source, $dest);
@@ -790,7 +698,7 @@ class CloudConvertService
             return null;
         } catch (Exception $e) {
             $downloadTime = round((microtime(true) - $downloadStartTime) * 1000, 2);
-            
+
             Log::error('CloudConvert文件下载失败', [
                 'job_id' => $jobId,
                 'error' => $e->getMessage(),
