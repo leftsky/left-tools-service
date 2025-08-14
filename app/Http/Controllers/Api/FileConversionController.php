@@ -102,7 +102,7 @@ class FileConversionController extends Controller
     public function upload(Request $request)
     {
         $request->validate([
-            'file' => 'required|file|max:10240', // 最大10MB
+            'file' => 'required|file|max:102400', // 最大100MB
             'folder' => 'nullable|string'
         ]);
 
