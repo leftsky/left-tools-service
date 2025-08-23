@@ -149,67 +149,6 @@ abstract class ConversionServiceBase
     }
 
     /**
-     * 记录日志
-     *
-     * @param string $level 日志级别
-     * @param string $message 日志消息
-     * @param array $context 上下文信息
-     */
-    protected function log(string $level, string $message, array $context = []): void
-    {
-        $context['service'] = $this->getServiceName();
-        if ($this->task) {
-            $context['task_id'] = $this->task->id;
-        }
-
-        Log::log($level, "[{$this->getServiceName()}] {$message}", $context);
-    }
-
-    /**
-     * 记录信息日志
-     *
-     * @param string $message 日志消息
-     * @param array $context 上下文信息
-     */
-    protected function logInfo(string $message, array $context = []): void
-    {
-        $this->log('info', $message, $context);
-    }
-
-    /**
-     * 记录错误日志
-     *
-     * @param string $message 日志消息
-     * @param array $context 上下文信息
-     */
-    protected function logError(string $message, array $context = []): void
-    {
-        $this->log('error', $message, $context);
-    }
-
-    /**
-     * 记录警告日志
-     *
-     * @param string $message 日志消息
-     * @param array $context 上下文信息
-     */
-    protected function logWarning(string $message, array $context = []): void
-    {
-        $this->log('warning', $message, $context);
-    }
-
-    /**
-     * 记录调试日志
-     *
-     * @param string $message 日志消息
-     * @param array $context 上下文信息
-     */
-    protected function logDebug(string $message, array $context = []): void
-    {
-        $this->log('debug', $message, $context);
-    }
-
-    /**
      * 构建成功响应
      *
      * @param array $data 响应数据

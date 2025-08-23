@@ -132,7 +132,7 @@ class ImageMagickService extends ConversionServiceBase
                 'tag' => $data['tag'] ?? null,
             ]);
 
-            $this->logInfo('ImageMagick转换任务已创建', [
+            Log::info('ImageMagick转换任务已创建', [
                 'task_id' => $task->id,
                 'input_format' => $data['input_format'],
                 'output_format' => $data['output_format']
@@ -141,7 +141,7 @@ class ImageMagickService extends ConversionServiceBase
             return $task;
 
         } catch (Exception $e) {
-            $this->logError('创建ImageMagick转换任务失败', [
+            Log::error('创建ImageMagick转换任务失败', [
                 'data' => $data,
                 'error' => $e->getMessage()
             ]);
@@ -201,7 +201,7 @@ class ImageMagickService extends ConversionServiceBase
             return $result;
 
         } catch (Exception $e) {
-            $this->logError('ImageMagick转换任务提交失败', [
+            Log::error('ImageMagick转换任务提交失败', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
@@ -219,7 +219,7 @@ class ImageMagickService extends ConversionServiceBase
     public function executeConversion(FileConversionTask $task): array
     {
         try {
-            $this->logInfo('开始ImageMagick转换任务', [
+            Log::info('开始ImageMagick转换任务', [
                 'task_id' => $task->id,
                 'input_format' => $task->input_format,
                 'output_format' => $task->output_format
@@ -259,7 +259,7 @@ class ImageMagickService extends ConversionServiceBase
             // 清理临时文件
             $this->cleanupFiles($inputFilePath, $outputFilePath);
 
-            $this->logInfo('ImageMagick转换任务完成', [
+            Log::info('ImageMagick转换任务完成', [
                 'task_id' => $task->id,
                 'output_url' => $outputUrl,
                 'output_size' => $outputSize
@@ -273,7 +273,7 @@ class ImageMagickService extends ConversionServiceBase
             ], 'ImageMagick转换任务完成');
 
         } catch (Exception $e) {
-            $this->logError('ImageMagick转换任务失败', [
+            Log::error('ImageMagick转换任务失败', [
                 'task_id' => $task->id,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
@@ -448,7 +448,7 @@ class ImageMagickService extends ConversionServiceBase
     {
         // 检查ImageMagick是否可用
         if (!$this->isImageMagickAvailable()) {
-            $this->logInfo('ImageMagick不可用', [
+            Log::info('ImageMagick不可用', [
                 'input_format' => $inputFormat,
                 'output_format' => $outputFormat
             ]);
@@ -471,7 +471,7 @@ class ImageMagickService extends ConversionServiceBase
             return false;
         }
 
-        $this->logInfo('使用ImageMagick进行转换', [
+        Log::info('使用ImageMagick进行转换', [
             'input_format' => $inputFormat,
             'output_format' => $outputFormat
         ]);
@@ -802,7 +802,7 @@ class ImageMagickService extends ConversionServiceBase
     {
         $commandStr = implode(' ', array_map('escapeshellarg', $command));
         
-        $this->logInfo('执行ImageMagick命令', ['command' => $commandStr]);
+        Log::info('执行ImageMagick命令', ['command' => $commandStr]);
 
         $descriptorspec = [
             0 => ['pipe', 'r'],  // stdin
@@ -829,7 +829,7 @@ class ImageMagickService extends ConversionServiceBase
         $returnCode = proc_close($process);
 
         if ($returnCode !== 0) {
-            $this->logError('ImageMagick命令执行失败', [
+            Log::error('ImageMagick命令执行失败', [
                 'command' => $commandStr,
                 'return_code' => $returnCode,
                 'stdout' => $stdout,
@@ -838,7 +838,7 @@ class ImageMagickService extends ConversionServiceBase
             throw new Exception("ImageMagick转换失败: {$stderr}");
         }
 
-        $this->logInfo('ImageMagick命令执行成功', ['command' => $commandStr]);
+        Log::info('ImageMagick命令执行成功', ['command' => $commandStr]);
     }
 
     /**
@@ -858,7 +858,7 @@ class ImageMagickService extends ConversionServiceBase
         $content = file_get_contents($outputFilePath);
         $disk->put($filePath, $content);
 
-        $this->logInfo('文件上传到OSS完成', [
+        Log::info('文件上传到OSS完成', [
             'task_id' => $task->id,
             'filename' => $fileName,
             'file_size' => strlen($content)

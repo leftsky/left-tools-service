@@ -609,7 +609,7 @@ class FFmpegService extends ConversionServiceBase
 
             return $result;
         } catch (Exception $e) {
-            $this->logError('FFmpeg转换任务提交失败', [
+            Log::error('FFmpeg转换任务提交失败', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
@@ -641,7 +641,7 @@ class FFmpegService extends ConversionServiceBase
             $currentOptions['selected_output_format'] = $outputFormat;
             $task->update(['conversion_options' => $currentOptions]);
 
-            $this->logInfo('FFmpeg编码器选择', [
+            Log::info('FFmpeg编码器选择', [
                 'task_id' => $task->id,
                 'output_format' => $outputFormat,
                 'video_encoder' => $videoEncoder,
@@ -694,7 +694,7 @@ class FFmpegService extends ConversionServiceBase
             // 清理临时文件
             $this->cleanupFiles($inputFilePath, $outputFilePath);
 
-            $this->logInfo('FFmpeg转换任务完成', [
+            Log::info('FFmpeg转换任务完成', [
                 'task_id' => $task->id,
                 'output_url' => $outputUrl,
                 'output_size' => $outputSize
@@ -707,7 +707,7 @@ class FFmpegService extends ConversionServiceBase
                 'output_size' => $outputSize
             ], 'FFmpeg转换任务完成');
         } catch (Exception $e) {
-            $this->logError('FFmpeg转换任务失败', [
+            Log::error('FFmpeg转换任务失败', [
                 'task_id' => $task->id,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
@@ -952,7 +952,7 @@ class FFmpegService extends ConversionServiceBase
         $videoEncoder = $options['selected_video_encoder'] ?? 'libx264';
 
         // 记录编码器选择
-        $this->logInfo('convertVideoOnly使用编码器', [
+        Log::info('convertVideoOnly使用编码器', [
             'task_id' => $task->id,
             'video_encoder' => $videoEncoder,
             'options' => $options
@@ -978,7 +978,7 @@ class FFmpegService extends ConversionServiceBase
     {
         // 首先检查输入文件是否包含音频流
         if (!$this->hasAudioStream($inputFile)) {
-            $this->logInfo('输入文件没有音频流，创建静音音频', [
+            Log::info('输入文件没有音频流，创建静音音频', [
                 'task_id' => $task->id,
                 'input_file' => $inputFile
             ]);
@@ -995,7 +995,7 @@ class FFmpegService extends ConversionServiceBase
         $audioEncoder = $options['selected_audio_encoder'] ?? 'aac';
 
         // 记录编码器选择
-        $this->logInfo('extractAudio使用编码器', [
+        Log::info('extractAudio使用编码器', [
             'task_id' => $task->id,
             'audio_encoder' => $audioEncoder,
             'options' => $options
@@ -1069,7 +1069,7 @@ class FFmpegService extends ConversionServiceBase
     {
         $commandStr = implode(' ', array_map('escapeshellarg', $command));
 
-        $this->logInfo('执行FFmpeg命令', ['command' => $commandStr]);
+        Log::info('执行FFmpeg命令', ['command' => $commandStr]);
 
         $descriptorspec = [
             0 => ['pipe', 'r'],  // stdin
@@ -1096,7 +1096,7 @@ class FFmpegService extends ConversionServiceBase
         $returnCode = proc_close($process);
 
         if ($returnCode !== 0) {
-            $this->logError('FFmpeg命令执行失败', [
+            Log::error('FFmpeg命令执行失败', [
                 'command' => $commandStr,
                 'return_code' => $returnCode,
                 'stdout' => $stdout,
@@ -1105,7 +1105,7 @@ class FFmpegService extends ConversionServiceBase
             throw new Exception("FFmpeg转换失败: {$stderr}");
         }
 
-        $this->logInfo('FFmpeg命令执行成功', ['command' => $commandStr]);
+        Log::info('FFmpeg命令执行成功', ['command' => $commandStr]);
     }
 
     /**
@@ -1128,7 +1128,7 @@ class FFmpegService extends ConversionServiceBase
         $content = file_get_contents($outputFilePath);
         $disk->put($filePath, $content);
 
-        $this->logInfo('文件上传到OSS完成', [
+        Log::info('文件上传到OSS完成', [
             'filename' => $fileName,
             'file_size' => strlen($content)
         ]);
@@ -1261,7 +1261,7 @@ class FFmpegService extends ConversionServiceBase
                 throw new Exception("无法识别音频编码格式。文件可能损坏或格式不支持。");
             }
 
-            $this->logInfo('文件验证成功', [
+            Log::info('文件验证成功', [
                 'file_path' => $inputFilePath,
                 'codec_type' => $audioStream['codec_type'],
                 'channels' => $channels,
@@ -1271,7 +1271,7 @@ class FFmpegService extends ConversionServiceBase
                 'bit_rate' => $audioStream['bit_rate'] ?? 'unknown'
             ]);
         } catch (Exception $e) {
-            $this->logError('文件验证失败', [
+            Log::error('文件验证失败', [
                 'file_path' => $inputFilePath,
                 'error' => $e->getMessage()
             ]);
@@ -1459,7 +1459,7 @@ class FFmpegService extends ConversionServiceBase
                 $videoEncoder = $options['selected_video_encoder'] ?? 'libvpx';
                 $audioEncoder = $options['selected_audio_encoder'] ?? 'libvorbis';
 
-                $this->logInfo('WebM转换使用编码器', [
+                Log::info('WebM转换使用编码器', [
                     'video_encoder' => $videoEncoder,
                     'audio_encoder' => $audioEncoder,
                     'options' => $options
@@ -1655,7 +1655,7 @@ class FFmpegService extends ConversionServiceBase
 
             return null;
         } catch (Exception $e) {
-            $this->logError('获取文件信息失败', [
+            Log::error('获取文件信息失败', [
                 'file_path' => $filePath,
                 'error' => $e->getMessage()
             ]);

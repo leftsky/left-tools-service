@@ -101,7 +101,7 @@ class LibreOfficeService extends ConversionServiceBase
                 'tag' => $data['tag'] ?? null,
             ]);
 
-            $this->logInfo('LibreOffice转换任务已创建', [
+            Log::info('LibreOffice转换任务已创建', [
                 'task_id' => $task->id,
                 'input_format' => $data['input_format'],
                 'output_format' => $data['output_format']
@@ -110,7 +110,7 @@ class LibreOfficeService extends ConversionServiceBase
             return $task;
 
         } catch (Exception $e) {
-            $this->logError('创建LibreOffice转换任务失败', [
+            Log::error('创建LibreOffice转换任务失败', [
                 'data' => $data,
                 'error' => $e->getMessage()
             ]);
@@ -175,7 +175,7 @@ class LibreOfficeService extends ConversionServiceBase
             ], 'LibreOffice转换任务已提交');
 
         } catch (Exception $e) {
-            $this->logError('LibreOffice转换任务提交失败', [
+            Log::error('LibreOffice转换任务提交失败', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getMessage()
             ]);
@@ -193,7 +193,7 @@ class LibreOfficeService extends ConversionServiceBase
     public function executeConversion(FileConversionTask $task): array
     {
         try {
-            $this->logInfo('开始LibreOffice转换任务', [
+            Log::info('开始LibreOffice转换任务', [
                 'task_id' => $task->id,
                 'input_format' => $task->input_format,
                 'output_format' => $task->output_format
@@ -233,7 +233,7 @@ class LibreOfficeService extends ConversionServiceBase
             // 清理临时文件
             $this->cleanupFiles($inputFilePath, $outputFilePath);
 
-            $this->logInfo('LibreOffice转换任务完成', [
+            Log::info('LibreOffice转换任务完成', [
                 'task_id' => $task->id,
                 'output_url' => $outputUrl,
                 'output_size' => $outputSize
@@ -247,7 +247,7 @@ class LibreOfficeService extends ConversionServiceBase
             ], 'LibreOffice转换任务完成');
 
         } catch (Exception $e) {
-            $this->logError('LibreOffice转换任务失败', [
+            Log::error('LibreOffice转换任务失败', [
                 'task_id' => $task->id,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
@@ -400,7 +400,7 @@ class LibreOfficeService extends ConversionServiceBase
     {
         // 检查LibreOffice是否可用
         if (!$this->isLibreOfficeAvailable()) {
-            $this->logInfo('LibreOffice不可用', [
+            Log::info('LibreOffice不可用', [
                 'input_format' => $inputFormat,
                 'output_format' => $outputFormat
             ]);
@@ -423,7 +423,7 @@ class LibreOfficeService extends ConversionServiceBase
             return false;
         }
 
-        $this->logInfo('使用LibreOffice进行转换', [
+        Log::info('使用LibreOffice进行转换', [
             'input_format' => $inputFormat,
             'output_format' => $outputFormat
         ]);
@@ -701,7 +701,7 @@ class LibreOfficeService extends ConversionServiceBase
             $this->executeCommand($convertCommand);
         } else {
             // 如果没有ImageMagick，返回PDF文件
-            $this->logInfo('ImageMagick不可用，返回PDF文件而不是图片', [
+            Log::info('ImageMagick不可用，返回PDF文件而不是图片', [
                 'task_id' => $task->id,
                 'requested_format' => $imageFormat
             ]);
@@ -737,7 +737,7 @@ class LibreOfficeService extends ConversionServiceBase
     {
         $commandStr = implode(' ', array_map('escapeshellarg', $command));
         
-        $this->logInfo('执行LibreOffice命令', ['command' => $commandStr]);
+        Log::info('执行LibreOffice命令', ['command' => $commandStr]);
 
         $descriptorspec = [
             0 => ['pipe', 'r'],  // stdin
@@ -764,7 +764,7 @@ class LibreOfficeService extends ConversionServiceBase
         $returnCode = proc_close($process);
 
         if ($returnCode !== 0) {
-            $this->logError('LibreOffice命令执行失败', [
+            Log::error('LibreOffice命令执行失败', [
                 'command' => $commandStr,
                 'return_code' => $returnCode,
                 'stdout' => $stdout,
@@ -773,7 +773,7 @@ class LibreOfficeService extends ConversionServiceBase
             throw new Exception("LibreOffice转换失败: {$stderr}");
         }
 
-        $this->logInfo('LibreOffice命令执行成功', ['command' => $commandStr]);
+        Log::info('LibreOffice命令执行成功', ['command' => $commandStr]);
     }
 
     /**
@@ -793,7 +793,7 @@ class LibreOfficeService extends ConversionServiceBase
         $content = file_get_contents($outputFilePath);
         $disk->put($filePath, $content);
 
-        $this->logInfo('文件上传到OSS完成', [
+        Log::info('文件上传到OSS完成', [
             'task_id' => $task->id,
             'filename' => $fileName,
             'file_size' => strlen($content)
