@@ -286,7 +286,7 @@ class FileConversionTaskResource extends Resource
                     // ->visible(fn(FileConversionTask $record): bool => $record->isFailed())
                     ->action(function (FileConversionTask $record): void {
                         // 重新调度转换任务
-                        \App\Jobs\ProcessConversionTaskJob::dispatch($record);
+                        \App\Jobs\ProcessConversionTaskJob::dispatch($record)->onQueue('file-conversion');
                         $record->update(['status' => FileConversionTask::STATUS_WAIT]);
                     })
                     ->successNotificationTitle('重试任务已调度'),
@@ -303,7 +303,7 @@ class FileConversionTaskResource extends Resource
                             $records->each(function ($record) {
                                 if ($record->isFailed()) {
                                     // 重新调度转换任务
-                                    \App\Jobs\ProcessConversionTaskJob::dispatch($record);
+                                    \App\Jobs\ProcessConversionTaskJob::dispatch($record)->onQueue('file-conversion');
                                     $record->update(['status' => FileConversionTask::STATUS_WAIT]);
                                 }
                             });

@@ -198,11 +198,6 @@ class ImageMagickService extends ConversionServiceBase
             // 执行转换任务
             $result = $this->executeConversion($task);
 
-            $this->logInfo('ImageMagick转换任务已提交', [
-                'input_format' => $task->input_format,
-                'output_format' => $task->output_format
-            ]);
-
             return $result;
 
         } catch (Exception $e) {

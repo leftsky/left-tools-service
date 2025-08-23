@@ -167,11 +167,6 @@ class LibreOfficeService extends ConversionServiceBase
             // 执行转换任务
             return $this->executeConversion($task);
 
-            $this->logInfo('LibreOffice转换任务已提交', [
-                'input_format' => $task->input_format,
-                'output_format' => $task->output_format
-            ]);
-
             return $this->buildSuccessResponse([
                 'task_id' => $task->id,
                 'status' => 'wait',

@@ -521,11 +521,6 @@ class FFmpegService extends ConversionServiceBase
             // 直接执行转换任务
             $result = $this->convertFile($task);
 
-            $this->logInfo('FFmpeg转换任务已提交', [
-                'input_format' => $task->input_format,
-                'output_format' => $task->output_format
-            ]);
-
             return $result;
 
         } catch (Exception $e) {
