@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\FileConversionTask;
+use Exception;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -233,4 +234,114 @@ abstract class ConversionServiceBase
     {
         return $this->task?->getConversionOptions() ?? [];
     }
+
+    private $tempInputFile = null;
+    private $tempOutputFile = null;
+
+    /**
+     * 下载输入文件到临时目录
+     *
+     * @return string 临时文件路径
+     */
+    protected function downloadInputFile(): string
+    {
+        $task = $this->task;
+        $tempDir = storage_path('app/temp');
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+
+        $inputExt = $task->input_format;
+        $tempInputFile = $tempDir . '/input_' . $task->id . '_' . time() . '.' . $inputExt;
+
+        // 根据输入方式下载文件
+        switch ($task->input_method) {
+            case FileConversionTask::INPUT_METHOD_URL:
+                $this->downloadFromUrl($task->input_file, $tempInputFile);
+                break;
+
+            case FileConversionTask::INPUT_METHOD_UPLOAD:
+            case FileConversionTask::INPUT_METHOD_DIRECT_UPLOAD:
+                // 从存储中复制文件
+                $content = \Illuminate\Support\Facades\Storage::get($task->input_file);
+                file_put_contents($tempInputFile, $content);
+                break;
+
+            default:
+                throw new Exception("不支持的输入方式: {$task->input_method}");
+        }
+
+        if (!file_exists($tempInputFile)) {
+            throw new Exception('输入文件下载失败');
+        }
+
+        return $tempInputFile;
+    }
+
+    /**
+     * 从URL下载文件
+     *
+     * @param string $url
+     * @param string $targetPath
+     */
+    private function downloadFromUrl(string $url, string $targetPath): void
+    {
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 300, // 5分钟超时
+                'user_agent' => 'Mozilla/5.0 (compatible; FFmpegConverter/1.0)'
+            ]
+        ]);
+
+        $content = file_get_contents($url, false, $context);
+        if ($content === false) {
+            throw new Exception("无法从URL下载文件: {$url}");
+        }
+
+        file_put_contents($targetPath, $content);
+    }
+
+    /**
+     * 上传输出文件到OSS
+     *
+     * @param string $outputFilePath
+     * @return string 文件URL
+     */
+    protected function uploadOutputFile(string $outputFilePath): string
+    {
+        $extension = pathinfo($outputFilePath, PATHINFO_EXTENSION);
+        $randomNumber = rand(10000, 99999);
+        $timestamp = date('Y-m-d H:i:s');
+        $fileName = "格式转换大王 {$timestamp} {$randomNumber}.{$extension}";
+        $folder = 'conversions';
+        $filePath = $folder . '/' . $fileName;
+
+        // 上传到OSS
+        $disk = \Illuminate\Support\Facades\Storage::disk('oss');
+        $content = file_get_contents($outputFilePath);
+        $disk->put($filePath, $content);
+
+        Log::info('文件上传到OSS完成', [
+            'filename' => $fileName,
+            'file_size' => strlen($content)
+        ]);
+
+        return \Illuminate\Support\Facades\Storage::url($filePath);
+    }
+
+    /**
+     * 清理临时文件
+     *
+     * @param string ...$files
+     */
+    protected function cleanupFiles(): void
+    {
+        if ($this->tempInputFile && file_exists($this->tempInputFile)) {
+            unlink($this->tempInputFile);
+        }
+        if ($this->tempOutputFile && file_exists($this->tempOutputFile)) {
+            unlink($this->tempOutputFile);
+        }
+    }
+
 }

@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\FileConversionTask;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Exception;
 
 class ImageMagickService extends ConversionServiceBase
@@ -14,15 +13,57 @@ class ImageMagickService extends ConversionServiceBase
      */
     const SUPPORTED_INPUT_FORMATS = [
         // 光栅图像格式
-        'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'tif', 'webp', 'avif', 'ico',
-        'ppm', 'pgm', 'pbm', 'pnm', 'xpm', 'xbm', 'pcx', 'tga', 'sgi', 'sun',
-        
+        'png',
+        'jpg',
+        'jpeg',
+        'gif',
+        'bmp',
+        'tiff',
+        'tif',
+        'webp',
+        'avif',
+        'ico',
+        'ppm',
+        'pgm',
+        'pbm',
+        'pnm',
+        'xpm',
+        'xbm',
+        'pcx',
+        'tga',
+        'sgi',
+        'sun',
+
         // 专业格式
-        'psd', 'psb', 'ai', 'eps', 'pdf', 'svg', 'cdr', 'wmf', 'emf',
-        
+        'psd',
+        'psb',
+        'ai',
+        'eps',
+        'pdf',
+        'svg',
+        'cdr',
+        'wmf',
+        'emf',
+
         // 其他格式
-        'dcm', 'dicom', 'hdr', 'exr', 'raw', 'cr2', 'nef', 'arw', 'orf', 'rw2',
-        'heic', 'heif', 'jp2', 'j2k', 'jpx', 'jpf', 'cur', 'ani'
+        'dcm',
+        'dicom',
+        'hdr',
+        'exr',
+        'raw',
+        'cr2',
+        'nef',
+        'arw',
+        'orf',
+        'rw2',
+        'heic',
+        'heif',
+        'jp2',
+        'j2k',
+        'jpx',
+        'jpf',
+        'cur',
+        'ani'
     ];
 
     /**
@@ -35,18 +76,18 @@ class ImageMagickService extends ConversionServiceBase
         ['value' => 'jpeg', 'label' => 'JPEG (Joint Photographic Experts Group)'],
         ['value' => 'webp', 'label' => 'WebP (Google WebP)'],
         ['value' => 'avif', 'label' => 'AVIF (AV1 Image File Format)'],
-        
+
         // 专业格式
         ['value' => 'tiff', 'label' => 'TIFF (Tagged Image File Format)'],
         ['value' => 'bmp', 'label' => 'BMP (Bitmap)'],
         ['value' => 'gif', 'label' => 'GIF (Graphics Interchange Format)'],
         ['value' => 'ico', 'label' => 'ICO (Icon)'],
         ['value' => 'pdf', 'label' => 'PDF (Portable Document Format)'],
-        
+
         // 现代高效格式
         ['value' => 'heif', 'label' => 'HEIF (High Efficiency Image Format)'],
         ['value' => 'heic', 'label' => 'HEIC (High Efficiency Image Container)'],
-        
+
         // 高级格式
         ['value' => 'ppm', 'label' => 'PPM (Portable Pixmap)'],
         ['value' => 'pgm', 'label' => 'PGM (Portable Graymap)'],
@@ -56,7 +97,7 @@ class ImageMagickService extends ConversionServiceBase
         ['value' => 'sgi', 'label' => 'SGI (Silicon Graphics Image)'],
         ['value' => 'hdr', 'label' => 'HDR (High Dynamic Range)'],
         ['value' => 'exr', 'label' => 'EXR (OpenEXR)'],
-        
+
         // RAW 格式
         ['value' => 'pef', 'label' => 'PEF (Pentax Electronic File)']
     ];
@@ -69,17 +110,17 @@ class ImageMagickService extends ConversionServiceBase
         'quality' => ['type' => 'range', 'min' => 1, 'max' => 100, 'default' => 85],
         'width' => ['type' => 'number', 'min' => 1, 'max' => 20000, 'default' => null],
         'height' => ['type' => 'number', 'min' => 1, 'max' => 20000, 'default' => null],
-        
+
         // 调整选项
         'resize_mode' => ['type' => 'select', 'options' => ['fit', 'crop', 'stretch', 'fill'], 'default' => 'fit'],
         'maintain_aspect' => ['type' => 'boolean', 'default' => true],
         'background_color' => ['type' => 'color', 'default' => '#FFFFFF'],
-        
+
         // 质量选项
         'compression' => ['type' => 'select', 'options' => ['none', 'fast', 'good', 'best'], 'default' => 'good'],
         'dither' => ['type' => 'boolean', 'default' => false],
         'strip' => ['type' => 'boolean', 'default' => false], // 移除元数据
-        
+
         // 格式特定选项
         'format_specific' => ['type' => 'object', 'default' => []]
     ];
@@ -88,66 +129,6 @@ class ImageMagickService extends ConversionServiceBase
      * 文件大小限制（100MB）
      */
     const MAX_FILE_SIZE = 100 * 1024 * 1024;
-
-    /**
-     * 创建ImageMagick转换任务
-     *
-     * @param array $data 任务数据
-     * @return FileConversionTask
-     * @throws Exception
-     */
-    public function createConversionTask(array $data): FileConversionTask
-    {
-        try {
-            // 验证输出格式
-            $outputFormats = array_column(self::OUTPUT_FORMATS, 'value');
-            if (!in_array($data['output_format'], $outputFormats)) {
-                throw new Exception("不支持的输出格式: {$data['output_format']}");
-            }
-
-            // 验证输入格式
-            if (!in_array($data['input_format'], self::SUPPORTED_INPUT_FORMATS)) {
-                throw new Exception("不支持的输入格式: {$data['input_format']}");
-            }
-
-            // 验证格式转换的合理性
-            if (!$this->isValidConversion($data['input_format'], $data['output_format'])) {
-                throw new Exception("不支持从 {$data['input_format']} 转换到 {$data['output_format']}");
-            }
-
-            // 创建任务记录
-            $task = FileConversionTask::create([
-                'user_id' => $data['user_id'] ?? null,
-                'conversion_engine' => 'imagemagick',
-                'input_method' => $data['input_method'],
-                'input_file' => $data['input_file'],
-                'filename' => $data['filename'],
-                'input_format' => $data['input_format'],
-                'file_size' => $data['file_size'] ?? null,
-                'output_format' => $data['output_format'],
-                'conversion_options' => $data['conversion_options'] ?? [],
-                'status' => FileConversionTask::STATUS_WAIT,
-                'step_percent' => 0,
-                'callback_url' => $data['callback_url'] ?? null,
-                'tag' => $data['tag'] ?? null,
-            ]);
-
-            Log::info('ImageMagick转换任务已创建', [
-                'task_id' => $task->id,
-                'input_format' => $data['input_format'],
-                'output_format' => $data['output_format']
-            ]);
-
-            return $task;
-
-        } catch (Exception $e) {
-            Log::error('创建ImageMagick转换任务失败', [
-                'data' => $data,
-                'error' => $e->getMessage()
-            ]);
-            throw $e;
-        }
-    }
 
     /**
      * 检查是否支持特定格式转换
@@ -199,7 +180,6 @@ class ImageMagickService extends ConversionServiceBase
             $result = $this->executeConversion($task);
 
             return $result;
-
         } catch (Exception $e) {
             Log::error('ImageMagick转换任务提交失败', [
                 'error' => $e->getMessage(),
@@ -232,7 +212,7 @@ class ImageMagickService extends ConversionServiceBase
             $this->validateFormats($task);
 
             // 下载输入文件
-            $inputFilePath = $this->downloadInputFile($task);
+            $inputFilePath = $this->downloadInputFile();
 
             // 验证文件大小
             $fileSize = filesize($inputFilePath);
@@ -244,7 +224,7 @@ class ImageMagickService extends ConversionServiceBase
             $outputFilePath = $this->performConversion($task, $inputFilePath);
 
             // 上传结果文件
-            $outputUrl = $this->uploadOutputFile($task, $outputFilePath);
+            $outputUrl = $this->uploadOutputFile($outputFilePath);
 
             // 更新任务状态为完成
             $outputSize = filesize($outputFilePath);
@@ -253,11 +233,12 @@ class ImageMagickService extends ConversionServiceBase
                 'output_url' => $outputUrl,
                 'output_size' => $outputSize,
                 'step_percent' => 100,
-                'completed_at' => now()
+                'completed_at' => now(),
+                'processing_time' => $task->started_at->diffInSeconds(now())
             ]);
 
             // 清理临时文件
-            $this->cleanupFiles($inputFilePath, $outputFilePath);
+            $this->cleanupFiles();
 
             Log::info('ImageMagick转换任务完成', [
                 'task_id' => $task->id,
@@ -271,7 +252,6 @@ class ImageMagickService extends ConversionServiceBase
                 'output_url' => $outputUrl,
                 'output_size' => $outputSize
             ], 'ImageMagick转换任务完成');
-
         } catch (Exception $e) {
             Log::error('ImageMagick转换任务失败', [
                 'task_id' => $task->id,
@@ -283,7 +263,8 @@ class ImageMagickService extends ConversionServiceBase
             $task->update([
                 'status' => FileConversionTask::STATUS_FAILED,
                 'error_message' => $e->getMessage(),
-                'completed_at' => now()
+                'completed_at' => now(),
+                'processing_time' => $task->started_at->diffInSeconds(now())
             ]);
 
             // 清理可能的临时文件
@@ -296,19 +277,6 @@ class ImageMagickService extends ConversionServiceBase
 
             return $this->buildErrorResponse('ImageMagick转换任务失败: ' . $e->getMessage(), 500);
         }
-    }
-
-    /**
-     * 创建并执行转换任务
-     *
-     * @param array $data 任务数据
-     * @return array 转换结果
-     * @throws Exception
-     */
-    public function createAndExecuteTask(array $data): array
-    {
-        $task = $this->createConversionTask($data);
-        return $this->executeConversion($task);
     }
 
     /**
@@ -548,66 +516,6 @@ class ImageMagickService extends ConversionServiceBase
     }
 
     /**
-     * 下载输入文件到临时目录
-     */
-    protected function downloadInputFile(FileConversionTask $task): string
-    {
-        $task->updateProgress(5);
-
-        $tempDir = storage_path('app/temp');
-        if (!is_dir($tempDir)) {
-            mkdir($tempDir, 0755, true);
-        }
-
-        $inputExt = $task->input_format;
-        $tempInputFile = $tempDir . '/imagemagick_input_' . $task->id . '_' . time() . '.' . $inputExt;
-
-        // 根据输入方式下载文件
-        switch ($task->input_method) {
-            case FileConversionTask::INPUT_METHOD_URL:
-                $this->downloadFromUrl($task->input_file, $tempInputFile);
-                break;
-
-            case FileConversionTask::INPUT_METHOD_UPLOAD:
-            case FileConversionTask::INPUT_METHOD_DIRECT_UPLOAD:
-                // 从存储中复制文件
-                $content = Storage::get($task->input_file);
-                file_put_contents($tempInputFile, $content);
-                break;
-
-            default:
-                throw new Exception("不支持的输入方式: {$task->input_method}");
-        }
-
-        if (!file_exists($tempInputFile)) {
-            throw new Exception('输入文件下载失败');
-        }
-
-        $task->updateProgress(10);
-        return $tempInputFile;
-    }
-
-    /**
-     * 从URL下载文件
-     */
-    protected function downloadFromUrl(string $url, string $targetPath): void
-    {
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => 300, // 5分钟超时
-                'user_agent' => 'Mozilla/5.0 (compatible; ImageMagickConverter/1.0)'
-            ]
-        ]);
-
-        $content = file_get_contents($url, false, $context);
-        if ($content === false) {
-            throw new Exception("无法从URL下载文件: {$url}");
-        }
-
-        file_put_contents($targetPath, $content);
-    }
-
-    /**
      * 执行ImageMagick转换
      */
     protected function performConversion(FileConversionTask $task, string $inputFilePath): string
@@ -801,7 +709,7 @@ class ImageMagickService extends ConversionServiceBase
     protected function executeImageMagickCommand(array $command): void
     {
         $commandStr = implode(' ', array_map('escapeshellarg', $command));
-        
+
         Log::info('执行ImageMagick命令', ['command' => $commandStr]);
 
         $descriptorspec = [
@@ -839,43 +747,5 @@ class ImageMagickService extends ConversionServiceBase
         }
 
         Log::info('ImageMagick命令执行成功', ['command' => $commandStr]);
-    }
-
-    /**
-     * 上传输出文件到OSS
-     */
-    protected function uploadOutputFile(FileConversionTask $task, string $outputFilePath): string
-    {
-        $extension = pathinfo($outputFilePath, PATHINFO_EXTENSION);
-        $randomNumber = rand(10000, 99999);
-        $timestamp = date('Y-m-d H:i:s');
-        $fileName = "图片转换 {$timestamp} {$randomNumber}.{$extension}";
-        $folder = 'conversions';
-        $filePath = $folder . '/' . $fileName;
-
-        // 上传到OSS
-        $disk = Storage::disk('oss');
-        $content = file_get_contents($outputFilePath);
-        $disk->put($filePath, $content);
-
-        Log::info('文件上传到OSS完成', [
-            'task_id' => $task->id,
-            'filename' => $fileName,
-            'file_size' => strlen($content)
-        ]);
-
-        return Storage::url($filePath);
-    }
-
-    /**
-     * 清理临时文件
-     */
-    protected function cleanupFiles(string ...$files): void
-    {
-        foreach ($files as $file) {
-            if (file_exists($file)) {
-                unlink($file);
-            }
-        }
     }
 }
