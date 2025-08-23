@@ -13,6 +13,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 class ProcessConversionTaskJob implements ShouldQueue
 {
@@ -92,24 +93,42 @@ class ProcessConversionTaskJob implements ShouldQueue
     {
         $inputFormat = $this->task->input_format;
         $outputFormat = $this->task->output_format;
+        $engine = 'cloudconvert';
 
-        // 1. 优先检测ImageMagick支持（图片格式转换）
-        if ($this->imageMagickService->supportsConversion($inputFormat, $outputFormat)) {
-            return 'imagemagick';
+        // 生成缓存键
+        $cacheKey = "conversion_engine:{$inputFormat}:{$outputFormat}";
+
+        // 尝试从缓存获取结果
+        $cachedEngine = Cache::get($cacheKey);
+        if ($cachedEngine && $cachedEngine !== 'cloudconvert') {
+            Log::info('使用缓存的转换引擎', [
+                'task_id' => $this->task->id,
+                'input_format' => $inputFormat,
+                'output_format' => $outputFormat,
+                'cached_engine' => $cachedEngine
+            ]);
+            return $cachedEngine;
+        } else {
+            if ($this->imageMagickService->supportsConversion($inputFormat, $outputFormat)) {
+                $engine = 'imagemagick';
+            } else if ($this->ffmpegService->supportsConversion($inputFormat, $outputFormat)) {
+                $engine = 'ffmpeg';
+            } else if ($this->libreOfficeService->supportsConversion($inputFormat, $outputFormat)) {
+                $engine = 'libreoffice';
+            } else {
+                $engine = 'cloudconvert';
+            }
+            // 缓存结果24小时
+            Cache::put($cacheKey, $engine, now()->addHours(24));
+            Log::info('检测到转换引擎，已缓存', [
+                'task_id' => $this->task->id,
+                'input_format' => $inputFormat,
+                'output_format' => $outputFormat,
+                'engine' => $engine
+            ]);
         }
 
-        // 2. 其次检测FFmpeg支持（音视频格式转换）
-        if ($this->ffmpegService->supportsConversion($inputFormat, $outputFormat)) {
-            return 'ffmpeg';
-        }
-
-        // 3. 再次检测LibreOffice支持（文档格式转换）
-        if ($this->libreOfficeService->supportsConversion($inputFormat, $outputFormat)) {
-            return 'libreoffice';
-        }
-
-        // 4. 兜底使用CloudConvert
-        return 'cloudconvert';
+        return $engine;
     }
 
     /**
