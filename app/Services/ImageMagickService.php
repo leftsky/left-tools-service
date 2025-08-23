@@ -8,99 +8,7 @@ use Exception;
 
 class ImageMagickService extends ConversionServiceBase
 {
-    /**
-     * 支持的输入格式
-     */
-    const SUPPORTED_INPUT_FORMATS = [
-        // 光栅图像格式
-        'png',
-        'jpg',
-        'jpeg',
-        'gif',
-        'bmp',
-        'tiff',
-        'tif',
-        'webp',
-        'avif',
-        'ico',
-        'ppm',
-        'pgm',
-        'pbm',
-        'pnm',
-        'xpm',
-        'xbm',
-        'pcx',
-        'tga',
-        'sgi',
-        'sun',
 
-        // 专业格式
-        'psd',
-        'psb',
-        'ai',
-        'eps',
-        'pdf',
-        'svg',
-        'cdr',
-        'wmf',
-        'emf',
-
-        // 其他格式
-        'dcm',
-        'dicom',
-        'hdr',
-        'exr',
-        'raw',
-        'cr2',
-        'nef',
-        'arw',
-        'orf',
-        'rw2',
-        'heic',
-        'heif',
-        'jp2',
-        'j2k',
-        'jpx',
-        'jpf',
-        'cur',
-        'ani'
-    ];
-
-    /**
-     * 支持的输出格式
-     */
-    const OUTPUT_FORMATS = [
-        // 常用格式
-        ['value' => 'png', 'label' => 'PNG (Portable Network Graphics)'],
-        ['value' => 'jpg', 'label' => 'JPEG (Joint Photographic Experts Group)'],
-        ['value' => 'jpeg', 'label' => 'JPEG (Joint Photographic Experts Group)'],
-        ['value' => 'webp', 'label' => 'WebP (Google WebP)'],
-        ['value' => 'avif', 'label' => 'AVIF (AV1 Image File Format)'],
-
-        // 专业格式
-        ['value' => 'tiff', 'label' => 'TIFF (Tagged Image File Format)'],
-        ['value' => 'bmp', 'label' => 'BMP (Bitmap)'],
-        ['value' => 'gif', 'label' => 'GIF (Graphics Interchange Format)'],
-        ['value' => 'ico', 'label' => 'ICO (Icon)'],
-        ['value' => 'pdf', 'label' => 'PDF (Portable Document Format)'],
-
-        // 现代高效格式
-        ['value' => 'heif', 'label' => 'HEIF (High Efficiency Image Format)'],
-        ['value' => 'heic', 'label' => 'HEIC (High Efficiency Image Container)'],
-
-        // 高级格式
-        ['value' => 'ppm', 'label' => 'PPM (Portable Pixmap)'],
-        ['value' => 'pgm', 'label' => 'PGM (Portable Graymap)'],
-        ['value' => 'pbm', 'label' => 'PBM (Portable Bitmap)'],
-        ['value' => 'xpm', 'label' => 'XPM (X Pixmap)'],
-        ['value' => 'tga', 'label' => 'TGA (Targa)'],
-        ['value' => 'sgi', 'label' => 'SGI (Silicon Graphics Image)'],
-        ['value' => 'hdr', 'label' => 'HDR (High Dynamic Range)'],
-        ['value' => 'exr', 'label' => 'EXR (OpenEXR)'],
-
-        // RAW 格式
-        ['value' => 'pef', 'label' => 'PEF (Pentax Electronic File)']
-    ];
 
     /**
      * 转换选项配置
@@ -144,19 +52,77 @@ class ImageMagickService extends ConversionServiceBase
             return false;
         }
 
-        // 检查输入格式是否支持
-        if (!in_array($inputFormat, self::SUPPORTED_INPUT_FORMATS)) {
-            return false;
+        // 使用动态检测检查格式支持
+        $formatSupport = $this->checkImageMagickFormatSupport($inputFormat, $outputFormat);
+        return $formatSupport['supports_conversion'];
+    }
+
+    /**
+     * 检测ImageMagick支持的格式
+     * 
+     * @param string|null $inputFormat 输入格式（可选）
+     * @param string|null $outputFormat 输出格式（可选）
+     * @return array 返回格式支持信息
+     */
+    public function checkImageMagickFormatSupport(?string $inputFormat = null, ?string $outputFormat = null): array
+    {
+        // 检查ImageMagick是否可用
+        if (!$this->isImageMagickAvailable()) {
+            return [
+                'available' => false,
+                'error' => 'ImageMagick不可用',
+                'supports_conversion' => false
+            ];
         }
 
-        // 检查输出格式是否支持
-        $outputFormats = array_column(self::OUTPUT_FORMATS, 'value');
-        if (!in_array($outputFormat, $outputFormats)) {
-            return false;
-        }
+        Log::info('ImageMagick格式支持检查', [
+            'inputFormat' => $inputFormat,
+            'outputFormat' => $outputFormat
+        ]);
 
-        // 检查转换的合理性
-        return $this->isValidConversion($inputFormat, $outputFormat);
+        try {
+            $supportsConversion = false;
+
+            if ($inputFormat && $outputFormat) {
+                // 直接检查输入格式是否支持读取（匹配格式名，包括可能的*号）
+                $inputCheck = shell_exec("convert -list format | awk -v format='{$inputFormat}' 'tolower(gensub(/\\*/, \"\", \"g\", \$1)) == tolower(format) {print \$0}' 2>&1");
+                $inputSupported = !empty($inputCheck) && strpos($inputCheck, 'r') !== false;
+
+                // 直接检查输出格式是否支持写入（匹配格式名，包括可能的*号）
+                $outputCheck = shell_exec("convert -list format | awk -v format='{$outputFormat}' 'tolower(gensub(/\\*/, \"\", \"g\", \$1)) == tolower(format) {print \$0}' 2>&1");
+                $outputSupported = !empty($outputCheck) && strpos($outputCheck, 'w') !== false;
+
+                $supportsConversion = $inputSupported && $outputSupported;
+
+                // 总是记录检查结果，方便调试
+                Log::info('ImageMagick格式支持检查结果', [
+                    'inputFormat' => $inputFormat,
+                    'outputFormat' => $outputFormat,
+                    'inputSupported' => $inputSupported,
+                    'outputSupported' => $outputSupported,
+                    'supportsConversion' => $supportsConversion,
+                    'inputCheck' => $inputCheck ?: 'NOT_FOUND',
+                    'outputCheck' => $outputCheck ?: 'NOT_FOUND'
+                ]);
+            }
+
+            return [
+                'available' => true,
+                'supports_conversion' => $supportsConversion
+            ];
+        } catch (Exception $e) {
+            Log::error('检测ImageMagick格式支持时出错', [
+                'error' => $e->getMessage(),
+                'input_format' => $inputFormat,
+                'output_format' => $outputFormat
+            ]);
+
+            return [
+                'available' => false,
+                'error' => $e->getMessage(),
+                'supports_conversion' => false
+            ];
+        }
     }
 
     /**
@@ -306,9 +272,34 @@ class ImageMagickService extends ConversionServiceBase
      */
     public function getSupportedFormats(): array
     {
+        // 如果需要获取所有支持的格式，可以调用一次完整的检测
+        $command = ['convert', '-list', 'format'];
+        $output = shell_exec(implode(' ', $command) . ' 2>&1');
+
+        $inputFormats = [];
+        $outputFormats = [];
+
+        if ($output) {
+            $lines = explode("\n", trim($output));
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if (preg_match('/^(\w+)\s+([rwm]+)\s+(.+)$/', $line, $matches)) {
+                    $format = strtolower($matches[1]);
+                    $modes = $matches[2];
+
+                    if (strpos($modes, 'r') !== false) {
+                        $inputFormats[] = $format;
+                    }
+                    if (strpos($modes, 'w') !== false) {
+                        $outputFormats[] = $format;
+                    }
+                }
+            }
+        }
+
         return [
-            'input_formats' => self::SUPPORTED_INPUT_FORMATS,
-            'output_formats' => array_column(self::OUTPUT_FORMATS, 'value'),
+            'input_formats' => array_unique($inputFormats),
+            'output_formats' => array_unique($outputFormats),
             'conversion_options' => self::CONVERSION_OPTIONS,
             'max_file_size' => self::MAX_FILE_SIZE
         ];
@@ -322,9 +313,10 @@ class ImageMagickService extends ConversionServiceBase
      */
     public function getSupportedConfigs(): array
     {
+        $formats = $this->getSupportedFormats();
         return [
-            'inputFormats' => self::SUPPORTED_INPUT_FORMATS,
-            'outputFormats' => self::OUTPUT_FORMATS,
+            'inputFormats' => $formats['input_formats'],
+            'outputFormats' => $formats['output_formats'],
             'conversionOptions' => self::CONVERSION_OPTIONS,
             'maxFileSize' => self::MAX_FILE_SIZE
         ];
@@ -423,14 +415,9 @@ class ImageMagickService extends ConversionServiceBase
             return false;
         }
 
-        // 检查输入格式是否支持
-        if (!in_array($inputFormat, self::SUPPORTED_INPUT_FORMATS)) {
-            return false;
-        }
-
-        // 检查输出格式是否支持
-        $outputFormats = array_column(self::OUTPUT_FORMATS, 'value');
-        if (!in_array($outputFormat, $outputFormats)) {
+        // 使用动态检测检查格式支持
+        $formatSupport = $this->checkImageMagickFormatSupport($inputFormat, $outputFormat);
+        if (!$formatSupport['supports_conversion']) {
             return false;
         }
 
@@ -506,12 +493,9 @@ class ImageMagickService extends ConversionServiceBase
      */
     protected function validateFormats(FileConversionTask $task): void
     {
-        if (!in_array($task->input_format, self::SUPPORTED_INPUT_FORMATS)) {
-            throw new Exception("不支持的输入格式: {$task->input_format}");
-        }
-
-        if (!in_array($task->output_format, array_column(self::OUTPUT_FORMATS, 'value'))) {
-            throw new Exception("不支持的输出格式: {$task->output_format}");
+        $formatSupport = $this->checkImageMagickFormatSupport($task->input_format, $task->output_format);
+        if (!$formatSupport['supports_conversion']) {
+            throw new Exception("不支持的格式转换: {$task->input_format} -> {$task->output_format}");
         }
     }
 
