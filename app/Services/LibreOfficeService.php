@@ -2,12 +2,12 @@
 
 namespace App\Services;
 
-use App\Jobs\LibreOfficeConversionJob;
 use App\Models\FileConversionTask;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Exception;
 
-class LibreOfficeService
+class LibreOfficeService extends ConversionServiceBase
 {
     /**
      * 支持的输入格式
@@ -101,7 +101,7 @@ class LibreOfficeService
                 'tag' => $data['tag'] ?? null,
             ]);
 
-            Log::info('LibreOffice转换任务已创建', [
+            $this->logInfo('LibreOffice转换任务已创建', [
                 'task_id' => $task->id,
                 'input_format' => $data['input_format'],
                 'output_format' => $data['output_format']
@@ -110,7 +110,7 @@ class LibreOfficeService
             return $task;
 
         } catch (Exception $e) {
-            Log::error('创建LibreOffice转换任务失败', [
+            $this->logError('创建LibreOffice转换任务失败', [
                 'data' => $data,
                 'error' => $e->getMessage()
             ]);
@@ -119,55 +119,217 @@ class LibreOfficeService
     }
 
     /**
-     * 调度LibreOffice转换任务
+     * 检查是否支持特定格式转换
+     *
+     * @param string $inputFormat 输入格式
+     * @param string $outputFormat 输出格式
+     * @return bool 是否支持该转换
+     */
+    public function supportsConversion(string $inputFormat, string $outputFormat): bool
+    {
+        // 检查LibreOffice是否可用
+        if (!$this->isLibreOfficeAvailable()) {
+            return false;
+        }
+
+        // 检查输入格式是否支持
+        if (!in_array($inputFormat, self::SUPPORTED_INPUT_FORMATS)) {
+            return false;
+        }
+
+        // 检查输出格式是否支持
+        $outputFormats = array_column(self::OUTPUT_FORMATS, 'value');
+        if (!in_array($outputFormat, $outputFormats)) {
+            return false;
+        }
+
+        // 检查转换的合理性
+        return $this->isValidConversion($inputFormat, $outputFormat);
+    }
+
+    /**
+     * 提交转换任务
      *
      * @param FileConversionTask $task
-     * @return void
+     * @return array 提交结果
      */
-    public function dispatchConversionJob(FileConversionTask $task): void
+    public function submitConversionTask(FileConversionTask $task): array
     {
         try {
-            // 调度异步任务
-            LibreOfficeConversionJob::dispatch($task)->onQueue('local-conversion');
+            // 设置任务
+            $this->setTask($task);
 
-            Log::info('LibreOffice转换任务已调度', [
-                'task_id' => $task->id
+            // 验证转换选项
+            if (!$this->validateConversionOptions($task->getConversionOptions())) {
+                return $this->buildErrorResponse('转换选项验证失败', 400);
+            }
+
+            // 执行转换任务
+            return $this->executeConversion($task);
+
+            $this->logInfo('LibreOffice转换任务已提交', [
+                'input_format' => $task->input_format,
+                'output_format' => $task->output_format
             ]);
 
-        } catch (Exception $e) {
-            Log::error('调度LibreOffice转换任务失败', [
+            return $this->buildSuccessResponse([
                 'task_id' => $task->id,
-                'error' => $e->getMessage()
+                'status' => 'wait',
+                'engine' => 'libreoffice',
+                'message' => 'LibreOffice转换任务已提交'
+            ], 'LibreOffice转换任务已提交');
+
+        } catch (Exception $e) {
+            $this->logError('LibreOffice转换任务提交失败', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getMessage()
+            ]);
+
+            return $this->buildErrorResponse('LibreOffice转换任务提交失败: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * 执行LibreOffice转换任务
+     *
+     * @param FileConversionTask $task
+     * @return array 转换结果
+     */
+    public function executeConversion(FileConversionTask $task): array
+    {
+        try {
+            $this->logInfo('开始LibreOffice转换任务', [
+                'task_id' => $task->id,
+                'input_format' => $task->input_format,
+                'output_format' => $task->output_format
+            ]);
+
+            // 更新任务状态为转换中
+            $task->startProcessing();
+
+            // 验证格式支持
+            $this->validateFormats($task);
+
+            // 下载输入文件
+            $inputFilePath = $this->downloadInputFile($task);
+
+            // 验证文件大小
+            $fileSize = filesize($inputFilePath);
+            if ($fileSize > self::MAX_FILE_SIZE) {
+                throw new Exception("文件过大，请选择小于50MB的文件");
+            }
+
+            // 执行转换
+            $outputFilePath = $this->performConversion($task, $inputFilePath);
+
+            // 上传结果文件
+            $outputUrl = $this->uploadOutputFile($task, $outputFilePath);
+
+            // 更新任务状态为完成
+            $outputSize = filesize($outputFilePath);
+            $task->update([
+                'status' => FileConversionTask::STATUS_FINISH,
+                'output_url' => $outputUrl,
+                'output_size' => $outputSize,
+                'step_percent' => 100,
+                'completed_at' => now()
+            ]);
+
+            // 清理临时文件
+            $this->cleanupFiles($inputFilePath, $outputFilePath);
+
+            $this->logInfo('LibreOffice转换任务完成', [
+                'task_id' => $task->id,
+                'output_url' => $outputUrl,
+                'output_size' => $outputSize
+            ]);
+
+            return $this->buildSuccessResponse([
+                'task_id' => $task->id,
+                'status' => 'finished',
+                'output_url' => $outputUrl,
+                'output_size' => $outputSize
+            ], 'LibreOffice转换任务完成');
+
+        } catch (Exception $e) {
+            $this->logError('LibreOffice转换任务失败', [
+                'task_id' => $task->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
 
             // 更新任务状态为失败
             $task->update([
                 'status' => FileConversionTask::STATUS_FAILED,
-                'error_message' => '任务调度失败: ' . $e->getMessage()
+                'error_message' => $e->getMessage(),
+                'completed_at' => now()
             ]);
 
-            throw $e;
+            // 清理可能的临时文件
+            if (isset($inputFilePath) && file_exists($inputFilePath)) {
+                unlink($inputFilePath);
+            }
+            if (isset($outputFilePath) && file_exists($outputFilePath)) {
+                unlink($outputFilePath);
+            }
+
+            return $this->buildErrorResponse('LibreOffice转换任务失败: ' . $e->getMessage(), 500);
         }
     }
 
     /**
-     * 创建并调度转换任务
+     * 创建并执行转换任务
      *
      * @param array $data 任务数据
-     * @return FileConversionTask
+     * @return array 转换结果
      * @throws Exception
      */
-    public function createAndDispatchTask(array $data): FileConversionTask
+    public function createAndExecuteTask(array $data): array
     {
         $task = $this->createConversionTask($data);
-        $this->dispatchConversionJob($task);
-        return $task;
+        return $this->executeConversion($task);
     }
 
     /**
-     * 获取支持的配置选项
+     * 重写服务名称
+     *
+     * @return string
+     */
+    public function getServiceName(): string
+    {
+        return 'libreoffice';
+    }
+
+    /**
+     * 重写服务可用性检查
+     *
+     * @return bool
+     */
+    public function isAvailable(): bool
+    {
+        return $this->isLibreOfficeAvailable();
+    }
+
+    /**
+     * 重写支持的格式列表
      *
      * @return array
+     */
+    public function getSupportedFormats(): array
+    {
+        return [
+            'input_formats' => self::SUPPORTED_INPUT_FORMATS,
+            'output_formats' => array_column(self::OUTPUT_FORMATS, 'value'),
+            'document_types' => self::DOCUMENT_TYPES,
+            'max_file_size' => self::MAX_FILE_SIZE
+        ];
+    }
+
+    /**
+     * 获取支持的配置选项（保持向后兼容）
+     *
+     * @return array
+     * @deprecated 使用 getSupportedFormats() 方法替代
      */
     public function getSupportedConfigs(): array
     {
@@ -243,7 +405,7 @@ class LibreOfficeService
     {
         // 检查LibreOffice是否可用
         if (!$this->isLibreOfficeAvailable()) {
-            Log::info('LibreOffice不可用', [
+            $this->logInfo('LibreOffice不可用', [
                 'input_format' => $inputFormat,
                 'output_format' => $outputFormat
             ]);
@@ -266,7 +428,7 @@ class LibreOfficeService
             return false;
         }
 
-        Log::info('使用LibreOffice进行转换', [
+        $this->logInfo('使用LibreOffice进行转换', [
             'input_format' => $inputFormat,
             'output_format' => $outputFormat
         ]);
@@ -353,5 +515,307 @@ class LibreOfficeService
         }
 
         return $command;
+    }
+
+    /**
+     * 验证格式支持
+     */
+    protected function validateFormats(FileConversionTask $task): void
+    {
+        if (!in_array($task->input_format, self::SUPPORTED_INPUT_FORMATS)) {
+            throw new Exception("不支持的输入格式: {$task->input_format}");
+        }
+
+        if (!in_array($task->output_format, array_column(self::OUTPUT_FORMATS, 'value'))) {
+            throw new Exception("不支持的输出格式: {$task->output_format}");
+        }
+    }
+
+    /**
+     * 下载输入文件到临时目录
+     */
+    protected function downloadInputFile(FileConversionTask $task): string
+    {
+        $task->updateProgress(5);
+
+        $tempDir = storage_path('app/temp');
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+
+        $inputExt = $task->input_format;
+        $tempInputFile = $tempDir . '/libreoffice_input_' . $task->id . '_' . time() . '.' . $inputExt;
+
+        // 根据输入方式下载文件
+        switch ($task->input_method) {
+            case FileConversionTask::INPUT_METHOD_URL:
+                $this->downloadFromUrl($task->input_file, $tempInputFile);
+                break;
+
+            case FileConversionTask::INPUT_METHOD_UPLOAD:
+            case FileConversionTask::INPUT_METHOD_DIRECT_UPLOAD:
+                // 从存储中复制文件
+                $content = Storage::get($task->input_file);
+                file_put_contents($tempInputFile, $content);
+                break;
+
+            default:
+                throw new Exception("不支持的输入方式: {$task->input_method}");
+        }
+
+        if (!file_exists($tempInputFile)) {
+            throw new Exception('输入文件下载失败');
+        }
+
+        $task->updateProgress(10);
+        return $tempInputFile;
+    }
+
+    /**
+     * 从URL下载文件
+     */
+    protected function downloadFromUrl(string $url, string $targetPath): void
+    {
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 300, // 5分钟超时
+                'user_agent' => 'Mozilla/5.0 (compatible; LibreOfficeConverter/1.0)'
+            ]
+        ]);
+
+        $content = file_get_contents($url, false, $context);
+        if ($content === false) {
+            throw new Exception("无法从URL下载文件: {$url}");
+        }
+
+        file_put_contents($targetPath, $content);
+    }
+
+    /**
+     * 执行LibreOffice转换
+     */
+    protected function performConversion(FileConversionTask $task, string $inputFilePath): string
+    {
+        $task->updateProgress(20);
+
+        $tempDir = dirname($inputFilePath);
+        $outputFormat = $task->output_format;
+        $options = $task->getConversionOptions();
+
+        // 特殊处理图片格式输出
+        if (in_array($outputFormat, ['png', 'jpg'])) {
+            return $this->convertToImage($task, $inputFilePath, $tempDir, $outputFormat);
+        }
+
+        // 标准文档转换
+        return $this->convertDocument($task, $inputFilePath, $tempDir, $outputFormat, $options);
+    }
+
+    /**
+     * 标准文档转换
+     */
+    protected function convertDocument(FileConversionTask $task, string $inputFilePath, string $tempDir, string $outputFormat, array $options): string
+    {
+        $task->updateProgress(30);
+
+        // 构建LibreOffice转换命令
+        $command = [
+            'libreoffice',
+            '--headless',
+            '--invisible',
+            '--nodefault',
+            '--nolockcheck',
+            '--nologo',
+            '--norestore',
+            '--convert-to', $outputFormat,
+            '--outdir', $tempDir,
+            $inputFilePath
+        ];
+
+        $task->updateProgress(50);
+
+        // 执行转换命令
+        $this->executeLibreOfficeCommand($command);
+
+        $task->updateProgress(80);
+
+        // 查找输出文件
+        $inputBasename = pathinfo($inputFilePath, PATHINFO_FILENAME);
+        $outputFilePath = $tempDir . '/' . $inputBasename . '.' . $outputFormat;
+
+        if (!file_exists($outputFilePath)) {
+            throw new Exception('转换失败，输出文件不存在');
+        }
+
+        return $outputFilePath;
+    }
+
+    /**
+     * 转换为图片格式（首页预览）
+     */
+    protected function convertToImage(FileConversionTask $task, string $inputFilePath, string $tempDir, string $imageFormat): string
+    {
+        $task->updateProgress(30);
+
+        // 首先转换为PDF
+        $pdfCommand = [
+            'libreoffice',
+            '--headless',
+            '--invisible',
+            '--nodefault',
+            '--nolockcheck',
+            '--nologo',
+            '--norestore',
+            '--convert-to', 'pdf',
+            '--outdir', $tempDir,
+            $inputFilePath
+        ];
+
+        $this->executeLibreOfficeCommand($pdfCommand);
+
+        $task->updateProgress(60);
+
+        // 查找生成的PDF文件
+        $inputBasename = pathinfo($inputFilePath, PATHINFO_FILENAME);
+        $pdfFilePath = $tempDir . '/' . $inputBasename . '.pdf';
+
+        if (!file_exists($pdfFilePath)) {
+            throw new Exception('PDF转换失败');
+        }
+
+        // 使用ImageMagick或其他工具将PDF首页转换为图片
+        $imageFilePath = $tempDir . '/' . $inputBasename . '.' . $imageFormat;
+        
+        // 检查是否有convert命令（ImageMagick）
+        $convertAvailable = false;
+        exec('which convert 2>/dev/null', $output, $returnCode);
+        if ($returnCode === 0) {
+            $convertAvailable = true;
+        }
+
+        if ($convertAvailable) {
+            // 使用ImageMagick转换PDF首页为图片
+            $convertCommand = [
+                'convert',
+                $pdfFilePath . '[0]', // 只转换第一页
+                '-quality', '90',
+                '-density', '150',
+                $imageFilePath
+            ];
+            
+            $this->executeCommand($convertCommand);
+        } else {
+            // 如果没有ImageMagick，返回PDF文件
+            $this->logInfo('ImageMagick不可用，返回PDF文件而不是图片', [
+                'task_id' => $task->id,
+                'requested_format' => $imageFormat
+            ]);
+            return $pdfFilePath;
+        }
+
+        $task->updateProgress(90);
+
+        // 清理临时PDF文件
+        if (file_exists($pdfFilePath)) {
+            unlink($pdfFilePath);
+        }
+
+        if (!file_exists($imageFilePath)) {
+            throw new Exception('图片转换失败');
+        }
+
+        return $imageFilePath;
+    }
+
+    /**
+     * 执行LibreOffice命令
+     */
+    protected function executeLibreOfficeCommand(array $command): void
+    {
+        $this->executeCommand($command);
+    }
+
+    /**
+     * 执行系统命令
+     */
+    protected function executeCommand(array $command): void
+    {
+        $commandStr = implode(' ', array_map('escapeshellarg', $command));
+        
+        $this->logInfo('执行LibreOffice命令', ['command' => $commandStr]);
+
+        $descriptorspec = [
+            0 => ['pipe', 'r'],  // stdin
+            1 => ['pipe', 'w'],  // stdout
+            2 => ['pipe', 'w']   // stderr
+        ];
+
+        $process = proc_open($commandStr, $descriptorspec, $pipes);
+
+        if (!is_resource($process)) {
+            throw new Exception('无法启动LibreOffice进程');
+        }
+
+        // 关闭stdin
+        fclose($pipes[0]);
+
+        // 读取stdout和stderr
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        // 等待进程结束
+        $returnCode = proc_close($process);
+
+        if ($returnCode !== 0) {
+            $this->logError('LibreOffice命令执行失败', [
+                'command' => $commandStr,
+                'return_code' => $returnCode,
+                'stdout' => $stdout,
+                'stderr' => $stderr
+            ]);
+            throw new Exception("LibreOffice转换失败: {$stderr}");
+        }
+
+        $this->logInfo('LibreOffice命令执行成功', ['command' => $commandStr]);
+    }
+
+    /**
+     * 上传输出文件到OSS
+     */
+    protected function uploadOutputFile(FileConversionTask $task, string $outputFilePath): string
+    {
+        $extension = pathinfo($outputFilePath, PATHINFO_EXTENSION);
+        $randomNumber = rand(10000, 99999);
+        $timestamp = date('Y-m-d H:i:s');
+        $fileName = "文档转换 {$timestamp} {$randomNumber}.{$extension}";
+        $folder = 'conversions';
+        $filePath = $folder . '/' . $fileName;
+
+        // 上传到OSS
+        $disk = Storage::disk('oss');
+        $content = file_get_contents($outputFilePath);
+        $disk->put($filePath, $content);
+
+        $this->logInfo('文件上传到OSS完成', [
+            'task_id' => $task->id,
+            'filename' => $fileName,
+            'file_size' => strlen($content)
+        ]);
+
+        return Storage::url($filePath);
+    }
+
+    /**
+     * 清理临时文件
+     */
+    protected function cleanupFiles(string ...$files): void
+    {
+        foreach ($files as $file) {
+            if (file_exists($file)) {
+                unlink($file);
+            }
+        }
     }
 }

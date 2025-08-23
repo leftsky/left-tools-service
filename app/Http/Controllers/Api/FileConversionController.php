@@ -327,20 +327,20 @@ class FileConversionController extends Controller
                 ];
             }
 
-            // 检查本地转换引擎支持情况
-            $ffmpegService = app(FFmpegService::class);
-            $libreOfficeService = app(LibreOfficeService::class);
+            // // 检查本地转换引擎支持情况
+            // $ffmpegService = app(FFmpegService::class);
+            // $libreOfficeService = app(LibreOfficeService::class);
             
-            $useLibreOffice = $this->shouldUseLibreOffice($fileInfo['format'], $outputFormat, $libreOfficeService);
-            $useFFmpeg = !$useLibreOffice && $this->shouldUseFFmpeg($fileInfo['format'], $outputFormat, $ffmpegService);
+            // $useLibreOffice = $this->shouldUseLibreOffice($fileInfo['format'], $outputFormat, $libreOfficeService);
+            // $useFFmpeg = !$useLibreOffice && $this->shouldUseFFmpeg($fileInfo['format'], $outputFormat, $ffmpegService);
             
-            // 确定转换引擎
-            $conversionEngine = 'cloudconvert'; // 默认使用云端转换
-            if ($useLibreOffice) {
-                $conversionEngine = 'libreoffice';
-            } elseif ($useFFmpeg) {
-                $conversionEngine = 'ffmpeg';
-            }
+            // // 确定转换引擎
+            // $conversionEngine = 'cloudconvert'; // 默认使用云端转换
+            // if ($useLibreOffice) {
+            //     $conversionEngine = 'libreoffice';
+            // } elseif ($useFFmpeg) {
+            //     $conversionEngine = 'ffmpeg';
+            // }
 
             // 创建转换任务记录
             $task = FileConversionTask::create([
@@ -351,25 +351,25 @@ class FileConversionController extends Controller
                 'input_format' => $fileInfo['format'] ?? null,
                 'file_size' => $fileInfo['file_size'] ?? 0,
                 'output_format' => $outputFormat,
-                'conversion_options' => $this->normalizeConversionOptions($conversionParams, $useFFmpeg),
+                'conversion_options' => $this->normalizeConversionOptions($conversionParams, false),
                 'status' => FileConversionTask::STATUS_WAIT,
-                'conversion_engine' => $conversionEngine,
+                // 'conversion_engine' => $conversionEngine,
             ]);
 
             // 提交转换任务
-            if ($useLibreOffice) {
-                $result = $this->submitLibreOfficeTask($task, $libreOfficeService);
-            } elseif ($useFFmpeg) {
-                $result = $this->submitFFmpegTask($task, $ffmpegService);
-            } else {
-                $result = $this->submitConversionTask($task, $fileUrl, $conversionParams);
-            }
+            // if ($useLibreOffice) {
+            //     $result = $this->submitLibreOfficeTask($task, $libreOfficeService);
+            // } elseif ($useFFmpeg) {
+            //     $result = $this->submitFFmpegTask($task, $ffmpegService);
+            // } else {
+            //     $result = $this->submitConversionTask($task, $fileUrl, $conversionParams);
+            // }
 
-            if (!$result['success']) {
-                return $this->error($result['message'], $result['code']);
-            }
+            // if (!$result['success']) {
+            //     return $this->error($result['message'], $result['code']);
+            // }
 
-            return $this->success($result['data'], $result['message']);
+            return $this->success($task, '任务提交成功');
         } catch (\Exception $e) {
             Log::error('文件转换任务提交失败', [
                 'error' => $e->getMessage(),

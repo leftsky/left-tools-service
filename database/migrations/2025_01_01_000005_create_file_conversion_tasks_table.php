@@ -46,12 +46,14 @@ return new class extends Migration
             $table->string('tag')->nullable()->comment('任务标签');
             $table->timestamp('started_at')->nullable()->comment('开始时间');
             $table->timestamp('completed_at')->nullable()->comment('完成时间');
+            // 订阅消息id
+            $table->string('subscription_message_id')->nullable()->comment('订阅消息ID');
             $table->timestamps();
 
             // 索引
-            $table->index(['user_id', 'status']);
-            $table->index(['conversion_engine', 'status']);
-            $table->index('tag');
+            // $table->index(['user_id', 'status']);
+            // $table->index(['conversion_engine', 'status']);
+            // $table->index('tag');
         });
     }
 

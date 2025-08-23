@@ -3,7 +3,7 @@ LABEL maintainer="leftsky <leftsky@vip.qq.com>"
 
 COPY ./ /var/www
 COPY ./supervisord.conf /etc/supervisord.conf
-RUN apk add ffmpeg libreoffice
+RUN apk add ffmpeg libreoffice imagemagick
 RUN rm -rf composer.lock
 RUN chmod -R 777 /var/www/storage
 #RUN composer config -g repo.packagist composer https://mirrors.aliyun.com/composer/

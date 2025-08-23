@@ -283,21 +283,13 @@ class FileConversionTaskResource extends Resource
                     ->label('重试')
                     ->icon('heroicon-o-arrow-path')
                     ->color('warning')
-                    ->visible(fn(FileConversionTask $record): bool => $record->isFailed())
+                    // ->visible(fn(FileConversionTask $record): bool => $record->isFailed())
                     ->action(function (FileConversionTask $record): void {
-                        // 这里可以添加重试逻辑
+                        // 重新调度转换任务
+                        \App\Jobs\ProcessConversionTaskJob::dispatch($record);
                         $record->update(['status' => FileConversionTask::STATUS_WAIT]);
-                    }),
-                Tables\Actions\Action::make('update_progress')
-                    ->label('更新进度')
-                    ->icon('heroicon-o-arrow-path')
-                    ->color('info')
-                    ->visible(fn(FileConversionTask $record): bool => $record->status === FileConversionTask::STATUS_CONVERT)
-                    ->action(function (FileConversionTask $record): void {
-                        // 从转换引擎更新任务状态和进度
-                        $record->updateStatusFromEngine();
                     })
-                    ->successNotificationTitle('进度已更新'),
+                    ->successNotificationTitle('重试任务已调度'),
 
             ])
             ->bulkActions([
@@ -310,22 +302,13 @@ class FileConversionTaskResource extends Resource
                         ->action(function ($records): void {
                             $records->each(function ($record) {
                                 if ($record->isFailed()) {
+                                    // 重新调度转换任务
+                                    \App\Jobs\ProcessConversionTaskJob::dispatch($record);
                                     $record->update(['status' => FileConversionTask::STATUS_WAIT]);
                                 }
                             });
-                        }),
-                    Tables\Actions\BulkAction::make('update_progress_bulk')
-                        ->label('批量更新进度')
-                        ->icon('heroicon-o-arrow-path')
-                        ->color('info')
-                        ->action(function ($records): void {
-                            $records->each(function ($record) {
-                                if ($record->status === FileConversionTask::STATUS_CONVERT) {
-                                    $record->updateStatusFromEngine();
-                                }
-                            });
                         })
-                        ->deselectRecordsAfterCompletion(),
+                        ->successNotificationTitle('失败任务重试已调度'),
                 ]),
             ])
             ->defaultSort('created_at', 'desc');
