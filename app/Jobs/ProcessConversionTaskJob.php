@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\FileConversionTask;
 use App\Services\FFmpegService;
 use App\Services\LibreOfficeService;
+use App\Services\ImageMagickService;
 use App\Services\CloudConvertService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -23,6 +24,7 @@ class ProcessConversionTaskJob implements ShouldQueue
     protected FileConversionTask $task;
     protected FFmpegService $ffmpegService;
     protected LibreOfficeService $libreOfficeService;
+    protected ImageMagickService $imageMagickService;
     protected CloudConvertService $cloudConvertService;
 
     /**
@@ -34,6 +36,7 @@ class ProcessConversionTaskJob implements ShouldQueue
         $this->task = $task;
         $this->ffmpegService = new FFmpegService();
         $this->libreOfficeService = new LibreOfficeService();
+        $this->imageMagickService = new ImageMagickService();
         $this->cloudConvertService = new CloudConvertService();
     }
 
@@ -90,17 +93,22 @@ class ProcessConversionTaskJob implements ShouldQueue
         $inputFormat = $this->task->input_format;
         $outputFormat = $this->task->output_format;
 
-        // 1. 优先检测FFmpeg支持
+        // 1. 优先检测ImageMagick支持（图片格式转换）
+        if ($this->imageMagickService->supportsConversion($inputFormat, $outputFormat)) {
+            return 'imagemagick';
+        }
+
+        // 2. 其次检测FFmpeg支持（音视频格式转换）
         if ($this->ffmpegService->supportsConversion($inputFormat, $outputFormat)) {
             return 'ffmpeg';
         }
 
-        // 2. 其次检测LibreOffice支持
+        // 3. 再次检测LibreOffice支持（文档格式转换）
         if ($this->libreOfficeService->supportsConversion($inputFormat, $outputFormat)) {
             return 'libreoffice';
         }
 
-        // 3. 兜底使用CloudConvert
+        // 4. 兜底使用CloudConvert
         return 'cloudconvert';
     }
 
@@ -110,6 +118,8 @@ class ProcessConversionTaskJob implements ShouldQueue
     protected function submitConversionTask(string $engine): array
     {
         switch ($engine) {
+            case 'imagemagick':
+                return $this->imageMagickService->submitConversionTask($this->task);
             case 'ffmpeg':
                 return $this->ffmpegService->submitConversionTask($this->task);
             case 'libreoffice':
@@ -117,8 +127,58 @@ class ProcessConversionTaskJob implements ShouldQueue
             case 'cloudconvert':
             default:
                 // return $this->cloudConvertService->submitConversionTask($this->task);
+                // 使用旧方式调用cloudconvert
+                $result =  $this->cloudConvertService->startConversion([
+                    'input_url' => $this->task->input_file,
+                    'output_format' => $this->task->output_format,
+                    'options' => $this->task->conversion_options,
+                    'tag' => "task-" . $this->task->id,
+                ]);
+
+                if ($result['success']) {
+                    // 更新任务为已开始状态
+                    $this->task->update([
+                        'status' => FileConversionTask::STATUS_CONVERT,
+                        'cloudconvert_id' => $result['data']['job_id'],
+                        'conversion_engine' => 'cloudconvert'
+                    ]);
+
+                    Log::info('文件转换任务已提交到 CloudConvert', [
+                        'task_id' => $this->task->id,
+                        'cloudconvert_id' => $result['data']['job_id'],
+                        'file_url' => $this->task->input_file,
+                        'output_format' => $this->task->output_format
+                    ]);
+
+                    return [
+                        'success' => true,
+                        'message' => '文件转换任务已提交到 CloudConvert',
+                        'data' => [
+                            'task_id' => $this->task->id,
+                            'status' => 'processing',
+                            'cloudconvert_id' => $result['data']['job_id'],
+                            'filename' => $this->task->filename,
+                            'file_size' => $this->task->formatted_file_size,
+                            'input_format' => $this->task->input_format,
+                            'output_format' => $this->task->output_format,
+                            'conversion_options' => $this->task->conversion_options
+                        ]
+                    ];
+                }
+
+                // 标记任务为失败状态
+                $this->task->update(['status' => FileConversionTask::STATUS_FAILED]);
+                Log::error('转换任务失败', [
+                    'task_id' => $this->task->id,
+                    'error' => $result['error']
+                ]);
+                break;
         }
-        return [];
+        return [
+            'success' => false,
+            'message' => '不支持的转换引擎',
+            'code' => 400
+        ];
     }
 
     /**

@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use OpenApi\Attributes as OA;
+use App\Jobs\ProcessConversionTaskJob;
 
 #[OA\Tag(
     name: '文件转换接口',
@@ -327,21 +328,6 @@ class FileConversionController extends Controller
                 ];
             }
 
-            // // 检查本地转换引擎支持情况
-            // $ffmpegService = app(FFmpegService::class);
-            // $libreOfficeService = app(LibreOfficeService::class);
-            
-            // $useLibreOffice = $this->shouldUseLibreOffice($fileInfo['format'], $outputFormat, $libreOfficeService);
-            // $useFFmpeg = !$useLibreOffice && $this->shouldUseFFmpeg($fileInfo['format'], $outputFormat, $ffmpegService);
-            
-            // // 确定转换引擎
-            // $conversionEngine = 'cloudconvert'; // 默认使用云端转换
-            // if ($useLibreOffice) {
-            //     $conversionEngine = 'libreoffice';
-            // } elseif ($useFFmpeg) {
-            //     $conversionEngine = 'ffmpeg';
-            // }
-
             // 创建转换任务记录
             $task = FileConversionTask::create([
                 'user_id' => $userId,
@@ -353,21 +339,10 @@ class FileConversionController extends Controller
                 'output_format' => $outputFormat,
                 'conversion_options' => $this->normalizeConversionOptions($conversionParams, false),
                 'status' => FileConversionTask::STATUS_WAIT,
-                // 'conversion_engine' => $conversionEngine,
+                'conversion_engine' => 'cloudconvert',
             ]);
 
-            // 提交转换任务
-            // if ($useLibreOffice) {
-            //     $result = $this->submitLibreOfficeTask($task, $libreOfficeService);
-            // } elseif ($useFFmpeg) {
-            //     $result = $this->submitFFmpegTask($task, $ffmpegService);
-            // } else {
-            //     $result = $this->submitConversionTask($task, $fileUrl, $conversionParams);
-            // }
-
-            // if (!$result['success']) {
-            //     return $this->error($result['message'], $result['code']);
-            // }
+            ProcessConversionTaskJob::dispatch($task)->onQueue('file-conversion');
 
             return $this->success($task, '任务提交成功');
         } catch (\Exception $e) {
