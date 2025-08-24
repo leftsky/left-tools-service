@@ -198,6 +198,7 @@ class FileConversionTaskResource extends Resource
                     }),
                 Tables\Columns\TextColumn::make('conversion_engine')
                     ->label('引擎')
+                    ->searchable()
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
                         FileConversionTask::ENGINE_CONVERTIO => 'orange',

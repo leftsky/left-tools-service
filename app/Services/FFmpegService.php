@@ -8,6 +8,11 @@ use Illuminate\Support\Facades\Log;
 
 class FFmpegService extends ConversionServiceBase
 {
+    /**
+     * 文件信息存储
+     */
+    private ?array $fileInfo = null;
+    public static string $serviceName = 'ffmpeg';
 
     /**
      * 视频质量选项
@@ -159,39 +164,13 @@ class FFmpegService extends ConversionServiceBase
         ]);
 
         // 直接检测输入格式是否支持
-        if (!$this->isInputFormatSupported($inputFormat)) {
-            Log::info('FFmpegService::supportsConversion inputFormat not supported', [
-                'inputFormat' => $inputFormat
-            ]);
-            return false;
-        }
-
-        // 直接检测输出格式是否支持
-        if (!$this->isOutputFormatSupported($outputFormat)) {
-            Log::info('FFmpegService::supportsConversion outputFormat not supported', [
-                'outputFormat' => $outputFormat
-            ]);
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * 检查输入格式是否支持（直接检测）
-     *
-     * @param string $format 格式名称
-     * @return bool
-     */
-    protected function isInputFormatSupported(string $format): bool
-    {
         try {
             // 使用 ffprobe 直接检测格式是否支持
             $output = [];
             $returnCode = 0;
 
             // 创建一个测试命令，检查格式是否被识别
-            exec("ffprobe -v quiet -f {$format} -i /dev/null 2>&1", $output, $returnCode);
+            exec("ffprobe -v quiet -f {$inputFormat} -i /dev/null 2>&1", $output, $returnCode);
 
             // 如果返回码是 0 或者错误信息不包含 "Invalid data"，说明格式被识别
             $outputStr = implode(' ', $output);
@@ -201,18 +180,12 @@ class FFmpegService extends ConversionServiceBase
 
             return $isSupported;
         } catch (Exception $e) {
+            Log::info('FFmpegService::supportsConversion inputFormat not supported', [
+                'inputFormat' => $inputFormat
+            ]);
             return false;
         }
-    }
 
-    /**
-     * 检查输出格式是否支持（直接检测）
-     *
-     * @param string $format 格式名称
-     * @return bool
-     */
-    protected function isOutputFormatSupported(string $format): bool
-    {
         try {
             // 使用 ffmpeg 直接检测编码器是否支持
             $output = [];
@@ -247,22 +220,13 @@ class FFmpegService extends ConversionServiceBase
             // 如果没有找到特定编码器，检查是否是基本支持的格式
             return false;
         } catch (Exception $e) {
+            Log::info('FFmpegService::supportsConversion outputFormat not supported', [
+                'outputFormat' => $outputFormat
+            ]);
             return false;
         }
-    }
 
-    /**
-     * 检查特定格式是否需要音频转码
-     *
-     * @param string $format 输出格式
-     * @return bool 是否需要音频转码
-     */
-    protected function needsAudioTranscode(string $format): bool
-    {
-        // 这些格式通常需要特定的音频编码器，不能直接复制
-        $formatsNeedingTranscode = ['mpg', 'mpeg', 'vob', 'ts', 'mts', 'm2ts'];
-
-        return in_array(strtolower($format), $formatsNeedingTranscode);
+        return true;
     }
 
     /**
@@ -293,76 +257,25 @@ class FFmpegService extends ConversionServiceBase
      *
      * @return bool 是否包含音频流
      */
-    protected function hasAudioStream(): bool
+        protected function hasAudioStream(): bool
     {
         try {
-            $output = [];
-            $returnCode = 0;
-
-            // 使用 ffprobe 检查音频流
-            exec("ffprobe -v quiet -select_streams a -show_entries stream=codec_type -of csv=p=0 '{$this->getTempInputFile()}'", $output, $returnCode);
-
-            // 如果找到音频流，输出应该包含 "audio"
-            return $returnCode === 0 && !empty($output) && in_array('audio', $output);
+            $this->loadFileInfo();
+            $streams = $this->fileInfo['streams'] ?? [];
+            
+            foreach ($streams as $stream) {
+                if (isset($stream['codec_type']) && $stream['codec_type'] === 'audio') {
+                    return true;
+                }
+            }
+            
+            return false;
         } catch (Exception $e) {
             return false;
         }
     }
 
-    /**
-     * 创建静音音频文件
-     *
-     * @param string $audioFile 音频文件路径
-     */
-    protected function createSilentAudio(string $audioFile): void
-    {
-        $task = $this->getTask();
-        $options = $task->getConversionOptions();
-        $audioEncoder = $options['selected_audio_encoder'] ?? 'aac';
-        $duration = $this->getVideoDuration($task->input_file) ?? 10; // 默认10秒
 
-        // 创建静音音频
-        $command = [
-            'ffmpeg',
-            '-f',
-            'lavfi',
-            '-i',
-            "anullsrc=channel_layout=stereo:sample_rate=48000:duration={$duration}",
-            '-c:a',
-            $audioEncoder
-        ];
-
-        // 添加音频编码参数
-        $command = array_merge($command, $this->getAudioEncodingParams($audioEncoder, $options));
-
-        $command = array_merge($command, ['-y', $audioFile]);
-
-        $this->executeFFmpegCommand($command);
-    }
-
-    /**
-     * 获取视频时长
-     *
-     * @return float|null 视频时长（秒），如果获取失败返回null
-     */
-    protected function getVideoDuration(): ?float
-    {
-        try {
-            $output = [];
-            $returnCode = 0;
-
-            // 使用 ffprobe 获取视频时长
-            exec("ffprobe -v quiet -show_entries format=duration -of csv=p=0 '{$this->getTempInputFile()}'", $output, $returnCode);
-
-            if ($returnCode === 0 && !empty($output) && is_numeric($output[0])) {
-                return (float) $output[0];
-            }
-
-            return null;
-        } catch (Exception $e) {
-            return null;
-        }
-    }
 
     /**
      * 检查编码器是否可用
@@ -593,25 +506,18 @@ class FFmpegService extends ConversionServiceBase
      */
     public function submitConversionTask(FileConversionTask $task): array
     {
+        // 设置任务
+        $this->setTask($task);
         try {
-            // 设置任务
-            $this->setTask($task);
+            // 检测文件，验证文件大小
+            $this->loadFileInfo();
 
-            // 验证转换选项
-            if (!$this->validateConversionOptions($task->getConversionOptions())) {
-                return $this->buildErrorResponse('转换选项验证失败', 400);
-            }
-
-            // 直接执行转换任务
-            $result = $this->convertFile();
-
-            return $result;
+            return $this->convertFile();
         } catch (Exception $e) {
             Log::error('FFmpeg转换任务提交失败', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-
             return $this->buildErrorResponse('FFmpeg转换任务提交失败: ' . $e->getMessage(), 500);
         }
     }
@@ -727,16 +633,6 @@ class FFmpegService extends ConversionServiceBase
     }
 
     /**
-     * 重写服务名称
-     *
-     * @return string
-     */
-    public function getServiceName(): string
-    {
-        return 'ffmpeg';
-    }
-
-    /**
      * 重写服务可用性检查
      *
      * @return bool
@@ -828,6 +724,20 @@ class FFmpegService extends ConversionServiceBase
         $outputExt = $task->output_format;
         $options = $task->getConversionOptions();
 
+        // 检查是否包含音频流
+        if (!$this->hasAudioStream()) {
+            // 没有音频流，直接转码视频作为输出
+            Log::info('输入文件没有音频流，直接转码视频', [
+                'task_id' => $task->id,
+                'input_file' => $this->getTempInputFile(),
+                'streams_count' => count($this->fileInfo['streams'] ?? [])
+            ]);
+            
+            $this->convertVideoOnly($outputFilePath, $options);
+            return;
+        }
+
+        // 有音频流，使用分离式转码
         // 临时文件路径
         $videoOnlyFile = $tempDir . '/video_only_' . $task->id . '.' . $outputExt;
 
@@ -904,16 +814,10 @@ class FFmpegService extends ConversionServiceBase
     protected function extractAudio(string $audioFile, string $outputExt): void
     {
         $task = $this->getTask();
-        // 首先检查输入文件是否包含音频流
+        
+        // 确保有音频流（调用此方法前已经检查过了）
         if (!$this->hasAudioStream()) {
-            Log::info('输入文件没有音频流，创建静音音频', [
-                'task_id' => $task->id,
-                'input_file' => $this->getTempInputFile()
-            ]);
-
-            // 创建静音音频文件
-            $this->createSilentAudio($audioFile);
-            return;
+            throw new Exception('无法提取音频：输入文件不包含音频流');
         }
 
         $command = ['ffmpeg', '-i', $this->getTempInputFile(), '-vn']; // 跳过视频
@@ -956,8 +860,11 @@ class FFmpegService extends ConversionServiceBase
         // 根据输出文件扩展名确定格式
         $outputFormat = strtolower(pathinfo($outputFile, PATHINFO_EXTENSION));
 
-        // 检查是否需要转码音频（某些格式不支持直接复制）
-        $needsAudioTranscode = $this->needsAudioTranscode($outputFormat);
+        // 这些格式通常需要特定的音频编码器，不能直接复制
+        $needsAudioTranscode =  in_array(
+            strtolower($outputFormat),
+            ['mpg', 'mpeg', 'vob', 'ts', 'mts', 'm2ts']
+        );
 
         $command = [
             'ffmpeg',
@@ -1087,147 +994,23 @@ class FFmpegService extends ConversionServiceBase
     protected function validateFileWithFFprobe(): void
     {
         try {
-            // 使用更通用的命令来获取文件信息
-            $command = [
-                'ffprobe',
-                '-v',
-                'quiet',
-                '-show_streams',
-                '-select_streams',
-                'a',
-                '-of',
-                'json',
-                escapeshellarg($this->getTempInputFile())
-            ];
-
-            $commandStr = implode(' ', $command);
-            $output = [];
-            $returnCode = 0;
-
-            exec($commandStr, $output, $returnCode);
-
-            if ($returnCode !== 0 || empty($output)) {
-                throw new Exception("无法读取文件信息，文件可能损坏或格式不支持");
-            }
-
-            // 解析 JSON 输出
-            $jsonOutput = implode('', $output);
-            $data = json_decode($jsonOutput, true);
-
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                throw new Exception("无法解析文件信息，JSON 解析失败");
-            }
-
-            if (!isset($data['streams']) || empty($data['streams'])) {
-                throw new Exception("文件不包含任何音频流");
-            }
-
-            $audioStream = $data['streams'][0];
-
-            // 验证音频流信息
-            if (!isset($audioStream['codec_type']) || $audioStream['codec_type'] !== 'audio') {
-                throw new Exception("文件不包含音频流，实际类型: " . ($audioStream['codec_type'] ?? 'unknown'));
-            }
-
-            $channels = (int)($audioStream['channels'] ?? 0);
-            $sampleRate = (int)($audioStream['sample_rate'] ?? 0);
-            $codecName = $audioStream['codec_name'] ?? '';
-
-            if ($channels <= 0) {
-                throw new Exception("音频通道数无效: {$channels}。这通常表示 FLAC 文件损坏或格式不正确。");
-            }
-
-            if ($sampleRate <= 0) {
-                throw new Exception("音频采样率无效: {$sampleRate}。这通常表示 FLAC 文件损坏或格式不正确。");
-            }
-
-            if (empty($codecName)) {
-                throw new Exception("无法识别音频编码格式。文件可能损坏或格式不支持。");
-            }
+            // 加载文件信息，这会检查文件是否损坏
+            $this->loadFileInfo();
 
             Log::info('文件验证成功', [
                 'file_path' => $this->getTempInputFile(),
-                'codec_type' => $audioStream['codec_type'],
-                'channels' => $channels,
-                'sample_rate' => $sampleRate,
-                'codec_name' => $codecName,
-                'duration' => $audioStream['duration'] ?? 'unknown',
-                'bit_rate' => $audioStream['bit_rate'] ?? 'unknown'
+                'streams_count' => count($this->fileInfo['streams'] ?? [])
             ]);
         } catch (Exception $e) {
             Log::error('文件验证失败', [
                 'file_path' => $this->getTempInputFile(),
                 'error' => $e->getMessage()
             ]);
-
-            // 提供更友好的错误信息和解决建议
-            $errorMessage = $this->getFriendlyErrorMessage($e->getMessage());
-            throw new Exception($errorMessage);
+            throw $e;
         }
     }
 
-    /**
-     * 获取友好的错误信息
-     *
-     * @param string $errorMessage 原始错误信息
-     * @return string 友好的错误信息
-     */
-    protected function getFriendlyErrorMessage(string $errorMessage): string
-    {
-        $filePath = $this->getTempInputFile();
-        $fileName = basename($filePath);
-        $fileExtension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
 
-        // 根据错误类型提供具体的解决建议
-        if (
-            strpos($errorMessage, '音频通道数无效') !== false ||
-            strpos($errorMessage, '音频采样率无效') !== false
-        ) {
-            return "FLAC 文件 '{$fileName}' 损坏或格式不正确。\n" .
-                "解决建议：\n" .
-                "1. 检查文件是否完整下载\n" .
-                "2. 尝试使用其他 FLAC 文件\n" .
-                "3. 使用音频编辑软件修复文件\n" .
-                "4. 重新获取原始文件\n" .
-                "技术详情：{$errorMessage}";
-        }
-
-        if (strpos($errorMessage, '不包含音频流') !== false) {
-            return "文件 '{$fileName}' 不包含有效的音频流。\n" .
-                "解决建议：\n" .
-                "1. 确认文件是有效的音频文件\n" .
-                "2. 检查文件扩展名是否正确\n" .
-                "3. 尝试使用其他音频文件\n" .
-                "技术详情：{$errorMessage}";
-        }
-
-        if (strpos($errorMessage, '无法识别音频编码格式') !== false) {
-            return "无法识别文件 '{$fileName}' 的音频编码格式。\n" .
-                "解决建议：\n" .
-                "1. 确认文件格式支持\n" .
-                "2. 检查文件是否损坏\n" .
-                "3. 尝试使用标准格式的音频文件\n" .
-                "技术详情：{$errorMessage}";
-        }
-
-        if (strpos($errorMessage, '无法读取文件信息') !== false) {
-            return "无法读取文件 '{$fileName}' 的信息。\n" .
-                "解决建议：\n" .
-                "1. 检查文件是否存在\n" .
-                "2. 确认文件权限\n" .
-                "3. 检查磁盘空间\n" .
-                "4. 尝试重新上传文件\n" .
-                "技术详情：{$errorMessage}";
-        }
-
-        // 默认错误信息
-        return "文件 '{$fileName}' 验证失败。\n" .
-            "解决建议：\n" .
-            "1. 检查文件格式是否正确\n" .
-            "2. 确认文件未损坏\n" .
-            "3. 尝试使用其他文件\n" .
-            "技术详情：{$errorMessage}";
-    }
 
     /**
      * 直接转换（用于图像格式）
@@ -1617,5 +1400,71 @@ class FFmpegService extends ConversionServiceBase
             }
         }
         return (float)$frameRate;
+    }
+
+    /**
+     * 获取并存储文件信息
+     */
+    protected function loadFileInfo(): void
+    {
+        if ($this->fileInfo !== null) return;
+
+        try {
+            $command = [
+                'ffprobe',
+                '-v',
+                'quiet',
+                '-show_format',
+                '-show_streams',
+                '-of',
+                'json',
+                escapeshellarg($this->getTempInputFile())
+            ];
+
+            $commandStr = implode(' ', $command);
+            $output = [];
+            $returnCode = 0;
+
+            exec($commandStr, $output, $returnCode);
+
+            if ($returnCode !== 0 || empty($output)) {
+                throw new Exception("无法读取文件信息，文件可能损坏或格式不支持");
+            }
+
+            // 解析 JSON 输出
+            $jsonOutput = implode('', $output);
+            $data = json_decode($jsonOutput, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                throw new Exception("无法解析文件信息，JSON 解析失败");
+            }
+
+            $this->fileInfo = $data;
+
+            Log::info('文件信息加载成功', [
+                'file_path' => $this->getTempInputFile(),
+                'format' => $this->fileInfo['format'] ?? 'unknown',
+                'streams_count' => count($this->fileInfo['streams'] ?? [])
+            ]);
+        } catch (Exception $e) {
+            Log::error('文件信息加载失败', [
+                'file_path' => $this->getTempInputFile(),
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * 检查文件是否损坏
+     */
+    protected function isFileCorrupted(): bool
+    {
+        try {
+            $this->loadFileInfo();
+            return false;
+        } catch (Exception $e) {
+            return true;
+        }
     }
 }
