@@ -96,7 +96,7 @@ class ProcessConversionTaskJob implements ShouldQueue
         $engine = 'cloudconvert';
 
         // 生成缓存键
-        $cacheKey = "conversion_engine:{$inputFormat}:{$outputFormat}";
+        $cacheKey = "conversion_engine:{$inputFormat} -> {$outputFormat}";
 
         // 尝试从缓存获取结果
         $cachedEngine = Cache::get($cacheKey);
