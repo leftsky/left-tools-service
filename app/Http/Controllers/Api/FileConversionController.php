@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Cache;
 use OpenApi\Attributes as OA;
 use App\Jobs\ProcessConversionTaskJob;
 
@@ -113,7 +114,34 @@ class FileConversionController extends Controller
         }
 
         try {
-            $result = $this->uploadFileToStorage($file, $request->input('folder', 'uploads'));
+            // 计算文件MD5
+            $fileMd5 = md5_file($file->getRealPath());
+            $folder = $request->input('folder', 'uploads');
+            
+            // 检查缓存中是否已存在该MD5的文件
+            $cacheKey = "file_upload_{$fileMd5}_{$folder}";
+            $cachedResult = Cache::get($cacheKey);
+            
+            if ($cachedResult) {
+                Log::info('文件上传命中缓存', [
+                    'md5' => $fileMd5,
+                    'cached_url' => $cachedResult['url']
+                ]);
+                return $this->success($cachedResult, '文件已存在，返回缓存URL');
+            }
+            
+            // 缓存未命中，执行实际上传
+            $result = $this->uploadFileToStorage($file, $folder);
+            
+            // 将结果缓存24小时
+            Cache::put($cacheKey, $result, now()->addHours(24));
+            
+            Log::info('文件上传完成并缓存', [
+                'md5' => $fileMd5,
+                'url' => $result['url'],
+                'cache_key' => $cacheKey
+            ]);
+            
             return $this->success($result, '文件上传成功');
         } catch (\Exception $e) {
             return $this->error('文件上传失败：' . $e->getMessage());
