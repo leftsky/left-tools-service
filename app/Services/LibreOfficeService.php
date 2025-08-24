@@ -315,37 +315,6 @@ class LibreOfficeService extends ConversionServiceBase
     }
 
     /**
-     * 重写支持的格式列表
-     *
-     * @return array
-     */
-    public function getSupportedFormats(): array
-    {
-        return [
-            'input_formats' => self::SUPPORTED_INPUT_FORMATS,
-            'output_formats' => array_column(self::OUTPUT_FORMATS, 'value'),
-            'document_types' => self::DOCUMENT_TYPES,
-            'max_file_size' => self::MAX_FILE_SIZE
-        ];
-    }
-
-    /**
-     * 获取支持的配置选项（保持向后兼容）
-     *
-     * @return array
-     * @deprecated 使用 getSupportedFormats() 方法替代
-     */
-    public function getSupportedConfigs(): array
-    {
-        return [
-            'inputFormats' => self::SUPPORTED_INPUT_FORMATS,
-            'outputFormats' => self::OUTPUT_FORMATS,
-            'documentTypes' => self::DOCUMENT_TYPES,
-            'maxFileSize' => self::MAX_FILE_SIZE
-        ];
-    }
-
-    /**
      * 验证转换选项
      *
      * @param array $options

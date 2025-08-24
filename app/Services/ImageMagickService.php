@@ -266,63 +266,6 @@ class ImageMagickService extends ConversionServiceBase
     }
 
     /**
-     * 重写支持的格式列表
-     *
-     * @return array
-     */
-    public function getSupportedFormats(): array
-    {
-        // 如果需要获取所有支持的格式，可以调用一次完整的检测
-        $command = ['convert', '-list', 'format'];
-        $output = shell_exec(implode(' ', $command) . ' 2>&1');
-
-        $inputFormats = [];
-        $outputFormats = [];
-
-        if ($output) {
-            $lines = explode("\n", trim($output));
-            foreach ($lines as $line) {
-                $line = trim($line);
-                if (preg_match('/^(\w+)\s+([rwm]+)\s+(.+)$/', $line, $matches)) {
-                    $format = strtolower($matches[1]);
-                    $modes = $matches[2];
-
-                    if (strpos($modes, 'r') !== false) {
-                        $inputFormats[] = $format;
-                    }
-                    if (strpos($modes, 'w') !== false) {
-                        $outputFormats[] = $format;
-                    }
-                }
-            }
-        }
-
-        return [
-            'input_formats' => array_unique($inputFormats),
-            'output_formats' => array_unique($outputFormats),
-            'conversion_options' => self::CONVERSION_OPTIONS,
-            'max_file_size' => self::MAX_FILE_SIZE
-        ];
-    }
-
-    /**
-     * 获取支持的配置选项（保持向后兼容）
-     *
-     * @return array
-     * @deprecated 使用 getSupportedFormats() 方法替代
-     */
-    public function getSupportedConfigs(): array
-    {
-        $formats = $this->getSupportedFormats();
-        return [
-            'inputFormats' => $formats['input_formats'],
-            'outputFormats' => $formats['output_formats'],
-            'conversionOptions' => self::CONVERSION_OPTIONS,
-            'maxFileSize' => self::MAX_FILE_SIZE
-        ];
-    }
-
-    /**
      * 验证转换选项
      *
      * @param array $options
