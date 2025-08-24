@@ -124,7 +124,7 @@ class ProcessConversionTaskJob implements ShouldQueue
             $engine = 'cloudconvert';
         }
 
-        if ($engine != 'cloudconvert') {
+        if ($engine != 'cloudconvert' && !$engineFormat) {
             // 保存到数据库
             ConversionEngineFormat::create([
                 'input_format' => $inputFormat,
