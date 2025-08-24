@@ -309,6 +309,7 @@ abstract class ConversionServiceBase
      */
     protected function uploadOutputFile(string $outputFilePath): string
     {
+        $this->tempOutputFile = $outputFilePath;
         $extension = pathinfo($outputFilePath, PATHINFO_EXTENSION);
         $randomNumber = rand(10000, 99999);
         $timestamp = date('Y-m-d H:i:s');
