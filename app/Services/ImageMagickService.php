@@ -47,6 +47,7 @@ class ImageMagickService extends ConversionServiceBase
      */
     public function supportsConversion(string $inputFormat, string $outputFormat): bool
     {
+        if ($inputFormat == 'mp4' || $outputFormat == 'mp4') return false;
         // 检查ImageMagick是否可用
         if (!$this->isImageMagickAvailable()) {
             return false;
