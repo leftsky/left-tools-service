@@ -24,6 +24,8 @@ abstract class ConversionServiceBase
      */
     protected array $config = [];
 
+    public static string $serviceName = '';
+
     /**
      * 构造函数
      */
@@ -105,20 +107,6 @@ abstract class ConversionServiceBase
         // 默认实现：服务可用
         // 子类应该重写此方法来检查具体的可用性条件
         return true;
-    }
-
-    /**
-     * 获取服务名称
-     * 
-     * 子类可以重写此方法来返回具体的服务名称
-     *
-     * @return string 服务名称
-     */
-    public function getServiceName(): string
-    {
-        // 默认实现：返回类名
-        $className = class_basename($this);
-        return str_replace('Service', '', $className);
     }
 
     /**
