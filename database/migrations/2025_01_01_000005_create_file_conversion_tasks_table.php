@@ -55,6 +55,19 @@ return new class extends Migration
             // $table->index(['conversion_engine', 'status']);
             // $table->index('tag');
         });
+
+        
+        Schema::create('conversion_engine_formats', function (Blueprint $table) {
+            $table->comment('转换引擎格式选择表');
+            $table->id();
+            $table->string('input_format', 20)->comment('输入格式');
+            $table->string('output_format', 20)->comment('输出格式');
+            $table->string('default_engine', 20)->comment('默认选择的引擎');
+            $table->timestamps();
+
+            // 唯一索引：输入格式+输出格式组合不能重复
+            $table->unique(['input_format', 'output_format'], 'unique_format_combination');
+        });
     }
 
     /**
@@ -63,5 +76,6 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('file_conversion_tasks');
+        Schema::dropIfExists('conversion_engine_formats');
     }
 };

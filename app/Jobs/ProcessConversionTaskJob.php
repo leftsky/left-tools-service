@@ -14,6 +14,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
+use App\Models\ConversionEngineFormat;
 
 class ProcessConversionTaskJob implements ShouldQueue
 {
@@ -93,40 +94,51 @@ class ProcessConversionTaskJob implements ShouldQueue
     {
         $inputFormat = $this->task->input_format;
         $outputFormat = $this->task->output_format;
+
+        // 从数据库获取配置的转换引擎
+        $engineFormat = ConversionEngineFormat::where('input_format', $inputFormat)
+            ->where('output_format', $outputFormat)
+            ->first();
+
+        if ($engineFormat) {
+            $engine = $engineFormat->default_engine;
+            Log::info('使用数据库配置的转换引擎', [
+                'task_id' => $this->task->id,
+                'input_format' => $inputFormat,
+                'output_format' => $outputFormat,
+                'configured_engine' => $engine
+            ]);
+            return $engine;
+        }
+
+        // 如果没有配置，使用默认逻辑
         $engine = 'cloudconvert';
 
-        // 生成缓存键
-        $cacheKey = "conversion_engine:{$inputFormat} -> {$outputFormat}";
-
-        // 尝试从缓存获取结果
-        $cachedEngine = Cache::get($cacheKey);
-        if ($cachedEngine && $cachedEngine !== 'cloudconvert') {
-            Log::info('使用缓存的转换引擎', [
-                'task_id' => $this->task->id,
-                'input_format' => $inputFormat,
-                'output_format' => $outputFormat,
-                'cached_engine' => $cachedEngine
-            ]);
-            return $cachedEngine;
+        if ($this->imageMagickService->supportsConversion($inputFormat, $outputFormat)) {
+            $engine = 'imagemagick';
+        } else if ($this->ffmpegService->supportsConversion($inputFormat, $outputFormat)) {
+            $engine = 'ffmpeg';
+        } else if ($this->libreOfficeService->supportsConversion($inputFormat, $outputFormat)) {
+            $engine = 'libreoffice';
         } else {
-            if ($this->imageMagickService->supportsConversion($inputFormat, $outputFormat)) {
-                $engine = 'imagemagick';
-            } else if ($this->ffmpegService->supportsConversion($inputFormat, $outputFormat)) {
-                $engine = 'ffmpeg';
-            } else if ($this->libreOfficeService->supportsConversion($inputFormat, $outputFormat)) {
-                $engine = 'libreoffice';
-            } else {
-                $engine = 'cloudconvert';
-            }
-            // 缓存结果24小时
-            Cache::put($cacheKey, $engine, now()->addHours(24));
-            Log::info('检测到转换引擎，已缓存', [
-                'task_id' => $this->task->id,
+            $engine = 'cloudconvert';
+        }
+
+        if ($engine != 'cloudconvert') {
+            // 保存到数据库
+            ConversionEngineFormat::create([
                 'input_format' => $inputFormat,
                 'output_format' => $outputFormat,
-                'engine' => $engine
+                'default_engine' => $engine
             ]);
         }
+
+        Log::info('使用默认检测的转换引擎', [
+            'task_id' => $this->task->id,
+            'input_format' => $inputFormat,
+            'output_format' => $outputFormat,
+            'detected_engine' => $engine
+        ]);
 
         return $engine;
     }
