@@ -257,25 +257,23 @@ class FFmpegService extends ConversionServiceBase
      *
      * @return bool 是否包含音频流
      */
-        protected function hasAudioStream(): bool
+    protected function hasAudioStream(): bool
     {
         try {
             $this->loadFileInfo();
             $streams = $this->fileInfo['streams'] ?? [];
-            
+
             foreach ($streams as $stream) {
                 if (isset($stream['codec_type']) && $stream['codec_type'] === 'audio') {
                     return true;
                 }
             }
-            
+
             return false;
         } catch (Exception $e) {
             return false;
         }
     }
-
-
 
     /**
      * 检查编码器是否可用
@@ -571,12 +569,6 @@ class FFmpegService extends ConversionServiceBase
             // 更新任务状态为转换中
             $task->startProcessing();
 
-            // 验证文件大小
-            $fileSize = filesize($this->getTempInputFile());
-            if ($fileSize > self::MAX_FILE_SIZE) {
-                throw new Exception("文件过大，请选择小于100MB的文件");
-            }
-
             // 执行转换
             $outputFilePath = $this->performConversion();
 
@@ -623,10 +615,7 @@ class FFmpegService extends ConversionServiceBase
                 'completed_at' => now()
             ]);
 
-            // 清理可能的临时文件
-            if (isset($outputFilePath) && file_exists($outputFilePath)) {
-                unlink($outputFilePath);
-            }
+            $this->cleanupFiles();
 
             return $this->buildErrorResponse('FFmpeg转换任务失败: ' . $e->getMessage(), 500);
         }
@@ -639,7 +628,14 @@ class FFmpegService extends ConversionServiceBase
      */
     public function isAvailable(): bool
     {
-        return $this->isFFmpegAvailable();
+        try {
+            $output = [];
+            $returnCode = 0;
+            exec('ffmpeg -version 2>&1', $output, $returnCode);
+            return $returnCode === 0;
+        } catch (Exception $e) {
+            return false;
+        }
     }
 
     /**
@@ -691,14 +687,8 @@ class FFmpegService extends ConversionServiceBase
         $outputFilePath = $tempDir . '/output_' . $task->id . '_' . time() . '.' . $outputExt;
 
         // 检查是否为图像格式（GIF、APNG、WebP等）
-        if ($this->isImageFormat($outputExt)) {
-            // 图像格式使用直接转换
-            $this->performDirectConversion($outputFilePath);
-        } elseif ($outputExt === 'webm') {
-            // WebM格式使用直接转换（因为需要特殊的编码器组合）
-            $this->performDirectConversion($outputFilePath);
-        } elseif ($this->isAudioFormat($outputExt)) {
-            // 音频格式使用直接转换
+        if ($this->isImageFormat($outputExt) || $outputExt === 'webm' || $this->isAudioFormat($outputExt)) {
+            // 图像格式或WebM格式使用直接转换
             $this->performDirectConversion($outputFilePath);
         } else {
             // 其他视频格式使用分离式转码
@@ -724,20 +714,6 @@ class FFmpegService extends ConversionServiceBase
         $outputExt = $task->output_format;
         $options = $task->getConversionOptions();
 
-        // 检查是否包含音频流
-        if (!$this->hasAudioStream()) {
-            // 没有音频流，直接转码视频作为输出
-            Log::info('输入文件没有音频流，直接转码视频', [
-                'task_id' => $task->id,
-                'input_file' => $this->getTempInputFile(),
-                'streams_count' => count($this->fileInfo['streams'] ?? [])
-            ]);
-            
-            $this->convertVideoOnly($outputFilePath, $options);
-            return;
-        }
-
-        // 有音频流，使用分离式转码
         // 临时文件路径
         $videoOnlyFile = $tempDir . '/video_only_' . $task->id . '.' . $outputExt;
 
@@ -747,14 +723,13 @@ class FFmpegService extends ConversionServiceBase
         $audioFile = $tempDir . '/audio_' . $task->id . '.' . $audioExt;
 
         try {
-            // 第一步：转码视频（无音频）
-            $this->convertVideoOnly($videoOnlyFile, $options);
-
-            // 第二步：提取并转码音频
-            $this->extractAudio($audioFile, $outputExt);
-
-            // 第三步：合并视频和音频
-            $this->mergeVideoAndAudio($videoOnlyFile, $audioFile, $outputFilePath);
+            if ($this->hasAudioStream()) {
+                $this->convertVideoOnly($videoOnlyFile, $options);
+                $this->extractAudio($audioFile, $outputExt);
+                $this->mergeVideoAndAudio($videoOnlyFile, $audioFile, $outputFilePath);
+            } else {
+                $this->convertVideoOnly($outputFilePath, $options);
+            }
         } finally {
             // 清理临时文件
             if (file_exists($videoOnlyFile)) {
@@ -814,7 +789,7 @@ class FFmpegService extends ConversionServiceBase
     protected function extractAudio(string $audioFile, string $outputExt): void
     {
         $task = $this->getTask();
-        
+
         // 确保有音频流（调用此方法前已经检查过了）
         if (!$this->hasAudioStream()) {
             throw new Exception('无法提取音频：输入文件不包含音频流');
@@ -968,51 +943,6 @@ class FFmpegService extends ConversionServiceBase
     }
 
     /**
-     * 验证输入文件
-     *
-     * @throws Exception
-     */
-    protected function validateInputFile(): void
-    {
-        if (!file_exists($this->getTempInputFile())) {
-            throw new Exception("输入文件不存在: {$this->getTempInputFile()}");
-        }
-
-        if (filesize($this->getTempInputFile()) === 0) {
-            throw new Exception("输入文件为空: {$this->getTempInputFile()}");
-        }
-
-        // 使用 ffprobe 验证文件格式和流信息
-        $this->validateFileWithFFprobe();
-    }
-
-    /**
-     * 使用 FFprobe 验证文件
-     *
-     * @throws Exception
-     */
-    protected function validateFileWithFFprobe(): void
-    {
-        try {
-            // 加载文件信息，这会检查文件是否损坏
-            $this->loadFileInfo();
-
-            Log::info('文件验证成功', [
-                'file_path' => $this->getTempInputFile(),
-                'streams_count' => count($this->fileInfo['streams'] ?? [])
-            ]);
-        } catch (Exception $e) {
-            Log::error('文件验证失败', [
-                'file_path' => $this->getTempInputFile(),
-                'error' => $e->getMessage()
-            ]);
-            throw $e;
-        }
-    }
-
-
-
-    /**
      * 直接转换（用于图像格式）
      *
      * @param string $outputFilePath
@@ -1022,9 +952,6 @@ class FFmpegService extends ConversionServiceBase
         $task = $this->getTask();
         $outputExt = $task->output_format;
         $options = $task->getConversionOptions();
-
-        // 验证输入文件
-        $this->validateInputFile();
 
         $command = ['ffmpeg', '-i', $this->getTempInputFile()];
 
@@ -1249,87 +1176,6 @@ class FFmpegService extends ConversionServiceBase
     }
 
     /**
-     * 检查FFmpeg是否可用
-     *
-     * @return bool
-     */
-    public function isFFmpegAvailable(): bool
-    {
-        try {
-            $output = [];
-            $returnCode = 0;
-            exec('ffmpeg -version 2>&1', $output, $returnCode);
-            return $returnCode === 0;
-        } catch (Exception $e) {
-            return false;
-        }
-    }
-
-    /**
-     * 获取FFmpeg版本信息
-     *
-     * @return string|null
-     */
-    public function getFFmpegVersion(): ?string
-    {
-        try {
-            $output = [];
-            exec('ffmpeg -version 2>&1', $output);
-            if (!empty($output)) {
-                // 解析版本信息
-                foreach ($output as $line) {
-                    if (preg_match('/ffmpeg version ([^\s]+)/', $line, $matches)) {
-                        return $matches[1];
-                    }
-                }
-            }
-            return null;
-        } catch (Exception $e) {
-            return null;
-        }
-    }
-
-    /**
-     * 获取文件信息（使用FFprobe）
-     *
-     * @param string $filePath
-     * @return array|null
-     */
-    public function getFileInfo(string $filePath): ?array
-    {
-        try {
-            $command = [
-                'ffprobe',
-                '-v',
-                'quiet',
-                '-print_format',
-                'json',
-                '-show_format',
-                '-show_streams',
-                escapeshellarg($filePath)
-            ];
-
-            $commandStr = implode(' ', $command);
-            $output = shell_exec($commandStr);
-
-            if ($output) {
-                $data = json_decode($output, true);
-                if ($data && isset($data['format'])) {
-                    return $this->parseFileInfo($data);
-                }
-            }
-
-            return null;
-        } catch (Exception $e) {
-            Log::error('获取文件信息失败', [
-                'file_path' => $filePath,
-                'error' => $e->getMessage()
-            ]);
-            return null;
-        }
-    }
-
-    /**
      * 解析文件信息
      *
      * @param array $data
@@ -1439,12 +1285,32 @@ class FFmpegService extends ConversionServiceBase
                 throw new Exception("无法解析文件信息，JSON 解析失败");
             }
 
+            $data = $this->parseFileInfo($data);
+
+            // $data['file_type'] = match ($data['format']['format_name']) {
+            //     'mov,mp4,m4a,3gp,3g2,mj2' => 'video',
+            //     'mp3' => 'audio',
+            //     default => 'unknown'
+            // };
+
+            // $data['output_format'] = match ($this->getOutputFormat()) {
+            //     'gif', 'apng', 'webp', 'avif', 'heic', 'heif' => 'image',
+            //     'mp4', 'm4v' => 'video',
+            //     'm4a', 'aac', 'flac', 'ogg', 'wav' => 'audio',
+            //     default => $this->getOutputFormat()
+            // };
+
             $this->fileInfo = $data;
+
+            // 验证文件大小
+            $fileSize = filesize($this->getTempInputFile());
+            if ($fileSize > self::MAX_FILE_SIZE) {
+                throw new Exception("文件过大，请选择小于100MB的文件");
+            }
 
             Log::info('文件信息加载成功', [
                 'file_path' => $this->getTempInputFile(),
-                'format' => $this->fileInfo['format'] ?? 'unknown',
-                'streams_count' => count($this->fileInfo['streams'] ?? [])
+                'fileInfo' => $this->fileInfo
             ]);
         } catch (Exception $e) {
             Log::error('文件信息加载失败', [
@@ -1455,16 +1321,4 @@ class FFmpegService extends ConversionServiceBase
         }
     }
 
-    /**
-     * 检查文件是否损坏
-     */
-    protected function isFileCorrupted(): bool
-    {
-        try {
-            $this->loadFileInfo();
-            return false;
-        } catch (Exception $e) {
-            return true;
-        }
-    }
 }
