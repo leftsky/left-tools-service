@@ -93,20 +93,6 @@ abstract class ConversionServiceBase
     }
 
     /**
-     * 获取支持的格式列表
-     * 
-     * 子类可以重写此方法来返回支持的格式信息
-     *
-     * @return array 支持的格式列表
-     */
-    public function getSupportedFormats(): array
-    {
-        // 默认实现：返回空数组
-        // 子类应该重写此方法来返回具体的支持格式
-        return [];
-    }
-
-    /**
      * 检查服务是否可用
      * 
      * 子类可以重写此方法来检查服务的可用性
@@ -225,16 +211,6 @@ abstract class ConversionServiceBase
         return $this->task?->output_format;
     }
 
-    /**
-     * 获取转换选项
-     *
-     * @return array
-     */
-    protected function getConversionOptions(): array
-    {
-        return $this->task?->getConversionOptions() ?? [];
-    }
-
     private $tempInputFile = null;
     private $tempOutputFile = null;
 
@@ -276,6 +252,14 @@ abstract class ConversionServiceBase
         }
 
         return $tempInputFile;
+    }
+
+    protected function getTempInputFile(): string
+    {
+        if (!$this->tempInputFile) {
+            $this->tempInputFile = $this->downloadInputFile();
+        }
+        return $this->tempInputFile;
     }
 
     /**
@@ -344,5 +328,4 @@ abstract class ConversionServiceBase
             unlink($this->tempOutputFile);
         }
     }
-
 }

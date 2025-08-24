@@ -291,17 +291,16 @@ class FFmpegService extends ConversionServiceBase
     /**
      * 检查输入文件是否包含音频流
      *
-     * @param string $inputFile 输入文件路径
      * @return bool 是否包含音频流
      */
-    protected function hasAudioStream(string $inputFile): bool
+    protected function hasAudioStream(): bool
     {
         try {
             $output = [];
             $returnCode = 0;
 
             // 使用 ffprobe 检查音频流
-            exec("ffprobe -v quiet -select_streams a -show_entries stream=codec_type -of csv=p=0 '{$inputFile}'", $output, $returnCode);
+            exec("ffprobe -v quiet -select_streams a -show_entries stream=codec_type -of csv=p=0 '{$this->getTempInputFile()}'", $output, $returnCode);
 
             // 如果找到音频流，输出应该包含 "audio"
             return $returnCode === 0 && !empty($output) && in_array('audio', $output);
@@ -314,10 +313,10 @@ class FFmpegService extends ConversionServiceBase
      * 创建静音音频文件
      *
      * @param string $audioFile 音频文件路径
-     * @param FileConversionTask $task 转换任务
      */
-    protected function createSilentAudio(string $audioFile, FileConversionTask $task): void
+    protected function createSilentAudio(string $audioFile): void
     {
+        $task = $this->getTask();
         $options = $task->getConversionOptions();
         $audioEncoder = $options['selected_audio_encoder'] ?? 'aac';
         $duration = $this->getVideoDuration($task->input_file) ?? 10; // 默认10秒
@@ -344,17 +343,16 @@ class FFmpegService extends ConversionServiceBase
     /**
      * 获取视频时长
      *
-     * @param string $inputFile 输入文件路径
      * @return float|null 视频时长（秒），如果获取失败返回null
      */
-    protected function getVideoDuration(string $inputFile): ?float
+    protected function getVideoDuration(): ?float
     {
         try {
             $output = [];
             $returnCode = 0;
 
             // 使用 ffprobe 获取视频时长
-            exec("ffprobe -v quiet -show_entries format=duration -of csv=p=0 '{$inputFile}'", $output, $returnCode);
+            exec("ffprobe -v quiet -show_entries format=duration -of csv=p=0 '{$this->getTempInputFile()}'", $output, $returnCode);
 
             if ($returnCode === 0 && !empty($output) && is_numeric($output[0])) {
                 return (float) $output[0];
@@ -605,7 +603,7 @@ class FFmpegService extends ConversionServiceBase
             }
 
             // 直接执行转换任务
-            $result = $this->convertFile($task);
+            $result = $this->convertFile();
 
             return $result;
         } catch (Exception $e) {
@@ -621,13 +619,12 @@ class FFmpegService extends ConversionServiceBase
     /**
      * 执行FFmpeg文件转换
      *
-     * @param FileConversionTask $task
      * @return array 转换结果
      */
-    public function convertFile(FileConversionTask $task): array
+    public function convertFile(): array
     {
         try {
-            $this->setTask($task);
+            $task = $this->getTask();
 
             // 记录选择的编码器信息
             $outputFormat = $task->output_format;
@@ -668,17 +665,14 @@ class FFmpegService extends ConversionServiceBase
             // 更新任务状态为转换中
             $task->startProcessing();
 
-            // 下载输入文件
-            $inputFilePath = $this->downloadInputFile();
-
             // 验证文件大小
-            $fileSize = filesize($inputFilePath);
+            $fileSize = filesize($this->getTempInputFile());
             if ($fileSize > self::MAX_FILE_SIZE) {
                 throw new Exception("文件过大，请选择小于100MB的文件");
             }
 
             // 执行转换
-            $outputFilePath = $this->performConversion($task, $inputFilePath);
+            $outputFilePath = $this->performConversion();
 
             // 上传结果文件
             $outputUrl = $this->uploadOutputFile($outputFilePath);
@@ -724,9 +718,6 @@ class FFmpegService extends ConversionServiceBase
             ]);
 
             // 清理可能的临时文件
-            if (isset($inputFilePath) && file_exists($inputFilePath)) {
-                unlink($inputFilePath);
-            }
             if (isset($outputFilePath) && file_exists($outputFilePath)) {
                 unlink($outputFilePath);
             }
@@ -794,29 +785,28 @@ class FFmpegService extends ConversionServiceBase
     /**
      * 执行FFmpeg转换
      *
-     * @param FileConversionTask $task
-     * @param string $inputFilePath
      * @return string 输出文件路径
      */
-    protected function performConversion(FileConversionTask $task, string $inputFilePath): string
+    protected function performConversion(): string
     {
-        $tempDir = dirname($inputFilePath);
+        $task = $this->getTask();
+        $tempDir = dirname($this->getTempInputFile());
         $outputExt = $task->output_format;
         $outputFilePath = $tempDir . '/output_' . $task->id . '_' . time() . '.' . $outputExt;
 
         // 检查是否为图像格式（GIF、APNG、WebP等）
         if ($this->isImageFormat($outputExt)) {
             // 图像格式使用直接转换
-            $this->performDirectConversion($task, $inputFilePath, $outputFilePath);
+            $this->performDirectConversion($outputFilePath);
         } elseif ($outputExt === 'webm') {
             // WebM格式使用直接转换（因为需要特殊的编码器组合）
-            $this->performDirectConversion($task, $inputFilePath, $outputFilePath);
+            $this->performDirectConversion($outputFilePath);
         } elseif ($this->isAudioFormat($outputExt)) {
             // 音频格式使用直接转换
-            $this->performDirectConversion($task, $inputFilePath, $outputFilePath);
+            $this->performDirectConversion($outputFilePath);
         } else {
             // 其他视频格式使用分离式转码
-            $this->performSeparateTranscode($task, $inputFilePath, $outputFilePath);
+            $this->performSeparateTranscode($outputFilePath);
         }
 
         if (!file_exists($outputFilePath)) {
@@ -829,13 +819,12 @@ class FFmpegService extends ConversionServiceBase
     /**
      * 分离式转码：分别处理视频和音频
      *
-     * @param FileConversionTask $task
-     * @param string $inputFilePath
      * @param string $outputFilePath
      */
-    protected function performSeparateTranscode(FileConversionTask $task, string $inputFilePath, string $outputFilePath): void
+    protected function performSeparateTranscode(string $outputFilePath): void
     {
-        $tempDir = dirname($inputFilePath);
+        $task = $this->getTask();
+        $tempDir = dirname($this->getTempInputFile());
         $outputExt = $task->output_format;
         $options = $task->getConversionOptions();
 
@@ -849,10 +838,10 @@ class FFmpegService extends ConversionServiceBase
 
         try {
             // 第一步：转码视频（无音频）
-            $this->convertVideoOnly($task, $inputFilePath, $videoOnlyFile, $options);
+            $this->convertVideoOnly($videoOnlyFile, $options);
 
             // 第二步：提取并转码音频
-            $this->extractAudio($task, $inputFilePath, $audioFile, $outputExt);
+            $this->extractAudio($audioFile, $outputExt);
 
             // 第三步：合并视频和音频
             $this->mergeVideoAndAudio($videoOnlyFile, $audioFile, $outputFilePath);
@@ -870,14 +859,13 @@ class FFmpegService extends ConversionServiceBase
     /**
      * 转码视频（无音频）
      *
-     * @param FileConversionTask $task
-     * @param string $inputFile
      * @param string $outputFile
      * @param array $options
      */
-    protected function convertVideoOnly(FileConversionTask $task, string $inputFile, string $outputFile, array $options): void
+    protected function convertVideoOnly(string $outputFile, array $options): void
     {
-        $command = ['ffmpeg', '-i', $inputFile];
+        $task = $this->getTask();
+        $command = ['ffmpeg', '-i', $this->getTempInputFile()];
 
         // 分辨率设置
         if (!empty($options['resolution']) && $options['resolution'] !== 'original') {
@@ -910,26 +898,25 @@ class FFmpegService extends ConversionServiceBase
     /**
      * 提取音频
      *
-     * @param FileConversionTask $task
-     * @param string $inputFile
      * @param string $audioFile
      * @param string $outputExt
      */
-    protected function extractAudio(FileConversionTask $task, string $inputFile, string $audioFile, string $outputExt): void
+    protected function extractAudio(string $audioFile, string $outputExt): void
     {
+        $task = $this->getTask();
         // 首先检查输入文件是否包含音频流
-        if (!$this->hasAudioStream($inputFile)) {
+        if (!$this->hasAudioStream()) {
             Log::info('输入文件没有音频流，创建静音音频', [
                 'task_id' => $task->id,
-                'input_file' => $inputFile
+                'input_file' => $this->getTempInputFile()
             ]);
 
             // 创建静音音频文件
-            $this->createSilentAudio($audioFile, $task);
+            $this->createSilentAudio($audioFile);
             return;
         }
 
-        $command = ['ffmpeg', '-i', $inputFile, '-vn']; // 跳过视频
+        $command = ['ffmpeg', '-i', $this->getTempInputFile(), '-vn']; // 跳过视频
 
         // 使用智能选择的音频编码器
         $options = $task->getConversionOptions();
@@ -1076,30 +1063,28 @@ class FFmpegService extends ConversionServiceBase
     /**
      * 验证输入文件
      *
-     * @param string $inputFilePath
      * @throws Exception
      */
-    protected function validateInputFile(string $inputFilePath): void
+    protected function validateInputFile(): void
     {
-        if (!file_exists($inputFilePath)) {
-            throw new Exception("输入文件不存在: {$inputFilePath}");
+        if (!file_exists($this->getTempInputFile())) {
+            throw new Exception("输入文件不存在: {$this->getTempInputFile()}");
         }
 
-        if (filesize($inputFilePath) === 0) {
-            throw new Exception("输入文件为空: {$inputFilePath}");
+        if (filesize($this->getTempInputFile()) === 0) {
+            throw new Exception("输入文件为空: {$this->getTempInputFile()}");
         }
 
         // 使用 ffprobe 验证文件格式和流信息
-        $this->validateFileWithFFprobe($inputFilePath);
+        $this->validateFileWithFFprobe();
     }
 
     /**
      * 使用 FFprobe 验证文件
      *
-     * @param string $inputFilePath
      * @throws Exception
      */
-    protected function validateFileWithFFprobe(string $inputFilePath): void
+    protected function validateFileWithFFprobe(): void
     {
         try {
             // 使用更通用的命令来获取文件信息
@@ -1112,7 +1097,7 @@ class FFmpegService extends ConversionServiceBase
                 'a',
                 '-of',
                 'json',
-                escapeshellarg($inputFilePath)
+                escapeshellarg($this->getTempInputFile())
             ];
 
             $commandStr = implode(' ', $command);
@@ -1161,7 +1146,7 @@ class FFmpegService extends ConversionServiceBase
             }
 
             Log::info('文件验证成功', [
-                'file_path' => $inputFilePath,
+                'file_path' => $this->getTempInputFile(),
                 'codec_type' => $audioStream['codec_type'],
                 'channels' => $channels,
                 'sample_rate' => $sampleRate,
@@ -1171,12 +1156,12 @@ class FFmpegService extends ConversionServiceBase
             ]);
         } catch (Exception $e) {
             Log::error('文件验证失败', [
-                'file_path' => $inputFilePath,
+                'file_path' => $this->getTempInputFile(),
                 'error' => $e->getMessage()
             ]);
 
             // 提供更友好的错误信息和解决建议
-            $errorMessage = $this->getFriendlyErrorMessage($e->getMessage(), $inputFilePath);
+            $errorMessage = $this->getFriendlyErrorMessage($e->getMessage());
             throw new Exception($errorMessage);
         }
     }
@@ -1185,11 +1170,11 @@ class FFmpegService extends ConversionServiceBase
      * 获取友好的错误信息
      *
      * @param string $errorMessage 原始错误信息
-     * @param string $filePath 文件路径
      * @return string 友好的错误信息
      */
-    protected function getFriendlyErrorMessage(string $errorMessage, string $filePath): string
+    protected function getFriendlyErrorMessage(string $errorMessage): string
     {
+        $filePath = $this->getTempInputFile();
         $fileName = basename($filePath);
         $fileExtension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
 
@@ -1247,19 +1232,18 @@ class FFmpegService extends ConversionServiceBase
     /**
      * 直接转换（用于图像格式）
      *
-     * @param FileConversionTask $task
-     * @param string $inputFilePath
      * @param string $outputFilePath
      */
-    protected function performDirectConversion(FileConversionTask $task, string $inputFilePath, string $outputFilePath): void
+    protected function performDirectConversion(string $outputFilePath): void
     {
+        $task = $this->getTask();
         $outputExt = $task->output_format;
         $options = $task->getConversionOptions();
 
         // 验证输入文件
-        $this->validateInputFile($inputFilePath);
+        $this->validateInputFile();
 
-        $command = ['ffmpeg', '-i', $inputFilePath];
+        $command = ['ffmpeg', '-i', $this->getTempInputFile()];
 
         // 根据输出格式设置特定参数
         switch (strtolower($outputExt)) {
@@ -1342,7 +1326,7 @@ class FFmpegService extends ConversionServiceBase
                 $command = [
                     'ffmpeg',
                     '-i',
-                    $inputFilePath,
+                    $this->getTempInputFile(),
                     '-an', // 忽略音频
                     '-vf',
                     "fps={$fps},scale={$scaleFilter}:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse",
