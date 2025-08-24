@@ -158,13 +158,13 @@ class ProcessConversionTaskJob implements ShouldQueue
             case 'cloudconvert':
             default:
                 // 如果是local则不使用cloudconvert
-                if (config('app.env') === 'local') {
-                    Log::error('local环境不使用cloudconvert', [
-                        'task_id' => $this->task->id,
-                        'engine' => $engine
-                    ]);
-                    break;
-                }
+                // if (config('app.env') === 'local') {
+                //     Log::error('local环境不使用cloudconvert', [
+                //         'task_id' => $this->task->id,
+                //         'engine' => $engine
+                //     ]);
+                //     break;
+                // }
                 // return $this->cloudConvertService->submitConversionTask($this->task);
                 // 使用旧方式调用cloudconvert
                 $result =  $this->cloudConvertService->startConversion([
