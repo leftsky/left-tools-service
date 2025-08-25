@@ -95,6 +95,10 @@ class FFmpegService extends ConversionServiceBase
             'video' => [],
             'audio' => ['libvorbis']
         ],
+        'opus' => [
+            'video' => [],
+            'audio' => ['libopus']
+        ],
         'flac' => [
             'video' => [],
             'audio' => ['flac']
@@ -102,6 +106,10 @@ class FFmpegService extends ConversionServiceBase
         'wav' => [
             'video' => [],
             'audio' => ['pcm_s16le']
+        ],
+        'm4a' => [
+            'video' => [],
+            'audio' => ['aac', 'libmp3lame']
         ],
         'gif' => [
             'video' => ['gif'],
@@ -174,11 +182,10 @@ class FFmpegService extends ConversionServiceBase
 
             // 如果返回码是 0 或者错误信息不包含 "Invalid data"，说明格式被识别
             $outputStr = implode(' ', $output);
-            $isSupported = $returnCode === 0 ||
+            $inputSupported = $returnCode === 0 ||
                 strpos($outputStr, 'Invalid data') === false ||
                 strpos($outputStr, 'No such file or directory') !== false; // 这是正常的，因为我们用的是 /dev/null
 
-            return $isSupported;
         } catch (Exception $e) {
             Log::info('FFmpegService::supportsConversion inputFormat not supported', [
                 'inputFormat' => $inputFormat
@@ -192,30 +199,32 @@ class FFmpegService extends ConversionServiceBase
             $returnCode = 0;
 
             // 检查是否有对应的编码器
-            $mapping = self::ENCODER_MAPPING[strtolower($format)] ?? [];
+            $mapping = self::ENCODER_MAPPING[strtolower($outputFormat)] ?? [];
             $encoders = array_merge($mapping['video'] ?? [], $mapping['audio'] ?? []);
 
             foreach ($encoders as $encoder) {
                 exec("ffmpeg -hide_banner -encoders 2>/dev/null | grep -w '{$encoder}'", $output, $returnCode);
                 if ($returnCode === 0 && !empty($output)) {
-                    return true;
+                    $outputSupported = true;
+                    break;
                 }
             }
 
             // 对于 MPG/MPEG 格式，还需要检查音频编码器
-            if (in_array(strtolower($format), ['mpg', 'mpeg'])) {
+            if (in_array(strtolower($outputFormat), ['mpg', 'mpeg'])) {
                 $audioEncoders = ['mp2', 'libtwolame', 'ac3'];
                 foreach ($audioEncoders as $audioEncoder) {
                     exec("ffmpeg -hide_banner -encoders 2>/dev/null | grep -w '{$audioEncoder}'", $output, $returnCode);
                     if ($returnCode === 0 && !empty($output)) {
-                        return true;
+                        $outputSupported = true;
+                        break;
                     }
                 }
             }
 
             Log::info('FFmpegService::isOutputFormatSupported outputFormat not supported', [
                 'encoders' => $encoders,
-                'outputFormat' => $format
+                'outputFormat' => $outputFormat
             ]);
             // 如果没有找到特定编码器，检查是否是基本支持的格式
             return false;
@@ -226,7 +235,7 @@ class FFmpegService extends ConversionServiceBase
             return false;
         }
 
-        return true;
+        return $inputSupported && $outputSupported;
     }
 
     /**
@@ -686,9 +695,8 @@ class FFmpegService extends ConversionServiceBase
         $outputExt = $task->output_format;
         $outputFilePath = $tempDir . '/output_' . $task->id . '_' . time() . '.' . $outputExt;
 
-        // 检查是否为图像格式（GIF、APNG、WebP等）
+        // 检查是否为图像、音频格式
         if ($this->isImageFormat($outputExt) || $outputExt === 'webm' || $this->isAudioFormat($outputExt)) {
-            // 图像格式或WebM格式使用直接转换
             $this->performDirectConversion($outputFilePath);
         } else {
             // 其他视频格式使用分离式转码
@@ -1019,6 +1027,19 @@ class FFmpegService extends ConversionServiceBase
                 ]);
                 break;
 
+            case 'm4a':
+                // M4A格式：使用AAC编码器
+                $command = array_merge($command, [
+                    '-vn', // 忽略视频
+                    '-c:a',
+                    'aac',
+                    '-b:a',
+                    '128k',
+                    '-ar',
+                    '48000'
+                ]);
+                break;
+
             case 'gif':
                 // GIF特殊处理：使用简化的单步转换
                 $fps = $options['framerate'] ?? '10'; // GIF默认10fps
@@ -1100,12 +1121,16 @@ class FFmpegService extends ConversionServiceBase
                         $command = array_merge($command, ['-c:v', 'copy']);
                     }
                 } elseif ($this->isAudioFormat($outputExt)) {
-                    // 音频格式：忽略视频，使用默认音频编码器
-                    $command = array_merge($command, [
-                        '-vn',
-                        '-c:a',
-                        'copy'
-                    ]);
+                    // 音频格式：忽略视频，使用智能选择的音频编码器
+                    $command = array_merge($command, ['-vn']);
+
+                    if (isset($options['selected_audio_encoder'])) {
+                        $audioEncoder = $options['selected_audio_encoder'];
+                        $command = array_merge($command, $this->getAudioEncodingParams($audioEncoder, $options));
+                    } else {
+                        // 如果没有选择编码器，使用默认的AAC编码器
+                        $command = array_merge($command, ['-c:a', 'aac', '-b:a', '128k']);
+                    }
                 } else {
                     // 视频格式：使用智能选择的编码器
                     if (isset($options['selected_video_encoder'])) {
@@ -1320,5 +1345,4 @@ class FFmpegService extends ConversionServiceBase
             throw $e;
         }
     }
-
 }
