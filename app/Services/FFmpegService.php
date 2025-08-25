@@ -186,6 +186,12 @@ class FFmpegService extends ConversionServiceBase
                 strpos($outputStr, 'Invalid data') === false ||
                 strpos($outputStr, 'No such file or directory') !== false; // 这是正常的，因为我们用的是 /dev/null
 
+            if (!$inputSupported) {
+                Log::info('FFmpegService::supportsConversion inputFormat not supported', [
+                    'inputFormat' => $inputFormat
+                ]);
+                return false;
+            }
         } catch (Exception $e) {
             Log::info('FFmpegService::supportsConversion inputFormat not supported', [
                 'inputFormat' => $inputFormat
@@ -222,12 +228,14 @@ class FFmpegService extends ConversionServiceBase
                 }
             }
 
-            Log::info('FFmpegService::isOutputFormatSupported outputFormat not supported', [
-                'encoders' => $encoders,
-                'outputFormat' => $outputFormat
-            ]);
-            // 如果没有找到特定编码器，检查是否是基本支持的格式
-            return false;
+            if (!$outputSupported) {
+                Log::info('FFmpegService::isOutputFormatSupported outputFormat not supported', [
+                    'encoders' => $encoders,
+                    'outputFormat' => $outputFormat
+                ]);
+                // 如果没有找到特定编码器，检查是否是基本支持的格式
+                return false;
+            }
         } catch (Exception $e) {
             Log::info('FFmpegService::supportsConversion outputFormat not supported', [
                 'outputFormat' => $outputFormat
